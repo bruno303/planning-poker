@@ -1,8 +1,12 @@
 package infra
 
-import "net/http"
+import (
+	"net/http"
 
-func ConfigureInfraAPI(mux *http.ServeMux) {
+	"github.com/gorilla/mux"
+)
+
+func ConfigureInfraAPI(mux *mux.Router) {
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))

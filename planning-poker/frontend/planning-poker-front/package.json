@@ -1,0 +1,24 @@
+{
+  "name": "planning-poker-front",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "dev:debug": "NODE_OPTIONS='--inspect' next dev",
+    "build": "next build --turbopack",
+    "start": "next start",
+    "start:debug": "NODE_OPTIONS='--inspect' next start"
+  },
+  "dependencies": {
+    "next": "15.5.2",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "lucide-react": "^0.542.0",
+    "typescript": "^5"
+  }
+}

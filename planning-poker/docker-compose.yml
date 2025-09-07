@@ -1,0 +1,27 @@
+services:
+  frontend:
+    build:
+      context: ./frontend/planning-poker-front
+      args:
+        - NEXT_PUBLIC_BACKEND_URL=http://backend:8080
+        - NEXT_PUBLIC_WEB_SOCKET_URL=ws://backend:8080
+    container_name: planning-poker-frontend
+    ports:
+      - "3000:3000"
+    networks:
+      - planning-poker
+
+  backend:
+    build:
+      context: ./
+    container_name: planning-poker-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - CORS_ALLOWED_ORIGINS=http://localhost:3000,http://frontend:3000
+      - LOG_LEVEL=DEBUG
+    networks:
+      - planning-poker
+
+networks:
+  planning-poker:
