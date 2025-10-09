@@ -13,6 +13,7 @@ require (
 	github.com/gorilla/handlers v1.5.2
 	github.com/gorilla/mux v1.8.1
 	github.com/samber/lo v1.51.0
+	go.uber.org/mock v0.6.0
 )
 
 require (

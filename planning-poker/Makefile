@@ -2,6 +2,10 @@ FRONT_DIR=frontend/planning-poker-front
 BACKEND_URL=http://localhost:8080
 WEBSOCKET_URL=ws://localhost:8080
 
+ifeq ($(wildcard .env),)
+$(shell cp example.env .env)
+endif
+
 include .env
 export
 
@@ -38,6 +42,9 @@ clean:
 .PHONY: fmt
 fmt:
 	go fmt ./...
+
+generate:
+	go generate ./...
 
 docker-build-backend:
 	docker build --no-cache -t planning-poker-backend .
