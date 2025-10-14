@@ -1,15 +1,17 @@
 package inmemory
 
 import (
+	"context"
 	"planning-poker/internal/domain/entity"
 	"testing"
 )
 
 func TestNewRoom(t *testing.T) {
+	ctx := context.Background()
 	hub := NewHub()
 	owner := "test-owner"
 
-	room := hub.NewRoom(owner)
+	room := hub.NewRoom(ctx, owner)
 
 	if room == nil {
 		t.Fatal("expected room to be non-nil")
@@ -29,11 +31,12 @@ func TestNewRoom(t *testing.T) {
 }
 
 func TestGetRoom(t *testing.T) {
+	ctx := context.Background()
 	hub := NewHub()
 	owner := "owner1"
-	room := hub.NewRoom(owner)
+	room := hub.NewRoom(ctx, owner)
 
-	got, ok := hub.GetRoom(room.ID)
+	got, ok := hub.GetRoom(ctx, room.ID)
 	if !ok {
 		t.Fatalf("expected to find room but got not found")
 	}
@@ -41,16 +44,17 @@ func TestGetRoom(t *testing.T) {
 		t.Errorf("expected to get the created room, got different room")
 	}
 
-	_, ok = hub.GetRoom("non-existent-id")
+	_, ok = hub.GetRoom(ctx, "non-existent-id")
 	if ok {
 		t.Error("expected \"false\" for non-existent room ID, got \"true\"")
 	}
 }
 
 func TestRemoveRoom(t *testing.T) {
+	ctx := context.Background()
 	hub := NewHub()
-	room1 := hub.NewRoom("owner1")
-	room2 := hub.NewRoom("owner2")
+	room1 := hub.NewRoom(ctx, "owner1")
+	room2 := hub.NewRoom(ctx, "owner2")
 
 	if len(hub.Rooms) != 2 {
 		t.Fatalf("expected 2 rooms, got %d", len(hub.Rooms))

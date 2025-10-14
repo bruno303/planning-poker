@@ -41,7 +41,7 @@ func NewJoinRoomUseCase(hub domain.Hub, lockManager lock.LockManager) JoinRoomUs
 func (uc JoinRoomUseCase) Execute(ctx context.Context, cmd JoinRoomCommand) (*JoinRoomOutput, error) {
 	output, err := uc.lockManager.WithLock(ctx, cmd.RoomID, func(ctx context.Context) (any, error) {
 
-		room, ok := uc.hub.GetRoom(cmd.RoomID)
+		room, ok := uc.hub.GetRoom(ctx, cmd.RoomID)
 		if !ok {
 			return nil, fmt.Errorf("room %s not found", cmd.RoomID)
 		}

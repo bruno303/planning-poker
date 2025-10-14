@@ -1,6 +1,7 @@
 FRONT_DIR=frontend/planning-poker-front
 BACKEND_URL=http://localhost:8080
 WEBSOCKET_URL=ws://localhost:8080
+OTLP_ENDPOINT=localhost:4317
 
 ifeq ($(wildcard .env),)
 $(shell cp example.env .env)
@@ -47,10 +48,11 @@ generate:
 	go generate ./...
 
 docker-build-backend:
-	docker build --no-cache -t planning-poker-backend .
+	docker build -t planning-poker-backend -f Dockerfile \
+	--build-arg OTLP_ENDPOINT=$(OTLP_ENDPOINT) .
 
 docker-build-frontend:
 	cd $(FRONT_DIR) && docker build -f Dockerfile \
 		--build-arg NEXT_PUBLIC_BACKEND_URL=$(BACKEND_URL) \
   	--build-arg NEXT_PUBLIC_WEBSOCKET_URL=$(WEBSOCKET_URL) \
-		--no-cache -t planning-poker-frontend .
+		-t planning-poker-frontend .

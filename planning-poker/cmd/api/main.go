@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
+	"github.com/bruno303/go-toolkit/pkg/trace"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 )
@@ -18,6 +19,8 @@ func main() {
 
 	configureLogging()
 	logger := log.NewLogger("main")
+	shutdown := configureTrace(ctx, logger)
+	defer shutdown(ctx)
 
 	container := NewContainer()
 
@@ -127,4 +130,18 @@ func corsMiddleware(next http.Handler, logger log.Logger) http.Handler {
 		handlers.OptionStatusCode(http.StatusOK),
 	)
 	return middleware(next)
+}
+
+func configureTrace(ctx context.Context, logger log.Logger) func(context.Context) error {
+	shutdown, err := trace.SetupOTelSDK(ctx, trace.Config{
+		ApplicationName:    "planning-poker-backend",
+		ApplicationVersion: "0.0.1",
+		Endpoint:           os.Getenv("TRACE_OTLP_ENDPOINT"),
+	})
+	if err != nil {
+		logger.Error(ctx, "Error setting up tracing: %v", err)
+	} else {
+		trace.SetTracer(trace.NewOtelTracerAdapter())
+	}
+	return shutdown
 }

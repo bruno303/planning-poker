@@ -10,8 +10,8 @@ type Hub interface {
 	AddClient(c *entity.Client)
 	RemoveClient(ctx context.Context, clientID string, roomID string) error
 
-	NewRoom(owner string) *entity.Room
-	GetRoom(roomID string) (*entity.Room, bool)
+	NewRoom(ctx context.Context, owner string) *entity.Room
+	GetRoom(ctx context.Context, roomID string) (*entity.Room, bool)
 	RemoveRoom(roomID string)
 	BroadcastToRoom(ctx context.Context, roomID string, message any) error
 

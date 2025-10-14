@@ -13,22 +13,29 @@ type (
 		RoomID   string
 		SenderID string
 	}
-	VoteAgainUseCase struct {
+
+	VoteAgainUseCase interface {
+		Execute(ctx context.Context, cmd VoteAgainCommand) error
+	}
+
+	voteAgainUseCase struct {
 		hub         domain.Hub
 		lockManager lock.LockManager
 	}
 )
 
+var _ VoteAgainUseCase = (*voteAgainUseCase)(nil)
+
 func NewVoteAgainUseCase(hub domain.Hub, lockManager lock.LockManager) VoteAgainUseCase {
-	return VoteAgainUseCase{
+	return &voteAgainUseCase{
 		hub:         hub,
 		lockManager: lockManager,
 	}
 }
 
-func (uc VoteAgainUseCase) Execute(ctx context.Context, cmd VoteAgainCommand) error {
+func (uc *voteAgainUseCase) Execute(ctx context.Context, cmd VoteAgainCommand) error {
 	return uc.lockManager.ExecuteWithLock(ctx, cmd.RoomID, func(ctx context.Context) error {
-		room, ok := uc.hub.GetRoom(cmd.RoomID)
+		room, ok := uc.hub.GetRoom(ctx, cmd.RoomID)
 		if !ok {
 			return fmt.Errorf("room %s not found", cmd.RoomID)
 		}

@@ -25,7 +25,7 @@ func NewUpdateNameUseCase(hub domain.Hub) UpdateNameUseCase {
 }
 
 func (uc UpdateNameUseCase) Execute(ctx context.Context, cmd UpdateNameCommand) error {
-	room, ok := uc.hub.GetRoom(cmd.RoomID)
+	room, ok := uc.hub.GetRoom(ctx, cmd.RoomID)
 	if !ok {
 		return fmt.Errorf("room %s not found", cmd.RoomID)
 	}

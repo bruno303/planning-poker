@@ -97,6 +97,7 @@ type CreateRoomResponse struct {
 
 func createRoom(hub domain.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
 
 		var body CreateRoomRequest
 		err := json.NewDecoder(r.Body).Decode(&body)
@@ -105,8 +106,8 @@ func createRoom(hub domain.Hub) http.HandlerFunc {
 			return
 		}
 
-		room := hub.NewRoom(body.CreatedBy)
-		logger.Info(r.Context(), "New room created: %v", room.ID)
+		room := hub.NewRoom(ctx, body.CreatedBy)
+		logger.Info(ctx, "New room created: %v", room.ID)
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(CreateRoomResponse{RoomID: room.ID})
 	}
@@ -114,13 +115,14 @@ func createRoom(hub domain.Hub) http.HandlerFunc {
 
 func getRoom(hub domain.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
 		roomID := mux.Vars(r)["roomID"]
 		if roomID == "" {
 			http.Error(w, "Room ID is required", http.StatusBadRequest)
 			return
 		}
 
-		_, ok := hub.GetRoom(roomID)
+		_, ok := hub.GetRoom(ctx, roomID)
 		if !ok {
 			http.Error(w, "Room not found", http.StatusNotFound)
 			return

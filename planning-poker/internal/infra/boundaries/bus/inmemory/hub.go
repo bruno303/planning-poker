@@ -7,6 +7,7 @@ import (
 	"planning-poker/internal/domain/entity"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
+	"github.com/bruno303/go-toolkit/pkg/trace"
 )
 
 type InMemoryHub struct {
@@ -27,19 +28,20 @@ func NewHub() *InMemoryHub {
 	}
 }
 
-func (h *InMemoryHub) NewRoom(owner string) *entity.Room {
-	room := entity.NewRoom(owner, NewInMemoryClientCollection())
-	h.Rooms[room.ID] = room
-	return room
+func (h *InMemoryHub) NewRoom(ctx context.Context, owner string) *entity.Room {
+	room, _ := trace.Trace(ctx, trace.NameConfig("InMemoryHub", "NewRoom"), func(ctx context.Context) (any, error) {
+
+		room := entity.NewRoom(owner, NewInMemoryClientCollection())
+		h.Rooms[room.ID] = room
+		return room, nil
+	})
+
+	return room.(*entity.Room)
 }
 
-func (h *InMemoryHub) GetRoom(roomID string) (*entity.Room, bool) {
-	for _, room := range h.Rooms {
-		if room.ID == roomID {
-			return room, true
-		}
-	}
-	return nil, false
+func (h *InMemoryHub) GetRoom(ctx context.Context, roomID string) (*entity.Room, bool) {
+	room, ok := h.Rooms[roomID]
+	return room, ok
 }
 
 func (h *InMemoryHub) RemoveRoom(roomID string) {
@@ -47,12 +49,8 @@ func (h *InMemoryHub) RemoveRoom(roomID string) {
 }
 
 func (h *InMemoryHub) FindClientByID(clientID string) (*entity.Client, bool) {
-	for _, c := range h.Clients {
-		if c.ID == clientID {
-			return c, true
-		}
-	}
-	return nil, false
+	client, ok := h.Clients[clientID]
+	return client, ok
 }
 
 func (h *InMemoryHub) AddClient(c *entity.Client) {
@@ -73,33 +71,43 @@ func (h *InMemoryHub) RemoveBus(clientID string) {
 }
 
 func (h *InMemoryHub) RemoveClient(ctx context.Context, clientID string, roomID string) error {
-	delete(h.Clients, clientID)
-	h.RemoveBus(clientID)
+	_, err := trace.Trace(ctx, trace.NameConfig("InMemoryHub", "RemoveClient"), func(ctx context.Context) (any, error) {
 
-	if room, ok := h.GetRoom(roomID); ok {
-		room.RemoveClient(ctx, clientID)
-		if room.IsEmpty() {
-			h.RemoveRoom(room.ID)
+		delete(h.Clients, clientID)
+		h.RemoveBus(clientID)
+
+		if room, ok := h.GetRoom(ctx, roomID); ok {
+			room.RemoveClient(ctx, clientID)
+			if room.IsEmpty() {
+				h.RemoveRoom(room.ID)
+			}
 		}
-	}
-	return nil
+		return nil, nil
+	})
+
+	return err
 }
 
 func (h *InMemoryHub) BroadcastToRoom(ctx context.Context, roomID string, message any) error {
-	room, ok := h.GetRoom(roomID)
-	if !ok {
-		return fmt.Errorf("room %s not found", roomID)
-	}
+	_, err := trace.Trace(ctx, trace.NameConfig("InMemoryHub", "BroadcastToRoom"), func(ctx context.Context) (any, error) {
 
-	for _, client := range room.Clients.Values() {
-		bus, ok := h.GetBus(client.ID)
+		room, ok := h.GetRoom(ctx, roomID)
 		if !ok {
-			h.logger.Warn(ctx, "bus not found for client %s", client.ID)
-			continue
+			return nil, fmt.Errorf("room %s not found", roomID)
 		}
-		if err := bus.Send(ctx, message); err != nil {
-			return fmt.Errorf("failed to send message to client %s: %w", client.ID, err)
+
+		for _, client := range room.Clients.Values() {
+			bus, ok := h.GetBus(client.ID)
+			if !ok {
+				h.logger.Warn(ctx, "bus not found for client %s", client.ID)
+				continue
+			}
+			if err := bus.Send(ctx, message); err != nil {
+				return nil, fmt.Errorf("failed to send message to client %s: %w", client.ID, err)
+			}
 		}
-	}
-	return nil
+		return nil, nil
+	})
+
+	return err
 }

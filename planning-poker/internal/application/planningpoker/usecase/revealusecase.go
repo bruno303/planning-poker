@@ -28,7 +28,7 @@ func NewRevealUseCase(hub domain.Hub, lockManager lock.LockManager) RevealUseCas
 
 func (uc RevealUseCase) Execute(ctx context.Context, cmd RevealCommand) error {
 	return uc.lockManager.ExecuteWithLock(ctx, cmd.RoomID, func(ctx context.Context) error {
-		room, ok := uc.hub.GetRoom(cmd.RoomID)
+		room, ok := uc.hub.GetRoom(ctx, cmd.RoomID)
 		if !ok {
 			return fmt.Errorf("room %s not found", cmd.RoomID)
 		}
