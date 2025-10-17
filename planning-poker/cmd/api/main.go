@@ -28,38 +28,15 @@ func main() {
 	httpapp.ConfigurePlanningPokerAPI(r, container.Hub, container.Usecases)
 	infra.ConfigureInfraAPI(r)
 
-	err := r.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
-		pathTemplate, err := route.GetPathTemplate()
-		if err == nil {
-			logger.Debug(ctx, "ROUTE: %v", pathTemplate)
-		}
-		pathRegexp, err := route.GetPathRegexp()
-		if err == nil {
-			logger.Debug(ctx, "Path regexp: %v", pathRegexp)
-		}
-		queriesTemplates, err := route.GetQueriesTemplates()
-		if err == nil {
-			logger.Debug(ctx, "Queries templates: %v", strings.Join(queriesTemplates, ","))
-		}
-		queriesRegexps, err := route.GetQueriesRegexp()
-		if err == nil {
-			logger.Debug(ctx, "Queries regexps: %v", strings.Join(queriesRegexps, ","))
-		}
-		methods, err := route.GetMethods()
-		if err == nil {
-			logger.Debug(ctx, "Methods: %v", strings.Join(methods, ","))
-		}
-		logger.Debug(ctx, "")
-		return nil
-	})
-
-	if err != nil {
-		logger.Error(ctx, "Error walking routes", err)
+	walkRoutes(ctx, r, logger)
+	port := os.Getenv("BACKEND_PORT")
+	if port == "" {
+		port = "8080"
 	}
 
-	logger.Info(ctx, "Starting server on :8080")
-	if err = http.ListenAndServe(
-		":8080",
+	logger.Info(ctx, "Listening on port %s", port)
+	if err := http.ListenAndServe(
+		":"+port,
 		loggingMiddleware(corsMiddleware(r, logger), logger),
 	); err != nil {
 		logger.Error(ctx, "Error starting server", err)
@@ -144,4 +121,35 @@ func configureTrace(ctx context.Context, logger log.Logger) func(context.Context
 		trace.SetTracer(trace.NewOtelTracerAdapter())
 	}
 	return shutdown
+}
+
+func walkRoutes(ctx context.Context, r *mux.Router, logger log.Logger) {
+	err := r.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
+		pathTemplate, err := route.GetPathTemplate()
+		if err == nil {
+			logger.Debug(ctx, "ROUTE: %v", pathTemplate)
+		}
+		pathRegexp, err := route.GetPathRegexp()
+		if err == nil {
+			logger.Debug(ctx, "Path regexp: %v", pathRegexp)
+		}
+		queriesTemplates, err := route.GetQueriesTemplates()
+		if err == nil {
+			logger.Debug(ctx, "Queries templates: %v", strings.Join(queriesTemplates, ","))
+		}
+		queriesRegexps, err := route.GetQueriesRegexp()
+		if err == nil {
+			logger.Debug(ctx, "Queries regexps: %v", strings.Join(queriesRegexps, ","))
+		}
+		methods, err := route.GetMethods()
+		if err == nil {
+			logger.Debug(ctx, "Methods: %v", strings.Join(methods, ","))
+		}
+		logger.Debug(ctx, "")
+		return nil
+	})
+
+	if err != nil {
+		logger.Error(ctx, "Error walking routes", err)
+	}
 }
