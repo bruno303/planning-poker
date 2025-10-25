@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
-	"os"
+	"planning-poker/internal/config"
 	"planning-poker/internal/infra"
 	httpapp "planning-poker/internal/infra/boundaries/http"
 	"strings"
@@ -14,8 +15,16 @@ import (
 	"github.com/gorilla/mux"
 )
 
+var cfg *config.Config
+
 func main() {
 	ctx := context.Background()
+
+	var err error
+	cfg, err = config.LoadConfig()
+	if err != nil {
+		panic(err)
+	}
 
 	configureLogging()
 	logger := log.NewLogger("main")
@@ -29,14 +38,14 @@ func main() {
 	infra.ConfigureInfraAPI(r)
 
 	walkRoutes(ctx, r, logger)
-	port := os.Getenv("BACKEND_PORT")
-	if port == "" {
-		port = "8080"
+	port := cfg.API.BackendPort
+	if port == 0 {
+		port = 8080
 	}
 
-	logger.Info(ctx, "Listening on port %s", port)
+	logger.Info(ctx, "Listening on port %d", port)
 	if err := http.ListenAndServe(
-		":"+port,
+		fmt.Sprintf(":%d", port),
 		loggingMiddleware(corsMiddleware(r, logger), logger),
 	); err != nil {
 		logger.Error(ctx, "Error starting server", err)
@@ -44,7 +53,7 @@ func main() {
 }
 
 func configureLogging() {
-	logLevel := os.Getenv("LOG_LEVEL")
+	logLevel := cfg.LogLevel
 
 	var ll log.Level
 	switch strings.ToUpper(logLevel) {
@@ -60,21 +69,28 @@ func configureLogging() {
 		ll = log.LevelInfo
 	}
 
-	log.SetLoggerFactory(func(name string) log.Logger {
+	logFactory := func(name string) log.Logger {
 		return log.NewSlogAdapter(
 			log.SlogAdapterOpts{
 				Level:                 ll,
 				FormatJson:            false,
 				ExtractAdditionalInfo: func(context.Context) []any { return []any{} },
-				Source:                name,
+				Name:                  name,
 			},
 		)
+	}
+
+	log.ConfigureLogging(log.LogConfig{
+		Type: log.LogTypeMultiple,
+		MultipleLogConfig: log.MultipleLogConfig{
+			Factory: logFactory,
+		},
 	})
 }
 
 func getCORSOrigins(logger log.Logger) []string {
 	var allowedOrigins []string
-	corsOrigins := os.Getenv("CORS_ALLOWED_ORIGINS")
+	corsOrigins := cfg.API.CorsAllowedOrigins
 
 	if corsOrigins == "" {
 		allowedOrigins = []string{
@@ -113,7 +129,7 @@ func configureTrace(ctx context.Context, logger log.Logger) func(context.Context
 	shutdown, err := trace.SetupOTelSDK(ctx, trace.Config{
 		ApplicationName:    "planning-poker-backend",
 		ApplicationVersion: "0.0.1",
-		Endpoint:           os.Getenv("TRACE_OTLP_ENDPOINT"),
+		Endpoint:           cfg.TraceOtlpEndpoint,
 	})
 	if err != nil {
 		logger.Error(ctx, "Error setting up tracing: %v", err)
