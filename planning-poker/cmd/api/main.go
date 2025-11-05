@@ -13,6 +13,7 @@ import (
 	"github.com/bruno303/go-toolkit/pkg/trace"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux"
 )
 
 var cfg *config.Config
@@ -38,6 +39,7 @@ func main() {
 	container := NewContainer()
 
 	r := mux.NewRouter()
+	r.Use(otelmux.Middleware(cfg.Service))
 	httpapp.ConfigurePlanningPokerAPI(r, container.Hub, container.Usecases, httpapp.WebSocketConfig{
 		WriteTimeout: cfg.API.PlanningPoker.WebsocketWriteTimeout,
 		ReadTimeout:  cfg.API.PlanningPoker.WebsocketReadTimeout,

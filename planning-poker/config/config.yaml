@@ -1,3 +1,4 @@
+service: "planning-poker-api"
 log_level: "INFO"
 trace_otlp_endpoint: "localhost:4317"
 api:
