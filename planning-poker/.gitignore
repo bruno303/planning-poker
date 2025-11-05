@@ -4,3 +4,6 @@
 vendor/
 
 __debug_bin*
+
+coverage.out
+coverage.html

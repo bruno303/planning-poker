@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"planning-poker/internal/application/planningpoker/usecase"
 	"planning-poker/internal/domain"
+	"time"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
 	"github.com/google/uuid"
@@ -36,16 +38,23 @@ type (
 		hub      domain.Hub
 		usecases usecase.UseCases
 		logger   log.Logger
+		cfg      WebSocketConfig
+	}
+
+	WebSocketConfig struct {
+		WriteTimeout time.Duration
+		ReadTimeout  time.Duration
+		PingInterval time.Duration
 	}
 )
 
-func ConfigurePlanningPokerAPI(mux *mux.Router, hub domain.Hub, usecases usecase.UseCases) {
-	mux.HandleFunc("/planning/{roomID}/ws", handleConnections(hub, usecases))
+func ConfigurePlanningPokerAPI(mux *mux.Router, hub domain.Hub, usecases usecase.UseCases, websocketCfg WebSocketConfig) {
+	mux.HandleFunc("/planning/{roomID}/ws", handleConnections(hub, usecases, websocketCfg))
 	mux.HandleFunc("/planning/room", createRoom(hub)).Methods("POST", "OPTIONS")
 	mux.HandleFunc("/planning/room/{roomID}", getRoom(hub)).Methods("GET")
 }
 
-func handleConnections(hub domain.Hub, usecases usecase.UseCases) http.HandlerFunc {
+func handleConnections(hub domain.Hub, usecases usecase.UseCases, websocketCfg WebSocketConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		roomID := mux.Vars(r)["roomID"]
 		if roomID == "" {
@@ -63,24 +72,27 @@ func handleConnections(hub domain.Hub, usecases usecase.UseCases) http.HandlerFu
 			RoomID:   roomID,
 			SenderID: uuid.NewString(),
 			BusFactory: func(clientID string) domain.Bus {
-				return NewWebsocketBus(clientID, ws, hub, usecases)
+				return NewWebsocketBus(clientID, ws, hub, usecases, websocketCfg)
 			},
 		})
 		if err != nil {
 			logger.Error(r.Context(), fmt.Sprintf("Error joining room %s", roomID), err)
 			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "{ \"msg\": \"Error joining room %s\" }", roomID)
+			_, _ = fmt.Fprintf(w, "{ \"msg\": \"Error joining room %s\" }", roomID)
 			return
 		}
 
 		logger.Info(r.Context(), "New client connected: %v on room: %v", output.Client.ID, output.Room.ID)
 
-		defer output.Bus.Close()
+		defer func() { _ = output.Bus.Close() }()
 		defer func() {
-			usecases.LeaveRoom.Execute(r.Context(), usecase.LeaveRoomCommand{
+			err := usecases.LeaveRoom.Execute(r.Context(), usecase.LeaveRoomCommand{
 				RoomID:   output.Room.ID,
 				SenderID: output.Client.ID,
 			})
+			if err != nil {
+				logger.Error(r.Context(), fmt.Sprintf("Error leaving room %s", roomID), err)
+			}
 		}()
 
 		output.Bus.Listen(r.Context())
@@ -109,7 +121,7 @@ func createRoom(hub domain.Hub) http.HandlerFunc {
 		room := hub.NewRoom(ctx, body.CreatedBy)
 		logger.Info(ctx, "New room created: %v", room.ID)
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(CreateRoomResponse{RoomID: room.ID})
+		_ = json.NewEncoder(w).Encode(CreateRoomResponse{RoomID: room.ID})
 	}
 }
 
@@ -137,12 +149,14 @@ func NewWebsocketBus(
 	socket *websocket.Conn,
 	hub domain.Hub,
 	usecases usecase.UseCases,
+	websocketCfg WebSocketConfig,
 ) *WebsocketBus {
 	return &WebsocketBus{
 		ID:       id,
 		conn:     socket,
 		hub:      hub,
 		usecases: usecases,
+		cfg:      websocketCfg,
 		logger:   log.NewLogger("websocket.client"),
 	}
 }
@@ -153,6 +167,7 @@ func (c *WebsocketBus) Close() error {
 
 func (c *WebsocketBus) Send(ctx context.Context, message any) error {
 	c.logger.Debug(ctx, "Sending message to client: %v", message)
+	_ = c.conn.SetWriteDeadline(time.Now().Add(c.cfg.WriteTimeout))
 	return c.conn.WriteJSON(message)
 }
 
@@ -163,16 +178,15 @@ func (c *WebsocketBus) receive() (map[string]any, error) {
 }
 
 func (c *WebsocketBus) Listen(ctx context.Context) {
-	defer c.Close()
+	defer func() { _ = c.Close() }()
+
+	_ = c.conn.SetReadDeadline(time.Now().Add(c.cfg.ReadTimeout))
+	go c.pinger(ctx)
 
 	for {
 		msg, err := c.receive()
 		if err != nil {
-			if _, ok := err.(*websocket.CloseError); ok {
-				c.logger.Info(ctx, "Client %v disconnected", c.ID)
-			} else {
-				c.logger.Error(ctx, fmt.Sprintf("Error receiving message from client %v", c.ID), err)
-			}
+			c.handleReceiveError(ctx, err)
 
 			return
 		}
@@ -244,6 +258,51 @@ func (c *WebsocketBus) Listen(ctx context.Context) {
 		if uerr != nil {
 			c.logger.Error(ctx, fmt.Sprintf("Error handling event for client %v", c.ID), uerr)
 			continue
+		}
+	}
+}
+
+func (c *WebsocketBus) handleReceiveError(ctx context.Context, err error) {
+	// closed connection
+	if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+		c.logger.Warn(ctx, "Reader: Connection explicitly closed by client or network: %v", err.Error())
+		return
+	}
+
+	// I/O timeout
+	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+		c.logger.Error(ctx, "WebSocket Timeout Detected! Client failed to respond to Ping: %v", netErr)
+		return
+	}
+
+	// general errors
+	c.logger.Error(ctx, fmt.Sprintf("Error receiving message from client %v", c.ID), err)
+}
+
+func (c *WebsocketBus) pinger(ctx context.Context) {
+	c.conn.SetPongHandler(func(appData string) error {
+		c.logger.Debug(ctx, "Pong received from client %v", c.ID)
+		_ = c.conn.SetReadDeadline(time.Now().Add(c.cfg.ReadTimeout))
+		return nil
+	})
+
+	ticker := time.NewTicker(c.cfg.PingInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			if err := c.conn.SetWriteDeadline(time.Now().Add(c.cfg.WriteTimeout)); err != nil {
+				c.logger.Error(ctx, "Error while setting the write deadline", err)
+				return
+			}
+
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				c.logger.Error(ctx, "Error while pinging the client", err)
+				return
+			}
+		case <-ctx.Done():
+			return
 		}
 	}
 }

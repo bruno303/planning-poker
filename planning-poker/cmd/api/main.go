@@ -29,12 +29,20 @@ func main() {
 	configureLogging()
 	logger := log.NewLogger("main")
 	shutdown := configureTrace(ctx, logger)
-	defer shutdown(ctx)
+	defer func() {
+		if err := shutdown(ctx); err != nil {
+			logger.Error(ctx, "Error shutting down tracing", err)
+		}
+	}()
 
 	container := NewContainer()
 
 	r := mux.NewRouter()
-	httpapp.ConfigurePlanningPokerAPI(r, container.Hub, container.Usecases)
+	httpapp.ConfigurePlanningPokerAPI(r, container.Hub, container.Usecases, httpapp.WebSocketConfig{
+		WriteTimeout: cfg.API.PlanningPoker.WebsocketWriteTimeout,
+		ReadTimeout:  cfg.API.PlanningPoker.WebsocketReadTimeout,
+		PingInterval: cfg.API.PlanningPoker.WebsocketPingInterval,
+	})
 	infra.ConfigureInfraAPI(r)
 
 	walkRoutes(ctx, r, logger)

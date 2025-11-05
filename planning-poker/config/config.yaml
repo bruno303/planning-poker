@@ -3,3 +3,7 @@ trace_otlp_endpoint: "localhost:4317"
 api:
   backend_port: 8080
   cors_allowed_origins: "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080"
+  planning_poker:
+    websocket_write_timeout: 10s
+    websocket_read_timeout: 60s
+    websocket_ping_interval: 30s

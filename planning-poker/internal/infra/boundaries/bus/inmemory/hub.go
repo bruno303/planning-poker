@@ -77,7 +77,10 @@ func (h *InMemoryHub) RemoveClient(ctx context.Context, clientID string, roomID 
 		h.RemoveBus(clientID)
 
 		if room, ok := h.GetRoom(ctx, roomID); ok {
-			room.RemoveClient(ctx, clientID)
+			err := room.RemoveClient(ctx, clientID)
+			if err != nil {
+				return nil, err
+			}
 			if room.IsEmpty() {
 				h.RemoveRoom(room.ID)
 			}
