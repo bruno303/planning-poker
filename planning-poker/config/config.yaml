@@ -8,3 +8,5 @@ api:
     websocket_write_timeout: 10s
     websocket_read_timeout: 60s
     websocket_ping_interval: 30s
+  tracing:
+    enabled: true

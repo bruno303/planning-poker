@@ -39,7 +39,7 @@ func main() {
 	container := NewContainer()
 
 	r := mux.NewRouter()
-	r.Use(otelmux.Middleware(cfg.Service))
+	configureMiddlewares(ctx, r, logger)
 	httpapp.ConfigurePlanningPokerAPI(r, container.Hub, container.Usecases, httpapp.WebSocketConfig{
 		WriteTimeout: cfg.API.PlanningPoker.WebsocketWriteTimeout,
 		ReadTimeout:  cfg.API.PlanningPoker.WebsocketReadTimeout,
@@ -59,6 +59,15 @@ func main() {
 		loggingMiddleware(corsMiddleware(r, logger), logger),
 	); err != nil {
 		logger.Error(ctx, "Error starting server", err)
+	}
+}
+
+func configureMiddlewares(ctx context.Context, r *mux.Router, logger log.Logger) {
+	if cfg.API.Tracing.Enabled {
+		logger.Info(ctx, "Tracing on API enabled")
+		r.Use(otelmux.Middleware(cfg.Service))
+	} else {
+		logger.Info(ctx, "Tracing on API disabled")
 	}
 }
 
