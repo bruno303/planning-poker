@@ -9,7 +9,7 @@ import (
 
 type Config struct {
 	Service string `env:"SERVICE" yaml:"service"`
-	API struct {
+	API     struct {
 		Tracing struct {
 			Enabled bool `env:"API_TRACING_ENABLED" yaml:"enabled"`
 		} `yaml:"tracing"`
