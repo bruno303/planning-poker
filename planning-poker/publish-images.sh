@@ -13,13 +13,11 @@ if [ -z "$DOCKER_USERNAME" ]; then
   exit 1
 fi
 
-make docker-build-frontend BACKEND_URL="https://planning-poker-backend.bsoapp.net" WEBSOCKET_URL="wss://planning-poker-backend.bsoapp.net" &
-make docker-build-backend OTLP_ENDPOINT="tempo:4317" &
-wait
+make docker-build-frontend BACKEND_URL="https://planning-poker-backend.bsoapp.net" WEBSOCKET_URL="wss://planning-poker-backend.bsoapp.net"
+make docker-build-backend
 
-docker tag planning-poker-backend $DOCKER_USERNAME/planning-poker-backend:$IMAGE_TAG &
-docker tag planning-poker-frontend $DOCKER_USERNAME/planning-poker-frontend:$IMAGE_TAG &
-wait
+docker tag planning-poker-backend $DOCKER_USERNAME/planning-poker-backend:$IMAGE_TAG
+docker tag planning-poker-frontend $DOCKER_USERNAME/planning-poker-frontend:$IMAGE_TAG
 
 docker push $DOCKER_USERNAME/planning-poker-backend:$IMAGE_TAG
 docker push $DOCKER_USERNAME/planning-poker-frontend:$IMAGE_TAG

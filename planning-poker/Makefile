@@ -1,7 +1,6 @@
 FRONT_DIR=frontend/planning-poker-front
 BACKEND_URL=http://localhost:8080
 WEBSOCKET_URL=ws://localhost:8080
-OTLP_ENDPOINT=localhost:4317
 
 ifeq ($(wildcard .env),)
 $(shell cp example.env .env)
@@ -62,8 +61,7 @@ generate:
 
 .PHONY: docker-build-backend
 docker-build-backend: test
-	docker build -t planning-poker-backend -f Dockerfile \
-	--build-arg OTLP_ENDPOINT=$(OTLP_ENDPOINT) .
+	docker build -t planning-poker-backend -f Dockerfile .
 
 .PHONY: docker-build-frontend
 docker-build-frontend:

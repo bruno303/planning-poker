@@ -1,5 +1,5 @@
 # Start from the official Golang image for building
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25.4-alpine AS builder
 
 WORKDIR /app
 
@@ -23,10 +23,6 @@ WORKDIR /app
 
 # Copy the built binary from builder
 COPY --from=builder /app/app .
-
-ARG OTLP_ENDPOINT="localhost:4317"
-
-ENV TRACE_OTLP_ENDPOINT=${OTLP_ENDPOINT}
 
 # Expose port (change if your app uses a different port)
 EXPOSE 8080
