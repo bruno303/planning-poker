@@ -10,10 +10,12 @@ import (
 
 type (
 	RoomState struct {
-		Type         string        `json:"type"`
-		CurrentStory string        `json:"currentStory"`
-		Reveal       bool          `json:"reveal"`
-		Participants []Participant `json:"participants"`
+		Type               string        `json:"type"`
+		CurrentStory       string        `json:"currentStory"`
+		Reveal             bool          `json:"reveal"`
+		Result             *float32      `json:"result,omitempty"`
+		MostAppearingVotes []int         `json:"mostAppearingVotes"`
+		Participants       []Participant `json:"participants"`
 	}
 	Participant struct {
 		ID          string  `json:"id"`
@@ -32,10 +34,12 @@ type (
 
 func NewRoomStateCommand(room *entity.Room) RoomState {
 	return RoomState{
-		Type:         "room-state",
-		CurrentStory: room.CurrentStory,
-		Reveal:       room.Reveal,
-		Participants: MapToParticipants(room.Clients.Values(), room.OwnerClient),
+		Type:               "room-state",
+		CurrentStory:       room.CurrentStory,
+		Reveal:             room.Reveal,
+		Participants:       MapToParticipants(room.Clients.Values()),
+		Result:             room.Result,
+		MostAppearingVotes: room.MostAppearingVotes,
 	}
 }
 
@@ -46,7 +50,7 @@ func NewUpdateClientIDCommand(clientID string) UpdateClientID {
 	}
 }
 
-func MapToParticipants(clients []*entity.Client, owner *entity.Client) []Participant {
+func MapToParticipants(clients []*entity.Client) []Participant {
 	slices.SortFunc(clients, func(a, b *entity.Client) int {
 		return strings.Compare(a.Name, b.Name)
 	})

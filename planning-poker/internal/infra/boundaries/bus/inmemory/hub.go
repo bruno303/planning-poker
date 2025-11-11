@@ -31,7 +31,7 @@ func NewHub() *InMemoryHub {
 func (h *InMemoryHub) NewRoom(ctx context.Context, owner string) *entity.Room {
 	room, _ := trace.Trace(ctx, trace.NameConfig("InMemoryHub", "NewRoom"), func(ctx context.Context) (any, error) {
 
-		room := entity.NewRoom(owner, NewInMemoryClientCollection())
+		room := entity.NewRoom(NewInMemoryClientCollection())
 		h.Rooms[room.ID] = room
 		return room, nil
 	})

@@ -16,9 +16,6 @@ func TestNewRoom(t *testing.T) {
 	if room == nil {
 		t.Fatal("expected room to be non-nil")
 	}
-	if room.Owner != owner {
-		t.Errorf("expected room owner to be %q, got %q", owner, room.Owner)
-	}
 	if len(hub.Rooms) != 1 {
 		t.Errorf("expected hub.Rooms to have 1 room, got %d", len(hub.Rooms))
 	}

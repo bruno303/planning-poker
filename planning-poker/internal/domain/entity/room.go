@@ -5,6 +5,7 @@ package entity
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/samber/lo"
@@ -22,22 +23,22 @@ type (
 	}
 
 	Room struct {
-		ID           string
-		Owner        string
-		OwnerClient  *Client
-		Clients      ClientCollection
-		CurrentStory string
-		Reveal       bool
+		ID                 string
+		Clients            ClientCollection
+		CurrentStory       string
+		Reveal             bool
+		Result             *float32
+		MostAppearingVotes []int
 	}
 )
 
-func NewRoom(owner string, clients ClientCollection) *Room {
+func NewRoom(clients ClientCollection) *Room {
 	return &Room{
 		ID:           uuid.NewString(),
-		Owner:        owner,
 		Clients:      clients,
 		CurrentStory: "",
 		Reveal:       false,
+		Result:       nil,
 	}
 }
 
@@ -77,7 +78,7 @@ func (r *Room) NewVoting(ctx context.Context, clientID string) error {
 	}
 
 	r.CurrentStory = ""
-	r.Reveal = false
+	r.reveal(false)
 	r.Clients.ForEach(func(c *Client) {
 		c.Vote(ctx, nil)
 	})
@@ -94,7 +95,7 @@ func (r *Room) ResetVoting(ctx context.Context, clientID string) error {
 		return fmt.Errorf("only the room owner can start a new voting")
 	}
 
-	r.Reveal = false
+	r.reveal(false)
 
 	r.Clients.ForEach(func(c *Client) {
 		c.Vote(ctx, nil)
@@ -111,7 +112,7 @@ func (r *Room) checkReveal() {
 	if lo.EveryBy(activeClients.Values(), func(client *Client) bool {
 		return client.HasVoted
 	}) {
-		r.Reveal = true
+		r.reveal(true)
 	}
 }
 
@@ -194,8 +195,55 @@ func (r *Room) ToggleReveal(ctx context.Context, clientID string) error {
 		return fmt.Errorf("only the room owner can toggle reveal")
 	}
 
-	r.Reveal = !r.Reveal
+	r.reveal(!r.Reveal)
 	return nil
+}
+
+func (r *Room) reveal(reveal bool) {
+	r.Reveal = reveal
+
+	if !reveal {
+		r.Result = nil
+		return
+	}
+
+	var voteSum float32 = 0
+	var voteCount float32 = 0
+	var votesCountMap = make(map[int]int)
+
+	for _, client := range r.Clients.Values() {
+		if !client.IsSpectator {
+			if client.CurrentVote != nil {
+				if vote, err := strconv.Atoi(*client.CurrentVote); err == nil {
+					voteSum += float32(vote)
+					voteCount++
+					votesCountMap[vote]++
+				}
+			}
+		}
+	}
+
+	r.MostAppearingVotes = []int{}
+
+	mostVoteCount := r.getMostVoteCount(votesCountMap)
+	for vote, count := range votesCountMap {
+		if count == mostVoteCount {
+			r.MostAppearingVotes = append(r.MostAppearingVotes, vote)
+		}
+	}
+
+	r.Result = lo.ToPtr(voteSum / voteCount)
+}
+
+func (r *Room) getMostVoteCount(voteMap map[int]int) int {
+	var mostVoteCount int
+	for _, count := range voteMap {
+		if count > mostVoteCount {
+			mostVoteCount = count
+		}
+	}
+
+	return mostVoteCount
 }
 
 func (r *Room) IsEmpty() bool {

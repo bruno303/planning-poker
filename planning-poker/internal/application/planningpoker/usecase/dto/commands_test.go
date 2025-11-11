@@ -21,14 +21,13 @@ func TestNewRoomStateCommand(t *testing.T) {
 
 	clientCollection.EXPECT().Values().Return(clients).AnyTimes()
 
-	owner := clients[0]
 	room := &entity.Room{
-		ID:           "room1",
-		Owner:        "Alice",
-		OwnerClient:  owner,
-		Clients:      clientCollection,
-		CurrentStory: "Story 1",
-		Reveal:       true,
+		ID:                 "room1",
+		Clients:            clientCollection,
+		CurrentStory:       "Story 1",
+		Reveal:             true,
+		Result:             lo.ToPtr(float32(5)),
+		MostAppearingVotes: []int{1, 2},
 	}
 	got := NewRoomStateCommand(room)
 	want := RoomState{
@@ -39,6 +38,8 @@ func TestNewRoomStateCommand(t *testing.T) {
 			{ID: "1", Name: "Alice", Vote: &vote, HasVoted: true, IsSpectator: false, IsOwner: true},
 			{ID: "2", Name: "Bob", Vote: nil, HasVoted: false, IsSpectator: true, IsOwner: false},
 		},
+		Result:             lo.ToPtr(float32(5)),
+		MostAppearingVotes: []int{1, 2},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("NewRoomStateCommand() = %+v, want %+v", got, want)
@@ -62,10 +63,7 @@ func TestMapToParticipants(t *testing.T) {
 		{ID: "2", Name: "Bob", CurrentVote: lo.ToPtr("3"), HasVoted: true, IsSpectator: false, IsOwner: true},
 		{ID: "3", Name: "Charlie", CurrentVote: lo.ToPtr("?"), HasVoted: true, IsSpectator: true, IsOwner: false},
 	}
-
-	owner := clients[1]
-
-	participants := MapToParticipants(clients, owner)
+	participants := MapToParticipants(clients)
 
 	expected := []Participant{
 		{ID: "1", Name: "Alice", Vote: lo.ToPtr("5"), HasVoted: true, IsSpectator: false, IsOwner: false},
