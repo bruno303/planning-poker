@@ -291,4 +291,41 @@ export const styles = {
     borderColor: '#d1d5db',
     color: '#9ca3af'
   },
+  roomHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '1rem 2rem',
+    backgroundColor: 'white',
+    boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+    marginBottom: '0'
+  },
+  roomInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem'
+  },
+  roomLabel: {
+    fontSize: '0.875rem',
+    color: '#6b7280'
+  },
+  roomCode: {
+    fontSize: '1rem',
+    fontWeight: '600',
+    color: '#1f2937',
+    backgroundColor: '#f3f4f6',
+    padding: '0.25rem 0.5rem',
+    borderRadius: '0.25rem',
+    fontFamily: 'Monaco, "Lucida Console", monospace'
+  },
+  backButton: {
+    padding: '0.5rem 1rem',
+    backgroundColor: '#f3f4f6',
+    color: '#374151',
+    border: '1px solid #d1d5db',
+    borderRadius: '0.375rem',
+    cursor: 'pointer',
+    fontSize: '0.875rem',
+    transition: 'background-color 0.2s'
+  },
 };
