@@ -18,19 +18,13 @@ import (
 	"github.com/samber/lo"
 )
 
-var (
-	upgrader = websocket.Upgrader{
-		ReadBufferSize:  1024,
-		WriteBufferSize: 1024,
-		CheckOrigin: func(r *http.Request) bool {
-			return true
-		},
-	}
-	logger = log.NewLogger("planningpoker.api")
-)
-
 type (
 	contextKey string
+
+	PlanningPokerAPI struct {
+		upgrader websocket.Upgrader
+		logger   log.Logger
+	}
 
 	WebsocketBus struct {
 		ID       string
@@ -48,13 +42,26 @@ type (
 	}
 )
 
-func ConfigurePlanningPokerAPI(mux *mux.Router, hub domain.Hub, usecases usecase.UseCases, websocketCfg WebSocketConfig) {
-	mux.HandleFunc("/planning/{roomID}/ws", handleConnections(hub, usecases, websocketCfg))
-	mux.HandleFunc("/planning/room", createRoom(hub)).Methods("POST", "OPTIONS")
-	mux.HandleFunc("/planning/room/{roomID}", getRoom(hub)).Methods("GET")
+func NewPlanningPokerAPI() PlanningPokerAPI {
+	return PlanningPokerAPI{
+		upgrader: websocket.Upgrader{
+			ReadBufferSize:  1024,
+			WriteBufferSize: 1024,
+			CheckOrigin: func(r *http.Request) bool {
+				return true
+			},
+		},
+		logger: log.NewLogger("planningpoker.api"),
+	}
 }
 
-func handleConnections(hub domain.Hub, usecases usecase.UseCases, websocketCfg WebSocketConfig) http.HandlerFunc {
+func (p PlanningPokerAPI) Configure(mux *mux.Router, hub domain.Hub, usecases usecase.UseCases, websocketCfg WebSocketConfig) {
+	mux.HandleFunc("/planning/{roomID}/ws", p.handleConnections(hub, usecases, websocketCfg))
+	mux.HandleFunc("/planning/room", p.createRoom(hub)).Methods("POST", "OPTIONS")
+	mux.HandleFunc("/planning/room/{roomID}", p.getRoom(hub)).Methods("GET")
+}
+
+func (p PlanningPokerAPI) handleConnections(hub domain.Hub, usecases usecase.UseCases, websocketCfg WebSocketConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		roomID := mux.Vars(r)["roomID"]
 		if roomID == "" {
@@ -63,9 +70,9 @@ func handleConnections(hub domain.Hub, usecases usecase.UseCases, websocketCfg W
 		}
 
 		r = r.WithContext(context.WithValue(r.Context(), contextKey("roomID"), roomID))
-		ws, err := upgrader.Upgrade(w, r, nil)
+		ws, err := p.upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			logger.Error(r.Context(), "Error upgrading to WebSocket", err)
+			p.logger.Error(r.Context(), "Error upgrading to WebSocket", err)
 		}
 
 		output, err := usecases.JoinRoom.Execute(r.Context(), usecase.JoinRoomCommand{
@@ -76,13 +83,13 @@ func handleConnections(hub domain.Hub, usecases usecase.UseCases, websocketCfg W
 			},
 		})
 		if err != nil {
-			logger.Error(r.Context(), fmt.Sprintf("Error joining room %s", roomID), err)
+			p.logger.Error(r.Context(), fmt.Sprintf("Error joining room %s", roomID), err)
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = fmt.Fprintf(w, "{ \"msg\": \"Error joining room %s\" }", roomID)
 			return
 		}
 
-		logger.Info(r.Context(), "New client connected: %v on room: %v", output.Client.ID, output.Room.ID)
+		p.logger.Info(r.Context(), "New client connected: %v on room: %v", output.Client.ID, output.Room.ID)
 
 		defer func() { _ = output.Bus.Close() }()
 		defer func() {
@@ -91,7 +98,7 @@ func handleConnections(hub domain.Hub, usecases usecase.UseCases, websocketCfg W
 				SenderID: output.Client.ID,
 			})
 			if err != nil {
-				logger.Error(r.Context(), fmt.Sprintf("Error leaving room %s", roomID), err)
+				p.logger.Error(r.Context(), fmt.Sprintf("Error leaving room %s", roomID), err)
 			}
 		}()
 
@@ -107,7 +114,7 @@ type CreateRoomResponse struct {
 	RoomID string `json:"roomId"`
 }
 
-func createRoom(hub domain.Hub) http.HandlerFunc {
+func (p PlanningPokerAPI) createRoom(hub domain.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
@@ -119,13 +126,13 @@ func createRoom(hub domain.Hub) http.HandlerFunc {
 		}
 
 		room := hub.NewRoom(ctx, body.CreatedBy)
-		logger.Info(ctx, "New room created: %v", room.ID)
+		p.logger.Info(ctx, "New room created: %v", room.ID)
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(CreateRoomResponse{RoomID: room.ID})
 	}
 }
 
-func getRoom(hub domain.Hub) http.HandlerFunc {
+func (p PlanningPokerAPI) getRoom(hub domain.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		roomID := mux.Vars(r)["roomID"]

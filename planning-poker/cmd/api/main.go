@@ -40,7 +40,7 @@ func main() {
 
 	r := mux.NewRouter()
 	configureMiddlewares(ctx, r, logger)
-	httpapp.ConfigurePlanningPokerAPI(r, container.Hub, container.Usecases, httpapp.WebSocketConfig{
+	container.API.PlanningPoker.Configure(r, container.Hub, container.Usecases, httpapp.WebSocketConfig{
 		WriteTimeout: cfg.API.PlanningPoker.WebsocketWriteTimeout,
 		ReadTimeout:  cfg.API.PlanningPoker.WebsocketReadTimeout,
 		PingInterval: cfg.API.PlanningPoker.WebsocketPingInterval,
@@ -88,11 +88,13 @@ func configureLogging() {
 		ll = log.LevelInfo
 	}
 
+	var jsonEnvironments = map[string]bool{
+		"production":  true,
+		"staging":     true,
+		"development": true,
+	}
 	logFactory := func(name string) log.Logger {
-		var formatJson bool
-		if formatJson = false; cfg.Environment == "production" {
-			formatJson = true
-		}
+		formatJson := jsonEnvironments[cfg.Environment]
 
 		return log.NewSlogAdapter(
 			log.SlogAdapterOpts{
@@ -151,10 +153,15 @@ func corsMiddleware(next http.Handler, logger log.Logger) http.Handler {
 }
 
 func configureTrace(ctx context.Context, logger log.Logger) func(context.Context) error {
+	if !cfg.API.Tracing.Enabled {
+		logger.Info(ctx, "Tracing disabled")
+		return func(context.Context) error { return nil }
+	}
+
 	shutdown, err := trace.SetupOTelSDK(ctx, trace.Config{
 		ApplicationName:    "planning-poker-backend",
 		ApplicationVersion: "0.0.1",
-		Endpoint:           cfg.TraceOtlpEndpoint,
+		Endpoint:           cfg.Trace.OtlpEndpoint,
 		Environment:        cfg.Environment,
 	})
 	if err != nil {

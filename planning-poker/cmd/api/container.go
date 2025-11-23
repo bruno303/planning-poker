@@ -4,15 +4,23 @@ import (
 	"context"
 	"planning-poker/internal/application/planningpoker/usecase"
 	"planning-poker/internal/infra/boundaries/bus/inmemory"
+	"planning-poker/internal/infra/boundaries/http"
 	"planning-poker/internal/infra/lock"
 	"planning-poker/internal/infra/trace/decorator"
 )
 
-type Container struct {
-	Hub         *inmemory.InMemoryHub
-	LockManager *lock.InMemoryLockManager
-	Usecases    usecase.UseCases
-}
+type (
+	APIContainer struct {
+		PlanningPoker http.PlanningPokerAPI
+	}
+
+	Container struct {
+		Hub         *inmemory.InMemoryHub
+		LockManager *lock.InMemoryLockManager
+		Usecases    usecase.UseCases
+		API         APIContainer
+	}
+)
 
 func NewContainer() *Container {
 	hub := inmemory.NewHub()
@@ -33,6 +41,9 @@ func NewContainer() *Container {
 	return &Container{
 		Hub:         hub,
 		LockManager: lockManager,
+		API: APIContainer{
+			PlanningPoker: http.NewPlanningPokerAPI(),
+		},
 		Usecases: usecase.UseCases{
 			UpdateName: decorator.NewTraceableUseCase(func(ctx context.Context, cmd usecase.UpdateNameCommand) error {
 				return updateNameUseCase.Execute(ctx, cmd)
