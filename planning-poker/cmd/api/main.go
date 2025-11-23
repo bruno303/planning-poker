@@ -153,7 +153,7 @@ func corsMiddleware(next http.Handler, logger log.Logger) http.Handler {
 }
 
 func configureTrace(ctx context.Context, logger log.Logger) func(context.Context) error {
-	if !cfg.API.Tracing.Enabled {
+	if !cfg.Trace.Enabled {
 		logger.Info(ctx, "Tracing disabled")
 		return func(context.Context) error { return nil }
 	}
