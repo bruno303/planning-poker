@@ -1,5 +1,5 @@
-github.com/bruno303/go-toolkit v1.2.2 h1:0NlMbEh7nyvU2uKjmKrCeVeoLNL5FobpIG8r8cAVVHw=
-github.com/bruno303/go-toolkit v1.2.2/go.mod h1:jIov67ntX5BjyuVyu7rRihuNpwXEopZFcUIHKIrZm/k=
+github.com/bruno303/go-toolkit v1.2.3 h1:G/cW1zqxHrNkQ0Tzem9JGeqMo1UDo0GteRIhwwKv7mE=
+github.com/bruno303/go-toolkit v1.2.3/go.mod h1:jIov67ntX5BjyuVyu7rRihuNpwXEopZFcUIHKIrZm/k=
 github.com/cenkalti/backoff/v5 v5.0.3 h1:ZN+IMa753KfX5hd8vVaMixjnqRZ3y8CuJKRKj1xcsSM=
 github.com/cenkalti/backoff/v5 v5.0.3/go.mod h1:rkhZdG3JZukswDf7f0cwqPNk4K0sa+F97BxZthm/crw=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=

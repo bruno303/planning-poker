@@ -8,8 +8,9 @@ import (
 )
 
 type Config struct {
-	Service string `env:"SERVICE" yaml:"service"`
-	API     struct {
+	Service     string `env:"SERVICE" yaml:"service"`
+	Environment string `env:"ENVIRONMENT" yaml:"environment"`
+	API         struct {
 		Tracing struct {
 			Enabled bool `env:"API_TRACING_ENABLED" yaml:"enabled"`
 		} `yaml:"tracing"`

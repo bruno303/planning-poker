@@ -89,12 +89,18 @@ func configureLogging() {
 	}
 
 	logFactory := func(name string) log.Logger {
+		var formatJson bool
+		if formatJson = false; cfg.Environment == "production" {
+			formatJson = true
+		}
+
 		return log.NewSlogAdapter(
 			log.SlogAdapterOpts{
 				Level:                 ll,
-				FormatJson:            false,
+				FormatJson:            formatJson,
 				ExtractAdditionalInfo: func(context.Context) []any { return []any{} },
 				Name:                  name,
+				Environment:           cfg.Environment,
 			},
 		)
 	}
@@ -149,6 +155,7 @@ func configureTrace(ctx context.Context, logger log.Logger) func(context.Context
 		ApplicationName:    "planning-poker-backend",
 		ApplicationVersion: "0.0.1",
 		Endpoint:           cfg.TraceOtlpEndpoint,
+		Environment:        cfg.Environment,
 	})
 	if err != nil {
 		logger.Error(ctx, "Error setting up tracing: %v", err)

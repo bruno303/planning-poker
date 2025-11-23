@@ -18,5 +18,5 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 cd "$PROJECT_ROOT"
 
-./publish-back.sh $IMAGE_TAG
-./publish-front.sh $IMAGE_TAG
+./scripts/publish-back.sh $IMAGE_TAG
+./scripts/publish-front.sh $IMAGE_TAG
