@@ -134,13 +134,6 @@ func getCORSOrigins(logger log.Logger) []string {
 	return allowedOrigins
 }
 
-func loggingMiddleware(next http.Handler, logger log.Logger) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		logger.Info(r.Context(), "Request: %s %s from Origin: %s", r.Method, r.URL.Path, r.Header.Get("Origin"))
-		next.ServeHTTP(w, r)
-	})
-}
-
 func corsMiddleware(next http.Handler, logger log.Logger) http.Handler {
 	middleware := handlers.CORS(
 		handlers.AllowedMethods([]string{"GET", "POST", "OPTIONS", "PUT", "DELETE"}),
@@ -150,6 +143,13 @@ func corsMiddleware(next http.Handler, logger log.Logger) http.Handler {
 		handlers.OptionStatusCode(http.StatusOK),
 	)
 	return middleware(next)
+}
+
+func loggingMiddleware(next http.Handler, logger log.Logger) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logger.Info(r.Context(), "Request: %s %s from Origin: %s", r.Method, r.URL.Path, r.Header.Get("Origin"))
+		next.ServeHTTP(w, r)
+	})
 }
 
 func configureTrace(ctx context.Context, logger log.Logger) func(context.Context) error {
