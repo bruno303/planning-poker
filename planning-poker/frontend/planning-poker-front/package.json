@@ -5,9 +5,9 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "dev:debug": "NODE_OPTIONS='--inspect' next dev",
-    "build": "next build --turbopack",
     "start": "next start",
-    "start:debug": "NODE_OPTIONS='--inspect' next start"
+    "start:debug": "NODE_OPTIONS='--inspect' next start",
+    "build": "next build --turbopack"
   },
   "dependencies": {
     "next": "15.5.2",
