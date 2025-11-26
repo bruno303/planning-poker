@@ -232,7 +232,11 @@ func (r *Room) reveal(reveal bool) {
 		}
 	}
 
-	r.Result = lo.ToPtr(voteSum / voteCount)
+	if voteCount > 0 {
+		r.Result = lo.ToPtr(voteSum / voteCount)
+	} else {
+		r.Result = nil
+	}
 }
 
 func (r *Room) getMostVoteCount(voteMap map[int]int) int {
