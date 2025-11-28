@@ -51,13 +51,13 @@ lint:
 fmt:
 	golangci-lint fmt
 
-.PHONY: clean
-clean:
-	rm -rf bin
-
 .PHONY: generate
 generate:
 	go generate ./...
+
+.PHONY: clean
+clean:
+	rm -rf bin
 
 .PHONY: docker-build-backend
 docker-build-backend: test
