@@ -1,19 +1,14 @@
 'use client'
 
+import FocusableComponent from '@/components/focusableInput/focusableInput';
 import { useRoom } from '@/context/room/roomContext';
 import { Eye, EyeOff, Repeat, RotateCcw, Shield, Users } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
-import { RefObject, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Header from './page.header';
 import { styles } from './page.styles';
 
 type Card = string | null
-type PlanningPokerProps = {
-  roomId: string | null
-  userName: string
-  connected: RefObject<boolean>
-  socket: RefObject<WebSocket | null>
-}
 
 type Participant = {
   id: string
@@ -179,7 +174,6 @@ export default function PlanningPoker() {
 
     <Header
       handleBackToHome={handleBackToHome}
-      currentRoomId={roomId}
       generateShareableLink={() => `${window.location.origin}/join/${roomId}`}
     >
       <div style={styles.container}>
@@ -194,18 +188,16 @@ export default function PlanningPoker() {
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.5rem' }}>
                   {isEditingStory ? (
                     <>
-                      <input
-                        type="text"
-                        value={currentStory}
-                        onChange={e => setCurrentStory(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') {
-                            socket.current?.send(JSON.stringify({ roomId: roomId, clientId: clientId, type: 'update-story', story: currentStory }));
-                            setIsEditingStory(false);
-                          }
-                        }}
-                        style={{ ...styles.input, fontStyle: 'italic', flex: 1 }}
-                      />
+                    <FocusableComponent
+                      currentStory={currentStory}
+                      onChange={e => setCurrentStory(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          socket.current?.send(JSON.stringify({ roomId: roomId, clientId: clientId, type: 'update-story', story: currentStory }));
+                          setIsEditingStory(false);
+                        }
+                      }}
+                    />
                       <button
                         style={{ ...styles.button, ...styles.primaryButton, padding: '0.5rem 1rem', fontSize: '0.875rem' }}
                         onClick={() => {
