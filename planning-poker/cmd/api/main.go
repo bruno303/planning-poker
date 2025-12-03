@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"planning-poker/internal/config"
-	"planning-poker/internal/infra"
-	httpapp "planning-poker/internal/infra/boundaries/http"
 	"strings"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
@@ -36,16 +34,11 @@ func main() {
 		}
 	}()
 
-	container := NewContainer()
+	container := NewContainer(cfg)
 
 	r := mux.NewRouter()
 	configureMiddlewares(ctx, r, logger)
-	container.API.PlanningPoker.Configure(r, container.Hub, container.Usecases, httpapp.WebSocketConfig{
-		WriteTimeout: cfg.API.PlanningPoker.WebsocketWriteTimeout,
-		ReadTimeout:  cfg.API.PlanningPoker.WebsocketReadTimeout,
-		PingInterval: cfg.API.PlanningPoker.WebsocketPingInterval,
-	})
-	infra.ConfigureInfraAPI(r)
+	configureAPIS(r, container)
 
 	walkRoutes(ctx, r, logger)
 	port := cfg.API.BackendPort
@@ -200,5 +193,16 @@ func walkRoutes(ctx context.Context, r *mux.Router, logger log.Logger) {
 
 	if err != nil {
 		logger.Error(ctx, "Error walking routes", err)
+	}
+}
+
+func configureAPIS(r *mux.Router, container *Container) {
+	for _, api := range container.API.APIs {
+		route := r.Handle(api.Endpoint(), api.Handle())
+
+		methods := api.Methods()
+		if len(methods) > 0 {
+			route.Methods(methods...)
+		}
 	}
 }

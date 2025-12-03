@@ -8,6 +8,7 @@ import (
 
 	"github.com/bruno303/go-toolkit/pkg/log"
 	"github.com/bruno303/go-toolkit/pkg/trace"
+	"github.com/samber/lo"
 )
 
 type InMemoryHub struct {
@@ -113,4 +114,10 @@ func (h *InMemoryHub) BroadcastToRoom(ctx context.Context, roomID string, messag
 	})
 
 	return err
+}
+
+func (h *InMemoryHub) GetRooms() []*entity.Room {
+	return lo.MapToSlice(h.Rooms, func(key string, room *entity.Room) *entity.Room {
+		return room
+	})
 }

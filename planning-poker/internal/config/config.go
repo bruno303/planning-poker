@@ -21,6 +21,9 @@ type Config struct {
 			WebsocketReadTimeout  time.Duration `env:"API_PLANNING_POKER_WEBSOCKET_READ_TIMEOUT" yaml:"websocket_read_timeout"`
 			WebsocketPingInterval time.Duration `env:"API_PLANNING_POKER_WEBSOCKET_PING_INTERVAL" yaml:"websocket_ping_interval"`
 		} `yaml:"planning_poker"`
+		Admin struct {
+			APIKey string `env:"ADMIN_API_KEY" yaml:"api_key"`
+		} `yaml:"admin"`
 	} `yaml:"api"`
 	Trace struct {
 		Enabled      bool   `env:"TRACE_ENABLED" yaml:"enabled"`

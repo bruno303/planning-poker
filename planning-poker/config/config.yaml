@@ -12,3 +12,5 @@ api:
     websocket_ping_interval: 30s
   tracing:
     enabled: false
+  admin:
+    api_key: "my-secret-key"
