@@ -45,13 +45,12 @@ func (c CreateRoomAPI) Handle() http.Handler {
 		var body CreateRoomRequest
 		err := json.NewDecoder(r.Body).Decode(&body)
 		if err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			SendJsonErrorMsg(w, http.StatusBadRequest, "Invalid request body")
 			return
 		}
 
 		room := c.hub.NewRoom(ctx, body.CreatedBy)
 		c.logger.Info(ctx, "New room created: %v", room.ID)
-		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(CreateRoomResponse{RoomID: room.ID})
+		SendJsonResponse(w, http.StatusCreated, CreateRoomResponse{RoomID: room.ID})
 	})
 }

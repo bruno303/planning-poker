@@ -40,16 +40,16 @@ func (g GetRoomAPI) Handle() http.Handler {
 		ctx := r.Context()
 		roomID := mux.Vars(r)["roomID"]
 		if roomID == "" {
-			http.Error(w, "Room ID is required", http.StatusBadRequest)
+			SendJsonErrorMsg(w, http.StatusBadRequest, "Room ID is required")
 			return
 		}
 
 		_, ok := g.hub.GetRoom(ctx, roomID)
 		if !ok {
-			http.Error(w, "Room not found", http.StatusNotFound)
+			SendJsonErrorMsg(w, http.StatusNotFound, "Room not found")
 			return
 		}
 
-		w.WriteHeader(http.StatusOK)
+		SendJsonResponse(w, http.StatusOK, GetRoomResponse{RoomID: roomID})
 	})
 }

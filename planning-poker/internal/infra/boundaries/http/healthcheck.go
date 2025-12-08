@@ -4,7 +4,12 @@ import (
 	"net/http"
 )
 
-type HealthcheckAPI struct{}
+type (
+	HealthcheckAPI      struct{}
+	HealthcheckResponse struct {
+		Status string `json:"status"`
+	}
+)
 
 var _ API = (*HealthcheckAPI)(nil)
 
@@ -22,7 +27,6 @@ func (api HealthcheckAPI) Methods() []string {
 
 func (api HealthcheckAPI) Handle() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("OK"))
+		SendJsonResponse(w, http.StatusOK, HealthcheckResponse{Status: "ok"})
 	})
 }

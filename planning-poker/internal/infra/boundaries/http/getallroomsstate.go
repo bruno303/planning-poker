@@ -1,7 +1,6 @@
 package http
 
 import (
-	"encoding/json"
 	"net/http"
 	"planning-poker/internal/domain"
 	"planning-poker/internal/domain/entity"
@@ -55,8 +54,7 @@ func (api GetAllRoomsStateAPI) execute() http.Handler {
 
 		rooms := api.hub.GetRooms()
 
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(mapRooms(rooms))
+		SendJsonResponse(w, http.StatusOK, mapRooms(rooms))
 	})
 }
 

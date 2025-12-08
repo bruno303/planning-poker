@@ -74,7 +74,7 @@ func (api *WebsocketAPI) Handle() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		roomID := mux.Vars(r)["roomID"]
 		if roomID == "" {
-			http.Error(w, "Room ID is required", http.StatusBadRequest)
+			SendJsonErrorMsg(w, http.StatusBadRequest, "Room ID is required")
 			return
 		}
 
@@ -82,6 +82,7 @@ func (api *WebsocketAPI) Handle() http.Handler {
 		ws, err := api.upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			api.logger.Error(r.Context(), "Error upgrading to WebSocket", err)
+			return
 		}
 
 		output, err := api.usecases.JoinRoom.Execute(r.Context(), usecase.JoinRoomCommand{
@@ -93,8 +94,7 @@ func (api *WebsocketAPI) Handle() http.Handler {
 		})
 		if err != nil {
 			api.logger.Error(r.Context(), fmt.Sprintf("Error joining room %s", roomID), err)
-			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = fmt.Fprintf(w, "{ \"msg\": \"Error joining room %s\" }", roomID)
+			SendJsonErrorMsg(w, http.StatusInternalServerError, fmt.Sprintf("Error joining room %s", roomID))
 			return
 		}
 
