@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
+	"github.com/bruno303/go-toolkit/pkg/metric"
 	"github.com/bruno303/go-toolkit/pkg/trace"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
@@ -27,6 +28,18 @@ func main() {
 
 	configureLogging()
 	logger := log.NewLogger("main")
+
+	metricsShutdown, err := configureMetrics(ctx, logger)
+	if err != nil {
+		logger.Error(ctx, "Error configuring metrics", err)
+		return
+	}
+	defer func() {
+		if err := metricsShutdown(ctx); err != nil {
+			logger.Error(ctx, "Error shutting down metrics", err)
+		}
+	}()
+
 	shutdown := configureTrace(ctx, logger)
 	defer func() {
 		if err := shutdown(ctx); err != nil {
@@ -152,7 +165,7 @@ func configureTrace(ctx context.Context, logger log.Logger) func(context.Context
 	}
 
 	shutdown, err := trace.SetupOTelSDK(ctx, trace.Config{
-		ApplicationName:    "planning-poker-backend",
+		ApplicationName:    cfg.Service,
 		ApplicationVersion: "0.0.1",
 		Endpoint:           cfg.Trace.OtlpEndpoint,
 		Environment:        cfg.Environment,
@@ -205,4 +218,16 @@ func configureAPIS(r *mux.Router, container *Container) {
 			route.Methods(methods...)
 		}
 	}
+}
+
+func configureMetrics(ctx context.Context, logger log.Logger) (func(context.Context) error, error) {
+	return metric.SetupOTelMetrics(ctx, metric.Config{
+		ApplicationName:    cfg.Service,
+		ApplicationVersion: "0.0.1",
+		Environment:        cfg.Environment,
+		Enabled:            cfg.Metrics.Enabled,
+		Port:               cfg.Metrics.Port,
+		Path:               cfg.Metrics.Path,
+		Log:                logger,
+	})
 }

@@ -30,6 +30,11 @@ type Config struct {
 		OtlpEndpoint string `env:"TRACE_OTLP_ENDPOINT" yaml:"otlp_endpoint"`
 	} `yaml:"trace"`
 	LogLevel string `env:"LOG_LEVEL" yaml:"log_level"`
+	Metrics  struct {
+		Enabled bool   `env:"METRICS_ENABLED" yaml:"enabled"`
+		Port    int    `env:"METRICS_PORT" yaml:"port"`
+		Path    string `env:"METRICS_PATH" yaml:"path"`
+	} `yaml:"metrics"`
 }
 
 func LoadConfig() (*Config, error) {

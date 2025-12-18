@@ -3,7 +3,7 @@ package http
 import (
 	"encoding/json"
 	"net/http"
-	"planning-poker/internal/domain"
+	"planning-poker/internal/application/planningpoker/usecase"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
 )
@@ -16,17 +16,17 @@ type (
 		RoomID string `json:"roomId"`
 	}
 	CreateRoomAPI struct {
-		hub    domain.Hub
-		logger log.Logger
+		usecase usecase.UseCaseWithResult[usecase.CreateRoomCommand, usecase.CreateRoomOutput]
+		logger  log.Logger
 	}
 )
 
 var _ API = (*CreateRoomAPI)(nil)
 
-func NewCreateRoomAPI(hub domain.Hub) CreateRoomAPI {
+func NewCreateRoomAPI(usecase usecase.UseCaseWithResult[usecase.CreateRoomCommand, usecase.CreateRoomOutput]) CreateRoomAPI {
 	return CreateRoomAPI{
-		hub:    hub,
-		logger: log.NewLogger("createroomapi"),
+		usecase: usecase,
+		logger:  log.NewLogger("createroomapi"),
 	}
 }
 
@@ -49,8 +49,13 @@ func (c CreateRoomAPI) Handle() http.Handler {
 			return
 		}
 
-		room := c.hub.NewRoom(ctx, body.CreatedBy)
-		c.logger.Info(ctx, "New room created: %v", room.ID)
-		SendJsonResponse(w, http.StatusCreated, CreateRoomResponse{RoomID: room.ID})
+		output, err := c.usecase.Execute(ctx, usecase.CreateRoomCommand{SenderID: body.CreatedBy})
+		if err != nil {
+			SendJsonErrorMsg(w, http.StatusInternalServerError, "Failed to create room")
+			return
+		}
+
+		c.logger.Info(ctx, "New room created: %v", output.Room.ID)
+		SendJsonResponse(w, http.StatusCreated, CreateRoomResponse{RoomID: output.Room.ID})
 	})
 }

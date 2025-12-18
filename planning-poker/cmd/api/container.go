@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	applock "planning-poker/internal/application/lock"
+	"planning-poker/internal/application/planningpoker/metric"
 	"planning-poker/internal/application/planningpoker/usecase"
 	"planning-poker/internal/config"
 	"planning-poker/internal/domain"
@@ -28,7 +29,8 @@ type (
 func NewContainer(cfg *config.Config) *Container {
 	hub := inmemory.NewHub()
 	lockManager := lock.NewInMemoryLockManager()
-	usecases := newUsecases(hub, lockManager)
+	planningPokerMetric := metric.NewPlanningPokerMetric()
+	usecases := newUsecases(hub, lockManager, planningPokerMetric)
 
 	return &Container{
 		Hub:         hub,
@@ -47,14 +49,14 @@ func newAPIContainer(cfg *config.Config, hub domain.Hub, usecases usecase.UseCas
 				PingInterval: cfg.API.PlanningPoker.WebsocketPingInterval,
 			}),
 			http.NewGetRoomAPI(hub),
-			http.NewCreateRoomAPI(hub),
+			http.NewCreateRoomAPI(usecases.CreateRoom),
 			http.NewHealthcheckAPI(),
 			http.NewGetAllRoomsStateAPI(adminHub, cfg.API.Admin.APIKey),
 		},
 	}
 }
 
-func newUsecases(hub domain.Hub, lockManager applock.LockManager) usecase.UseCases {
+func newUsecases(hub domain.Hub, lockManager applock.LockManager, metric metric.PlanningPokerMetric) usecase.UseCases {
 	updateNameUseCase := usecase.NewUpdateNameUseCase(hub)
 	voteUseCase := usecase.NewVoteUseCase(hub, lockManager)
 	revealUseCase := usecase.NewRevealUseCase(hub, lockManager)
@@ -64,8 +66,9 @@ func newUsecases(hub domain.Hub, lockManager applock.LockManager) usecase.UseCas
 	updateStoryUseCase := usecase.NewUpdateStoryUseCase(hub, lockManager)
 	newVotingUseCase := usecase.NewNewVotingUseCase(hub, lockManager)
 	voteAgainUseCase := usecase.NewVoteAgainUseCase(hub, lockManager)
-	leaveRoomUseCase := usecase.NewLeaveRoomUseCase(hub, lockManager)
-	joinRoomUseCase := usecase.NewJoinRoomUseCase(hub, lockManager)
+	leaveRoomUseCase := usecase.NewLeaveRoomUseCase(hub, lockManager, metric)
+	joinRoomUseCase := usecase.NewJoinRoomUseCase(hub, lockManager, metric)
+	createRoomUseCase := usecase.NewCreateRoomUseCase(hub, metric)
 
 	return usecase.UseCases{
 		UpdateName: decorator.NewTraceableUseCase(func(ctx context.Context, cmd usecase.UpdateNameCommand) error {
@@ -101,5 +104,8 @@ func newUsecases(hub domain.Hub, lockManager applock.LockManager) usecase.UseCas
 		JoinRoom: decorator.NewTraceableUseCaseWithResult(func(ctx context.Context, cmd usecase.JoinRoomCommand) (*usecase.JoinRoomOutput, error) {
 			return joinRoomUseCase.Execute(ctx, cmd)
 		}, "JoinRoomUseCase", "JoinRoom"),
+		CreateRoom: decorator.NewTraceableUseCaseWithResult(func(ctx context.Context, cmd usecase.CreateRoomCommand) (usecase.CreateRoomOutput, error) {
+			return createRoomUseCase.Execute(ctx, cmd)
+		}, "CreateRoomUseCase", "CreateRoom"),
 	}
 }

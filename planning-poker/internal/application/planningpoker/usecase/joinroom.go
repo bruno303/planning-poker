@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"planning-poker/internal/application/lock"
+	"planning-poker/internal/application/planningpoker/metric"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
 	"planning-poker/internal/domain"
 	"planning-poker/internal/domain/entity"
@@ -27,14 +28,16 @@ type (
 		hub         domain.Hub
 		lockManager lock.LockManager
 		logger      log.Logger
+		metric      metric.PlanningPokerMetric
 	}
 )
 
-func NewJoinRoomUseCase(hub domain.Hub, lockManager lock.LockManager) JoinRoomUseCase {
+func NewJoinRoomUseCase(hub domain.Hub, lockManager lock.LockManager, metric metric.PlanningPokerMetric) JoinRoomUseCase {
 	return JoinRoomUseCase{
 		hub:         hub,
 		lockManager: lockManager,
 		logger:      log.NewLogger("usecase.joinroom"),
+		metric:      metric,
 	}
 }
 
@@ -54,6 +57,9 @@ func (uc JoinRoomUseCase) Execute(ctx context.Context, cmd JoinRoomCommand) (*Jo
 		uc.logger.Debug(ctx, "creating bus for client %s on room %s", clientID, room.ID)
 		bus := cmd.BusFactory(client.ID)
 		uc.hub.AddBus(client.ID, bus)
+
+		uc.metric.IncrementUsersTotal(ctx)
+		uc.metric.IncrementActiveUsers(ctx)
 
 		output := &JoinRoomOutput{Client: client, Room: room, Bus: bus}
 

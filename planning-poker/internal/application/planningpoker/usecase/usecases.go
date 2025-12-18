@@ -22,5 +22,6 @@ type (
 		VoteAgain       UseCase[VoteAgainCommand]
 		LeaveRoom       UseCase[LeaveRoomCommand]
 		JoinRoom        UseCaseWithResult[JoinRoomCommand, *JoinRoomOutput]
+		CreateRoom      UseCaseWithResult[CreateRoomCommand, CreateRoomOutput]
 	}
 )

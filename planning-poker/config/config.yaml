@@ -1,5 +1,6 @@
 service: "planning-poker-api"
 log_level: "INFO"
+environment: "local"
 trace:
   enabled: false
   otlp_endpoint: "localhost:4317"
@@ -14,3 +15,7 @@ api:
     enabled: false
   admin:
     api_key: "my-secret-key"
+metrics:
+  enabled: true
+  port: 9090
+  path: "/metrics"
