@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"planning-poker/internal/application"
 	"planning-poker/internal/application/planningpoker/metric"
 	"planning-poker/internal/domain"
 	"planning-poker/internal/domain/entity"
@@ -16,22 +17,27 @@ type (
 	CreateRoomOutput struct {
 		Room *entity.Room
 	}
-	CreateRoomUseCase struct {
+	CreateRoomUseCase interface {
+		Execute(ctx context.Context, cmd CreateRoomCommand) (CreateRoomOutput, error)
+	}
+	createRoomUseCase struct {
 		hub    domain.Hub
 		logger log.Logger
 		metric metric.PlanningPokerMetric
 	}
 )
 
-func NewCreateRoomUseCase(hub domain.Hub, metric metric.PlanningPokerMetric) CreateRoomUseCase {
-	return CreateRoomUseCase{
+var _ application.UseCaseR[CreateRoomCommand, CreateRoomOutput] = (*createRoomUseCase)(nil)
+
+func NewCreateRoomUseCase(hub domain.Hub, metric metric.PlanningPokerMetric) createRoomUseCase {
+	return createRoomUseCase{
 		hub:    hub,
 		logger: log.NewLogger("usecase.CreateRoom"),
 		metric: metric,
 	}
 }
 
-func (uc CreateRoomUseCase) Execute(ctx context.Context, cmd CreateRoomCommand) (CreateRoomOutput, error) {
+func (uc createRoomUseCase) Execute(ctx context.Context, cmd CreateRoomCommand) (CreateRoomOutput, error) {
 	room := uc.hub.NewRoom(ctx, cmd.SenderID)
 	uc.metric.IncrementActiveRoomsCounter(ctx)
 

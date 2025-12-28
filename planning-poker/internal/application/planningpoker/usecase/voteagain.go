@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"fmt"
+	"planning-poker/internal/application"
 	"planning-poker/internal/application/lock"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
 	"planning-poker/internal/domain"
@@ -13,20 +14,15 @@ type (
 		RoomID   string
 		SenderID string
 	}
-
-	VoteAgainUseCase interface {
-		Execute(ctx context.Context, cmd VoteAgainCommand) error
-	}
-
 	voteAgainUseCase struct {
 		hub         domain.Hub
 		lockManager lock.LockManager
 	}
 )
 
-var _ VoteAgainUseCase = (*voteAgainUseCase)(nil)
+var _ application.UseCase[VoteAgainCommand] = (*voteAgainUseCase)(nil)
 
-func NewVoteAgainUseCase(hub domain.Hub, lockManager lock.LockManager) VoteAgainUseCase {
+func NewVoteAgainUseCase(hub domain.Hub, lockManager lock.LockManager) *voteAgainUseCase {
 	return &voteAgainUseCase{
 		hub:         hub,
 		lockManager: lockManager,

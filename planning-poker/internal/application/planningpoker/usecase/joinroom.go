@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"fmt"
+	"planning-poker/internal/application"
 	"planning-poker/internal/application/lock"
 	"planning-poker/internal/application/planningpoker/metric"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
@@ -31,6 +32,8 @@ type (
 		metric      metric.PlanningPokerMetric
 	}
 )
+
+var _ application.UseCaseR[JoinRoomCommand, *JoinRoomOutput] = (*JoinRoomUseCase)(nil)
 
 func NewJoinRoomUseCase(hub domain.Hub, lockManager lock.LockManager, metric metric.PlanningPokerMetric) JoinRoomUseCase {
 	return JoinRoomUseCase{

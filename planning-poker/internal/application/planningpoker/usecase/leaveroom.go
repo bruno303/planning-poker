@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"planning-poker/internal/application"
 	"planning-poker/internal/application/lock"
 	"planning-poker/internal/application/planningpoker/metric"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
@@ -13,11 +14,6 @@ type (
 		RoomID   string
 		SenderID string
 	}
-
-	LeaveRoomUseCase interface {
-		Execute(ctx context.Context, cmd LeaveRoomCommand) error
-	}
-
 	leaveRoomUseCase struct {
 		hub         domain.Hub
 		lockManager lock.LockManager
@@ -25,9 +21,9 @@ type (
 	}
 )
 
-var _ LeaveRoomUseCase = (*leaveRoomUseCase)(nil)
+var _ application.UseCase[LeaveRoomCommand] = (*leaveRoomUseCase)(nil)
 
-func NewLeaveRoomUseCase(hub domain.Hub, lockManager lock.LockManager, metric metric.PlanningPokerMetric) LeaveRoomUseCase {
+func NewLeaveRoomUseCase(hub domain.Hub, lockManager lock.LockManager, metric metric.PlanningPokerMetric) *leaveRoomUseCase {
 	return &leaveRoomUseCase{
 		hub:         hub,
 		lockManager: lockManager,

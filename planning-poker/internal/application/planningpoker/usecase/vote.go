@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"fmt"
+	"planning-poker/internal/application"
 	"planning-poker/internal/application/lock"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
 	"planning-poker/internal/domain"
@@ -14,18 +15,13 @@ type (
 		SenderID string
 		Vote     *string
 	}
-
-	VoteUseCase interface {
-		Execute(ctx context.Context, cmd VoteCommand) error
-	}
-
 	voteUseCase struct {
 		hub         domain.Hub
 		lockManager lock.LockManager
 	}
 )
 
-var _ VoteUseCase = (*voteUseCase)(nil)
+var _ application.UseCase[VoteCommand] = (*voteUseCase)(nil)
 
 func NewVoteUseCase(hub domain.Hub, lockManager lock.LockManager) *voteUseCase {
 	return &voteUseCase{

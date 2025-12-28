@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	applock "planning-poker/internal/application/lock"
 	"planning-poker/internal/application/planningpoker/metric"
 	"planning-poker/internal/application/planningpoker/usecase"
@@ -9,8 +8,8 @@ import (
 	"planning-poker/internal/domain"
 	"planning-poker/internal/infra/boundaries/bus/inmemory"
 	"planning-poker/internal/infra/boundaries/http"
+	"planning-poker/internal/infra/decorators/usecasedecorators"
 	"planning-poker/internal/infra/lock"
-	"planning-poker/internal/infra/trace/decorator"
 )
 
 type (
@@ -21,7 +20,7 @@ type (
 	Container struct {
 		Hub         *inmemory.InMemoryHub
 		LockManager *lock.InMemoryLockManager
-		Usecases    usecase.UseCases
+		Usecases    usecase.UseCasesFacade
 		API         APIContainer
 	}
 )
@@ -40,7 +39,7 @@ func NewContainer(cfg *config.Config) *Container {
 	}
 }
 
-func newAPIContainer(cfg *config.Config, hub domain.Hub, usecases usecase.UseCases, adminHub domain.AdminHub) APIContainer {
+func newAPIContainer(cfg *config.Config, hub domain.Hub, usecases usecase.UseCasesFacade, adminHub domain.AdminHub) APIContainer {
 	return APIContainer{
 		APIs: []http.API{
 			http.NewWebsocketAPI(hub, usecases, http.WebSocketConfig{
@@ -56,7 +55,7 @@ func newAPIContainer(cfg *config.Config, hub domain.Hub, usecases usecase.UseCas
 	}
 }
 
-func newUsecases(hub domain.Hub, lockManager applock.LockManager, metric metric.PlanningPokerMetric) usecase.UseCases {
+func newUsecases(hub domain.Hub, lockManager applock.LockManager, metric metric.PlanningPokerMetric) usecase.UseCasesFacade {
 	updateNameUseCase := usecase.NewUpdateNameUseCase(hub)
 	voteUseCase := usecase.NewVoteUseCase(hub, lockManager)
 	revealUseCase := usecase.NewRevealUseCase(hub, lockManager)
@@ -70,42 +69,18 @@ func newUsecases(hub domain.Hub, lockManager applock.LockManager, metric metric.
 	joinRoomUseCase := usecase.NewJoinRoomUseCase(hub, lockManager, metric)
 	createRoomUseCase := usecase.NewCreateRoomUseCase(hub, metric)
 
-	return usecase.UseCases{
-		UpdateName: decorator.NewTraceableUseCase(func(ctx context.Context, cmd usecase.UpdateNameCommand) error {
-			return updateNameUseCase.Execute(ctx, cmd)
-		}, "UpdateNameUseCase", "UpdateName"),
-		Vote: decorator.NewTraceableUseCase(func(ctx context.Context, cmd usecase.VoteCommand) error {
-			return voteUseCase.Execute(ctx, cmd)
-		}, "VoteUseCase", "Vote"),
-		Reveal: decorator.NewTraceableUseCase(func(ctx context.Context, cmd usecase.RevealCommand) error {
-			return revealUseCase.Execute(ctx, cmd)
-		}, "RevealUseCase", "Reveal"),
-		Reset: decorator.NewTraceableUseCase(func(ctx context.Context, cmd usecase.ResetCommand) error {
-			return resetUseCase.Execute(ctx, cmd)
-		}, "ResetUseCase", "Reset"),
-		ToggleSpectator: decorator.NewTraceableUseCase(func(ctx context.Context, cmd usecase.ToggleSpectatorCommand) error {
-			return toggleSpectatorUseCase.Execute(ctx, cmd)
-		}, "ToggleSpectatorUseCase", "ToggleSpectator"),
-		ToggleOwner: decorator.NewTraceableUseCase(func(ctx context.Context, cmd usecase.ToggleOwnerCommand) error {
-			return toggleOwnerUseCase.Execute(ctx, cmd)
-		}, "ToggleOwnerUseCase", "ToggleOwner"),
-		UpdateStory: decorator.NewTraceableUseCase(func(ctx context.Context, cmd usecase.UpdateStoryCommand) error {
-			return updateStoryUseCase.Execute(ctx, cmd)
-		}, "UpdateStoryUseCase", "UpdateStory"),
-		NewVoting: decorator.NewTraceableUseCase(func(ctx context.Context, cmd usecase.NewVotingCommand) error {
-			return newVotingUseCase.Execute(ctx, cmd)
-		}, "NewVotingUseCase", "NewVoting"),
-		VoteAgain: decorator.NewTraceableUseCase(func(ctx context.Context, cmd usecase.VoteAgainCommand) error {
-			return voteAgainUseCase.Execute(ctx, cmd)
-		}, "VoteAgainUseCase", "VoteAgain"),
-		LeaveRoom: decorator.NewTraceableUseCase(func(ctx context.Context, cmd usecase.LeaveRoomCommand) error {
-			return leaveRoomUseCase.Execute(ctx, cmd)
-		}, "LeaveRoomUseCase", "LeaveRoom"),
-		JoinRoom: decorator.NewTraceableUseCaseWithResult(func(ctx context.Context, cmd usecase.JoinRoomCommand) (*usecase.JoinRoomOutput, error) {
-			return joinRoomUseCase.Execute(ctx, cmd)
-		}, "JoinRoomUseCase", "JoinRoom"),
-		CreateRoom: decorator.NewTraceableUseCaseWithResult(func(ctx context.Context, cmd usecase.CreateRoomCommand) (usecase.CreateRoomOutput, error) {
-			return createRoomUseCase.Execute(ctx, cmd)
-		}, "CreateRoomUseCase", "CreateRoom"),
+	return usecase.UseCasesFacade{
+		UpdateName:      usecasedecorators.NewTraceableUseCase(updateNameUseCase, "UpdateNameUseCase", "UpdateName"),
+		Vote:            usecasedecorators.NewTraceableUseCase(voteUseCase, "VoteUseCase", "Vote"),
+		Reveal:          usecasedecorators.NewTraceableUseCase(revealUseCase, "RevealUseCase", "Reveal"),
+		Reset:           usecasedecorators.NewTraceableUseCase(resetUseCase, "ResetUseCase", "Reset"),
+		ToggleSpectator: usecasedecorators.NewTraceableUseCase(toggleSpectatorUseCase, "ToggleSpectatorUseCase", "ToggleSpectator"),
+		ToggleOwner:     usecasedecorators.NewTraceableUseCase(toggleOwnerUseCase, "ToggleOwnerUseCase", "ToggleOwner"),
+		UpdateStory:     usecasedecorators.NewTraceableUseCase(updateStoryUseCase, "UpdateStoryUseCase", "UpdateStory"),
+		NewVoting:       usecasedecorators.NewTraceableUseCase(newVotingUseCase, "NewVotingUseCase", "NewVoting"),
+		VoteAgain:       usecasedecorators.NewTraceableUseCase(voteAgainUseCase, "VoteAgainUseCase", "VoteAgain"),
+		LeaveRoom:       usecasedecorators.NewTraceableUseCase(leaveRoomUseCase, "LeaveRoomUseCase", "LeaveRoom"),
+		JoinRoom:        usecasedecorators.NewTraceableUseCaseR(joinRoomUseCase, "JoinRoomUseCase", "JoinRoom"),
+		CreateRoom:      usecasedecorators.NewTraceableUseCaseR(createRoomUseCase, "CreateRoomUseCase", "CreateRoom"),
 	}
 }

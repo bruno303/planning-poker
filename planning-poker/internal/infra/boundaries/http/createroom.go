@@ -16,14 +16,14 @@ type (
 		RoomID string `json:"roomId"`
 	}
 	CreateRoomAPI struct {
-		usecase usecase.UseCaseWithResult[usecase.CreateRoomCommand, usecase.CreateRoomOutput]
+		usecase usecase.CreateRoomUseCase
 		logger  log.Logger
 	}
 )
 
 var _ API = (*CreateRoomAPI)(nil)
 
-func NewCreateRoomAPI(usecase usecase.UseCaseWithResult[usecase.CreateRoomCommand, usecase.CreateRoomOutput]) CreateRoomAPI {
+func NewCreateRoomAPI(usecase usecase.CreateRoomUseCase) CreateRoomAPI {
 	return CreateRoomAPI{
 		usecase: usecase,
 		logger:  log.NewLogger("createroomapi"),
