@@ -36,14 +36,6 @@ export const styles = {
     color: '#6b7280',
     fontStyle: 'italic'
   },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-    gap: '1.5rem'
-  },
-  gridLarge: {
-    gridColumn: '1 / -1'
-  },
   card: {
     backgroundColor: 'white',
     borderRadius: '0.5rem',

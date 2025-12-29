@@ -2,10 +2,11 @@
 
 import FocusableComponent from '@/components/focusableInput/focusableInput';
 import { useRoom } from '@/context/room/roomContext';
-import { Eye, EyeOff, Repeat, RotateCcw, Shield, Users } from 'lucide-react';
+import { Eye, EyeOff, Repeat, RotateCcw, Shield, Users, X } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Header from './page.header';
+import gridStyles from './page.module.css';
 import { styles } from './page.styles';
 
 type Card = string | null
@@ -226,9 +227,9 @@ export default function PlanningPoker() {
             </div>
           </div>
 
-          <div style={styles.grid}>
+          <div className={gridStyles.grid}>
             {/* Main Voting Area */}
-            <div style={{...styles.gridLarge, ...styles.card}}>
+            <div style={styles.card}>
               {/* User Info */}
               <div style={styles.userInfo}>
                 <div style={styles.inputGroup}>
@@ -241,14 +242,17 @@ export default function PlanningPoker() {
                 </div>
               </div>
               
-              {selectedCard && (
-                <div style={styles.selectedCard}>
-                  <div style={styles.selectedCardLabel}>Your Vote</div>
-                  <div style={{...styles.selectedCardDisplay, backgroundColor: getCardColor(selectedCard)}}>
-                    {selectedCard}
-                  </div>
+              <div style={styles.selectedCard}>
+                <div style={styles.selectedCardLabel}>
+                  {selectedCard ? 'Your Vote' : 'No Vote Yet'}
                 </div>
-              )}
+                <div style={{
+                  ...styles.selectedCardDisplay, 
+                  backgroundColor: selectedCard ? getCardColor(selectedCard) : '#9ca3af'
+                }}>
+                  {selectedCard ? selectedCard : <X size={32} strokeWidth={3} />}
+                </div>
+              </div>
 
               {/* Planning Poker Cards */}
               <div style={{marginTop: '2rem'}}>
