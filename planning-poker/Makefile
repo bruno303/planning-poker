@@ -20,6 +20,11 @@ deps:
 	go mod tidy
 	go mod vendor
 
+.PHONY: download
+download:
+	go mod tidy
+	go mod download
+
 .PHONY: run
 run:
 	go run ./cmd/api
@@ -58,14 +63,5 @@ generate:
 .PHONY: clean
 clean:
 	rm -rf bin
-
-.PHONY: docker-build-backend
-docker-build-backend: test
-	docker build -t planning-poker-backend -f Dockerfile .
-
-.PHONY: docker-build-frontend
-docker-build-frontend:
-	cd $(FRONT_DIR) && docker build -f Dockerfile \
-		--build-arg NEXT_PUBLIC_BACKEND_URL=$(BACKEND_URL) \
-  	--build-arg NEXT_PUBLIC_WEBSOCKET_URL=$(WEBSOCKET_URL) \
-		-t planning-poker-frontend .
+	rm -rf coverage.out
+	rm -rf coverage.html

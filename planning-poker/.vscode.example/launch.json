@@ -13,49 +13,6 @@
       "internalConsoleOptions": "openOnSessionStart",
       "console": "internalConsole",
       "envFile": "${workspaceFolder}/.env"
-    },
-    {
-      "name": "Next.js: debug server-side",
-      "type": "node-terminal",
-      "request": "launch",
-      "cwd": "${workspaceFolder}/frontend/planning-poker-front",
-      "command": "npm run dev"
-    },
-    {
-      "name": "Next.js: debug client-side (Chrome)",
-      "type": "chrome",
-      "request": "launch",
-      "cwd": "${workspaceFolder}/frontend/planning-poker-front",
-      "url": "http://localhost:3000"
-    },
-    {
-      "name": "Next.js: debug client-side (Firefox)",
-      "type": "firefox",
-      "request": "launch",
-      "url": "http://localhost:3000",
-      "pathMappings": [
-        {
-          "url": "webpack://_N_E",
-          "path": "${workspaceFolder}/frontend/planning-poker-front"
-        }
-      ]
-    },
-    {
-      "name": "Next.js: debug full stack",
-      "type": "node",
-      "request": "launch",
-      "program": "${workspaceFolder}/frontend/planning-poker-front/node_modules/next/dist/bin/next",
-      "runtimeArgs": ["--inspect"],
-      "cwd": "${workspaceFolder}/frontend/planning-poker-front",
-      "skipFiles": ["<node_internals>/**"],
-      "sourceMaps": true,
-      "serverReadyAction": {
-        "action": "debugWithEdge",
-        "killOnServerStop": true,
-        "pattern": "- Local:.+(https?://.+)",
-        "uriFormat": "%s",
-        "webRoot": "${workspaceFolder}/frontend/planning-poker-front"
-      }
     }
   ]
 }

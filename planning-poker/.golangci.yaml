@@ -1,0 +1,13 @@
+version: "2"
+formatters:
+  exclusions:
+    warn-unused: true
+    generated: lax
+    paths:
+      - ".*/*_test.go$"
+linters:
+  exclusions:
+    generated: lax
+    warn-unused: true
+    paths:
+      - ".*/*_test.go$"

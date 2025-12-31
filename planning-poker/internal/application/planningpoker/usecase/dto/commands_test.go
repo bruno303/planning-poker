@@ -2,11 +2,11 @@ package dto
 
 import (
 	"planning-poker/internal/domain/entity"
+	"planning-poker/internal/infra/boundaries/bus/inmemory"
 	"reflect"
 	"testing"
 
 	"github.com/samber/lo"
-	"go.uber.org/mock/gomock"
 )
 
 func TestNewRoomStateCommand(t *testing.T) {
@@ -16,10 +16,10 @@ func TestNewRoomStateCommand(t *testing.T) {
 		{ID: "2", Name: "Bob", CurrentVote: nil, HasVoted: false, IsSpectator: true, IsOwner: false},
 	}
 
-	ctrl := gomock.NewController(t)
-	clientCollection := entity.NewMockClientCollection(ctrl)
-
-	clientCollection.EXPECT().Values().Return(clients).AnyTimes()
+	clientCollection := inmemory.NewInMemoryClientCollection()
+	for _, client := range clients {
+		clientCollection.Add(client)
+	}
 
 	room := &entity.Room{
 		ID:                 "room1",

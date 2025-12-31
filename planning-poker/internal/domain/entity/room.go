@@ -1,6 +1,6 @@
 package entity
 
-//go:generate mockgen -destination mocks.go -package entity . ClientCollection
+//go:generate go tool mockgen -destination mocks.go -package entity . ClientCollection
 
 import (
 	"context"
