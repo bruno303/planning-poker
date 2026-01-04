@@ -1,0 +1,21 @@
+service: "planning-poker-api-test"
+log_level: "INFO"
+environment: "test"
+trace:
+  enabled: false
+  otlp_endpoint: "localhost:4317"
+api:
+  backend_port: 0
+  cors_allowed_origins: "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080"
+  planning_poker:
+    websocket_write_timeout: 10s
+    websocket_read_timeout: 60s
+    websocket_ping_interval: 30s
+  tracing:
+    enabled: false
+  admin:
+    api_key: "my-secret-key"
+metrics:
+  enabled: true
+  port: 9090
+  path: "/metrics"

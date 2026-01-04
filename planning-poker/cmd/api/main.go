@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"planning-poker/internal/config"
+	"planning-poker/internal/setup"
 	"strings"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
-	"github.com/bruno303/go-toolkit/pkg/metric"
-	"github.com/bruno303/go-toolkit/pkg/trace"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux"
@@ -26,10 +25,10 @@ func main() {
 		panic(err)
 	}
 
-	configureLogging()
+	setup.ConfigureLogging(cfg)
 	logger := log.NewLogger("main")
 
-	metricsShutdown, err := configureMetrics(ctx, logger)
+	metricsShutdown, err := setup.ConfigureMetrics(ctx, cfg, logger)
 	if err != nil {
 		logger.Error(ctx, "Error configuring metrics", err)
 		return
@@ -40,18 +39,18 @@ func main() {
 		}
 	}()
 
-	shutdown := configureTrace(ctx, logger)
+	shutdown := setup.ConfigureTrace(ctx, cfg, logger)
 	defer func() {
 		if err := shutdown(ctx); err != nil {
 			logger.Error(ctx, "Error shutting down tracing", err)
 		}
 	}()
 
-	container := NewContainer(cfg)
+	container := setup.NewContainer(cfg)
 
 	r := mux.NewRouter()
 	configureMiddlewares(ctx, r, logger)
-	configureAPIS(r, container)
+	setup.ConfigureAPIs(r, container)
 
 	walkRoutes(ctx, r, logger)
 	port := cfg.API.BackendPort
@@ -75,50 +74,6 @@ func configureMiddlewares(ctx context.Context, r *mux.Router, logger log.Logger)
 	} else {
 		logger.Info(ctx, "Tracing on API disabled")
 	}
-}
-
-func configureLogging() {
-	logLevel := cfg.LogLevel
-
-	var ll log.Level
-	switch strings.ToUpper(logLevel) {
-	case "DEBUG":
-		ll = log.LevelDebug
-	case "INFO":
-		ll = log.LevelInfo
-	case "WARN":
-		ll = log.LevelWarn
-	case "ERROR":
-		ll = log.LevelError
-	default:
-		ll = log.LevelInfo
-	}
-
-	var jsonEnvironments = map[string]bool{
-		"production":  true,
-		"staging":     true,
-		"development": true,
-	}
-	logFactory := func(name string) log.Logger {
-		formatJson := jsonEnvironments[cfg.Environment]
-
-		return log.NewSlogAdapter(
-			log.SlogAdapterOpts{
-				Level:                 ll,
-				FormatJson:            formatJson,
-				ExtractAdditionalInfo: func(context.Context) []any { return []any{} },
-				Name:                  name,
-				Environment:           cfg.Environment,
-			},
-		)
-	}
-
-	log.ConfigureLogging(log.LogConfig{
-		Type: log.LogTypeMultiple,
-		MultipleLogConfig: log.MultipleLogConfig{
-			Factory: logFactory,
-		},
-	})
 }
 
 func getCORSOrigins(logger log.Logger) []string {
@@ -158,26 +113,6 @@ func loggingMiddleware(next http.Handler, logger log.Logger) http.Handler {
 	})
 }
 
-func configureTrace(ctx context.Context, logger log.Logger) func(context.Context) error {
-	if !cfg.Trace.Enabled {
-		logger.Info(ctx, "Tracing disabled")
-		return func(context.Context) error { return nil }
-	}
-
-	shutdown, err := trace.SetupOTelSDK(ctx, trace.Config{
-		ApplicationName:    cfg.Service,
-		ApplicationVersion: "0.0.1",
-		Endpoint:           cfg.Trace.OtlpEndpoint,
-		Environment:        cfg.Environment,
-	})
-	if err != nil {
-		logger.Error(ctx, "Error setting up tracing: %v", err)
-	} else {
-		trace.SetTracer(trace.NewOtelTracerAdapter())
-	}
-	return shutdown
-}
-
 func walkRoutes(ctx context.Context, r *mux.Router, logger log.Logger) {
 	err := r.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
 		pathTemplate, err := route.GetPathTemplate()
@@ -207,27 +142,4 @@ func walkRoutes(ctx context.Context, r *mux.Router, logger log.Logger) {
 	if err != nil {
 		logger.Error(ctx, "Error walking routes", err)
 	}
-}
-
-func configureAPIS(r *mux.Router, container *Container) {
-	for _, api := range container.API.APIs {
-		route := r.Handle(api.Endpoint(), api.Handle())
-
-		methods := api.Methods()
-		if len(methods) > 0 {
-			route.Methods(methods...)
-		}
-	}
-}
-
-func configureMetrics(ctx context.Context, logger log.Logger) (func(context.Context) error, error) {
-	return metric.SetupOTelMetrics(ctx, metric.Config{
-		ApplicationName:    cfg.Service,
-		ApplicationVersion: "0.0.1",
-		Environment:        cfg.Environment,
-		Enabled:            cfg.Metrics.Enabled,
-		Port:               cfg.Metrics.Port,
-		Path:               cfg.Metrics.Path,
-		Log:                logger,
-	})
 }

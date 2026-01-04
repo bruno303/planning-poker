@@ -6,8 +6,11 @@ ifeq ($(wildcard .env),)
 $(shell cp example.env .env)
 endif
 
+# Only load .env for non-test targets
+ifeq ($(filter test-integration,$(MAKECMDGOALS)),)
 include .env
 export
+endif
 
 .PHONY: init
 init:
@@ -37,13 +40,17 @@ run-frontend:
 build:
 	go build -o bin/api ./cmd/api
 
-.PHONY: test
-test: lint fmt
-	go test -timeout 30s ./...
+.PHONY: test-unit
+test-unit: lint fmt
+	go test -v -timeout 30s ./internal/...
+
+.PHONY: test-integration
+test-integration: lint fmt
+	go test -v -timeout 30s ./test/integration/...
 
 .PHONY: test-coverage
 test-coverage:
-	go test -coverprofile=coverage.out ./...
+	go test -coverprofile=coverage.out -coverpkg=./internal/... ./...
 	go tool cover -html=coverage.out -o coverage.html
 	echo "Generated coverage report at coverage.html"
 	echo "If using WSL, run 'explorer.exe coverage.html' to view the report."
