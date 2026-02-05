@@ -1,4 +1,4 @@
-package inmemory
+package clientcollection
 
 import (
 	"planning-poker/internal/domain/entity"
@@ -10,7 +10,7 @@ func newTestClient(id, name string) *entity.Client {
 }
 
 func TestAddAndValues(t *testing.T) {
-	cc := NewInMemoryClientCollection()
+	cc := New()
 	client := newTestClient("1", "Alice")
 	cc.Add(client)
 
@@ -23,7 +23,7 @@ func TestAddAndValues(t *testing.T) {
 func TestRemove(t *testing.T) {
 	client1 := newTestClient("1", "Alice")
 	client2 := newTestClient("2", "Bob")
-	cc := NewInMemoryClientCollection(client1, client2)
+	cc := New(client1, client2)
 
 	cc.Remove("1")
 	if cc.Count() != 1 || cc.Values()[0] != client2 {
@@ -37,7 +37,7 @@ func TestRemove(t *testing.T) {
 }
 
 func TestCount(t *testing.T) {
-	cc := NewInMemoryClientCollection()
+	cc := New()
 	if cc.Count() != 0 {
 		t.Errorf("expected count 0, got %d", cc.Count())
 	}
@@ -48,7 +48,7 @@ func TestCount(t *testing.T) {
 }
 
 func TestFirst(t *testing.T) {
-	cc := NewInMemoryClientCollection()
+	cc := New()
 	if c, ok := cc.First(); ok || c != nil {
 		t.Errorf("expected First to return nil, false for empty collection")
 	}
@@ -62,7 +62,7 @@ func TestFirst(t *testing.T) {
 func TestForEach(t *testing.T) {
 	client1 := newTestClient("1", "Alice")
 	client2 := newTestClient("2", "Bob")
-	cc := NewInMemoryClientCollection(client1, client2)
+	cc := New(client1, client2)
 
 	var ids []string
 	cc.ForEach(func(c *entity.Client) {
@@ -76,7 +76,7 @@ func TestForEach(t *testing.T) {
 func TestFilter(t *testing.T) {
 	client1 := newTestClient("1", "Alice")
 	client2 := newTestClient("2", "Bob")
-	cc := NewInMemoryClientCollection(client1, client2)
+	cc := New(client1, client2)
 
 	filtered := cc.Filter(func(c *entity.Client) bool {
 		return c.Name == "Bob"

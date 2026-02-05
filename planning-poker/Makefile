@@ -1,6 +1,7 @@
 FRONT_DIR=frontend/planning-poker-front
 BACKEND_URL=http://localhost:8080
 WEBSOCKET_URL=ws://localhost:8080
+DOCKER_COMPOSE=docker compose
 
 ifeq ($(wildcard .env),)
 $(shell cp example.env .env)
@@ -40,13 +41,17 @@ run-frontend:
 build:
 	go build -o bin/api ./cmd/api
 
+.PHONY: tests
+tests: lint fmt
+	go test -timeout 30s ./...
+
 .PHONY: test-unit
 test-unit: lint fmt
-	go test -v -timeout 30s ./internal/...
+	go test -timeout 30s ./internal/...
 
 .PHONY: test-integration
 test-integration: lint fmt
-	go test -v -timeout 30s ./test/integration/...
+	go test -timeout 30s ./test/integration/...
 
 .PHONY: test-coverage
 test-coverage:
@@ -72,3 +77,11 @@ clean:
 	rm -rf bin
 	rm -rf coverage.out
 	rm -rf coverage.html
+
+.PHONY: infra-up
+infra-up:
+	$(DOCKER_COMPOSE) up -d
+
+.PHONY: infra-down
+infra-down:
+	$(DOCKER_COMPOSE) down

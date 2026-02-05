@@ -7,7 +7,7 @@ import (
 	"planning-poker/internal/application/planningpoker/metric"
 	"planning-poker/internal/domain"
 	"planning-poker/internal/domain/entity"
-	"planning-poker/internal/infra/boundaries/bus/inmemory"
+	"planning-poker/internal/infra/boundaries/bus/clientcollection"
 	"testing"
 
 	"go.uber.org/mock/gomock"
@@ -44,9 +44,8 @@ func TestLeaveRoomUseCase_Execute_Success_RoomExists(t *testing.T) {
 	senderID := "client123"
 	room := &entity.Room{
 		ID:      roomID,
-		Clients: inmemory.NewInMemoryClientCollection(),
+		Clients: clientcollection.New(),
 	}
-
 
 	mockLockManager.EXPECT().
 		ExecuteWithLock(gomock.Any(), roomID, gomock.Any()).
@@ -155,7 +154,7 @@ func TestLeaveRoomUseCase_Execute_BroadcastError(t *testing.T) {
 	senderID := "client123"
 	room := &entity.Room{
 		ID:      roomID,
-		Clients: inmemory.NewInMemoryClientCollection(),
+		Clients: clientcollection.New(),
 	}
 
 	expectedError := errors.New("broadcast failed")

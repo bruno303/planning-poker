@@ -71,6 +71,11 @@ func (uc JoinRoomUseCase) Execute(ctx context.Context, cmd JoinRoomCommand) (*Jo
 			return output, fmt.Errorf("failed to send update client ID command: %w", err)
 		}
 
+		uc.logger.Debug(ctx, "broadcasting room state for room %s", room.ID)
+		if err := uc.hub.BroadcastToRoom(ctx, room.ID, dto.NewRoomStateCommand(room)); err != nil {
+			return output, fmt.Errorf("failed to broadcast room state: %w", err)
+		}
+
 		return output, nil
 	})
 

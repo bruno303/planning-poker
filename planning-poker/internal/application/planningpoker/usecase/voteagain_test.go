@@ -6,7 +6,7 @@ import (
 	"planning-poker/internal/application/lock"
 	"planning-poker/internal/domain"
 	"planning-poker/internal/domain/entity"
-	"planning-poker/internal/infra/boundaries/bus/inmemory"
+	"planning-poker/internal/infra/boundaries/bus/clientcollection"
 	"testing"
 
 	"go.uber.org/mock/gomock"
@@ -38,7 +38,7 @@ func TestVoteAgainUseCase_Execute_Success(t *testing.T) {
 	clientID := "client123"
 	room := &entity.Room{
 		ID:      roomID,
-		Clients: inmemory.NewInMemoryClientCollection(),
+		Clients: clientcollection.New(),
 	}
 
 	client := room.NewClient(clientID)
@@ -51,6 +51,7 @@ func TestVoteAgainUseCase_Execute_Success(t *testing.T) {
 		})
 
 	mockHub.EXPECT().GetRoom(ctx, roomID).Return(room, true)
+	mockHub.EXPECT().SaveRoom(ctx, room).Return(nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(nil)
 
 	uc := NewVoteAgainUseCase(mockHub, mockLockManager)
@@ -63,6 +64,50 @@ func TestVoteAgainUseCase_Execute_Success(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
+	}
+}
+
+func TestVoteAgainUseCase_Execute_SaveRoomError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	mockHub := domain.NewMockHub(ctrl)
+	mockLockManager := lock.NewMockLockManager(ctrl)
+
+	roomID := "room123"
+	senderID := "client123"
+	room := &entity.Room{
+		ID:      roomID,
+		Clients: clientcollection.New(),
+	}
+
+	client := room.NewClient(senderID)
+	client.IsOwner = true
+	expectedError := errors.New("failed to save room")
+
+	mockLockManager.EXPECT().
+		ExecuteWithLock(gomock.Any(), roomID, gomock.Any()).
+		DoAndReturn(func(ctx context.Context, key string, fn func(context.Context) error) error {
+			return fn(ctx)
+		})
+
+	mockHub.EXPECT().GetRoom(ctx, roomID).Return(room, true)
+	mockHub.EXPECT().SaveRoom(ctx, room).Return(expectedError)
+
+	uc := NewVoteAgainUseCase(mockHub, mockLockManager)
+	cmd := VoteAgainCommand{
+		RoomID:   roomID,
+		SenderID: senderID,
+	}
+
+	err := uc.Execute(ctx, cmd)
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if err != expectedError {
+		t.Errorf("expected error %v, got %v", expectedError, err)
 	}
 }
 
@@ -112,7 +157,7 @@ func TestVoteAgainUseCase_Execute_BroadcastError(t *testing.T) {
 	clientID := "client123"
 	room := &entity.Room{
 		ID:      roomID,
-		Clients: inmemory.NewInMemoryClientCollection(),
+		Clients: clientcollection.New(),
 	}
 
 	client := room.NewClient(clientID)
@@ -126,6 +171,7 @@ func TestVoteAgainUseCase_Execute_BroadcastError(t *testing.T) {
 		})
 
 	mockHub.EXPECT().GetRoom(ctx, roomID).Return(room, true)
+	mockHub.EXPECT().SaveRoom(ctx, room).Return(nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(expectedError)
 
 	uc := NewVoteAgainUseCase(mockHub, mockLockManager)

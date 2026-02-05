@@ -14,6 +14,7 @@ type (
 		NewRoom(ctx context.Context, owner string) *entity.Room
 		GetRoom(ctx context.Context, roomID string) (*entity.Room, bool)
 		RemoveRoom(roomID string)
+		SaveRoom(ctx context.Context, room *entity.Room) error
 		BroadcastToRoom(ctx context.Context, roomID string, message any) error
 
 		GetBus(clientID string) (Bus, bool)

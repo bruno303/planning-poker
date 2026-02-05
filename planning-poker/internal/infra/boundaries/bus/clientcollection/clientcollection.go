@@ -1,4 +1,4 @@
-package inmemory
+package clientcollection
 
 import (
 	"planning-poker/internal/domain/entity"
@@ -8,7 +8,7 @@ type InMemoryClientCollection struct {
 	clients []*entity.Client
 }
 
-func NewInMemoryClientCollection(clients ...*entity.Client) *InMemoryClientCollection {
+func New(clients ...*entity.Client) *InMemoryClientCollection {
 	return &InMemoryClientCollection{
 		clients: clients,
 	}
@@ -49,7 +49,7 @@ func (cc *InMemoryClientCollection) ForEach(f func(client *entity.Client)) {
 }
 
 func (cc *InMemoryClientCollection) Filter(f func(client *entity.Client) bool) entity.ClientCollection {
-	filtered := NewInMemoryClientCollection()
+	filtered := New()
 	for _, client := range cc.clients {
 		if f(client) {
 			filtered.Add(client)

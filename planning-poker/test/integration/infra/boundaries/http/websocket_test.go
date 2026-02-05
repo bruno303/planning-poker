@@ -104,6 +104,12 @@ func getClientID(t *testing.T, conn *websocket.Conn) string {
 		t.Fatal("clientId not found in update-client-id message")
 	}
 
+	// Consume the initial room-state message that comes after joining
+	msg2 := receiveMessage(t, conn, 2*time.Second)
+	if msg2["type"] != "room-state" {
+		t.Fatalf("expected second message type 'room-state', got '%v'", msg2["type"])
+	}
+
 	return clientID
 }
 
@@ -198,6 +204,8 @@ func TestWebSocketVoting(t *testing.T) {
 	conn2 := connectWebSocket(t, ts, roomID)
 	defer conn2.Close()
 	clientID2 := getClientID(t, conn2)
+	// Client1 receives broadcast when client2 joins
+	_ = receiveMessage(t, conn1, 2*time.Second)
 
 	t.Run("client can vote", func(t *testing.T) {
 		sendMessage(t, conn1, map[string]any{
@@ -350,6 +358,8 @@ func TestWebSocketToggleSpectator(t *testing.T) {
 
 	defer conn2.Close()
 	clientID2 := getClientID(t, conn2)
+	// Client1 receives broadcast when client2 joins
+	_ = receiveMessage(t, conn1, 2*time.Second)
 
 	t.Run("owner can toggle spectator mode", func(t *testing.T) {
 		sendMessage(t, conn1, map[string]any{
@@ -400,6 +410,8 @@ func TestWebSocketToggleOwner(t *testing.T) {
 
 	defer conn2.Close()
 	clientID2 := getClientID(t, conn2)
+	// Client1 receives broadcast when client2 joins
+	_ = receiveMessage(t, conn1, 2*time.Second)
 
 	t.Run("owner can promote another user to owner", func(t *testing.T) {
 		sendMessage(t, conn1, map[string]any{
@@ -573,10 +585,15 @@ func TestWebSocketMultipleClients(t *testing.T) {
 	conn2 := connectWebSocket(t, ts, roomID)
 	defer conn2.Close()
 	clientID2 := getClientID(t, conn2)
+	// Client1 receives broadcast when client2 joins
+	_ = receiveMessage(t, conn1, 2*time.Second)
 
 	conn3 := connectWebSocket(t, ts, roomID)
 	defer conn3.Close()
 	clientID3 := getClientID(t, conn3)
+	// Client1 and Client2 receive broadcasts when client3 joins
+	_ = receiveMessage(t, conn1, 2*time.Second)
+	_ = receiveMessage(t, conn2, 2*time.Second)
 
 	t.Run("all clients receive updates when one client votes", func(t *testing.T) {
 		sendMessage(t, conn1, map[string]any{

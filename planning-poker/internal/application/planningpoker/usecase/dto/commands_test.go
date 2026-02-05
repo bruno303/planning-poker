@@ -2,7 +2,7 @@ package dto
 
 import (
 	"planning-poker/internal/domain/entity"
-	"planning-poker/internal/infra/boundaries/bus/inmemory"
+	"planning-poker/internal/infra/boundaries/bus/clientcollection"
 	"reflect"
 	"testing"
 
@@ -16,7 +16,7 @@ func TestNewRoomStateCommand(t *testing.T) {
 		{ID: "2", Name: "Bob", CurrentVote: nil, HasVoted: false, IsSpectator: true, IsOwner: false},
 	}
 
-	clientCollection := inmemory.NewInMemoryClientCollection()
+	clientCollection := clientcollection.New()
 	for _, client := range clients {
 		clientCollection.Add(client)
 	}

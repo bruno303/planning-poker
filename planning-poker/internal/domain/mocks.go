@@ -416,6 +416,44 @@ func (c *MockHubRemoveRoomCall) DoAndReturn(f func(string)) *MockHubRemoveRoomCa
 	return c
 }
 
+// SaveRoom mocks base method.
+func (m *MockHub) SaveRoom(ctx context.Context, room *entity.Room) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SaveRoom", ctx, room)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SaveRoom indicates an expected call of SaveRoom.
+func (mr *MockHubMockRecorder) SaveRoom(ctx, room any) *MockHubSaveRoomCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveRoom", reflect.TypeOf((*MockHub)(nil).SaveRoom), ctx, room)
+	return &MockHubSaveRoomCall{Call: call}
+}
+
+// MockHubSaveRoomCall wrap *gomock.Call
+type MockHubSaveRoomCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockHubSaveRoomCall) Return(arg0 error) *MockHubSaveRoomCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockHubSaveRoomCall) Do(f func(context.Context, *entity.Room) error) *MockHubSaveRoomCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockHubSaveRoomCall) DoAndReturn(f func(context.Context, *entity.Room) error) *MockHubSaveRoomCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockAdminHub is a mock of AdminHub interface.
 type MockAdminHub struct {
 	ctrl     *gomock.Controller

@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"planning-poker/internal/domain"
 	"planning-poker/internal/domain/entity"
-	"planning-poker/internal/infra/boundaries/bus/inmemory"
+	"planning-poker/internal/infra/boundaries/bus/clientcollection"
 	"testing"
 
 	"go.uber.org/mock/gomock"
@@ -64,11 +64,11 @@ func TestGetAllRoomsStateAPI_Handle_Success(t *testing.T) {
 	rooms := []*entity.Room{
 		{
 			ID:      "room1",
-			Clients: inmemory.NewInMemoryClientCollection(client1),
+			Clients: clientcollection.New(client1),
 		},
 		{
 			ID:      "room2",
-			Clients: inmemory.NewInMemoryClientCollection(client2),
+			Clients: clientcollection.New(client2),
 		},
 	}
 

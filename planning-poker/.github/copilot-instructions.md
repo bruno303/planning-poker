@@ -9,9 +9,9 @@ This is a real-time Planning Poker application with **Go backend + Next.js front
 - `cmd/api/` - Application entry point; dependency injection via [container.go](../cmd/api/container.go)
 - `internal/domain/` - Core business logic (entities, interfaces). Example: [Room](../internal/domain/entity/room.go) entity with voting rules
 - `internal/application/` - Use cases implementing business workflows (see [usecase/](../internal/application/planningpoker/usecase/))
-- `internal/infra/` - External concerns (HTTP handlers, WebSockets, in-memory storage)
+- `internal/infra/` - External concerns (HTTP handlers, WebSockets, Redis storage)
 
-**Key Pattern**: Dependencies point inward. Domain defines interfaces (`Hub`, `Bus`), infra implements them (`InMemoryHub`).
+**Key Pattern**: Dependencies point inward. Domain defines interfaces (`Hub`, `Bus`), infra implements them (`RedisHub`).
 
 ## Critical Workflows
 
@@ -81,9 +81,18 @@ See [websocket.go](../internal/infra/boundaries/http/websocket.go) for handler m
 - Bidirectional reference to Room (`client.room`)
 - States: owner, spectator, voted
 
-### Hub (In-Memory)
+### Hub (Redis-based)
 
-Central registry managing rooms, clients, and WebSocket buses. Thread-safe with mutexes. See [inmemory/hub.go](../internal/infra/boundaries/bus/inmemory/hub.go).
+Central registry managing rooms, clients, and WebSocket buses. **Stateless** - all room state persists in Redis. Uses Redis pub/sub to broadcast updates across multiple backend instances. See [redis/hub.go](../internal/infra/boundaries/bus/redis/hub.go).
+
+**Key Features**:
+
+- Room state serialized to Redis with 24-hour TTL
+- Pub/sub channels (`planning-poker:updates:{roomId}`) broadcast state changes
+- Each instance maintains local WebSocket `Bus` map for connected clients
+- Supports horizontal scaling - multiple backend instances can serve the same room
+
+**In-Memory Alternative**: [inmemory/hub.go](../internal/infra/boundaries/bus/inmemory/hub.go) available for testing/single-instance deployments.
 
 ## Configuration
 
@@ -95,7 +104,28 @@ Environment vars override YAML (see [example.env](../example.env)):
 API_BACKEND_PORT=8080
 API_CORS_ALLOWED_ORIGINS=http://localhost:3000
 TRACE_ENABLED=false
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_DB=0
 ```
+
+## Redis Configuration
+
+The application uses Redis for stateless operation:
+
+- **Room persistence**: Serialized room state with 24-hour TTL
+- **Pub/sub broadcasting**: Updates distributed across instances via channels
+- **Client-room mapping**: Tracks which clients belong to which rooms
+
+Required configuration (via environment or YAML):
+
+- `REDIS_HOST`: Redis server host (default: localhost)
+- `REDIS_PORT`: Redis server port (default: 6379)
+- `REDIS_PASSWORD`: Redis password (optional)
+- `REDIS_DB`: Redis database number (default: 0)
+
+Start Redis locally: `docker run -p 6379:6379 redis:7-alpine` or use docker-compose.
 
 ## Frontend Conventions
 

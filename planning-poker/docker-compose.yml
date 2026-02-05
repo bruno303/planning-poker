@@ -1,4 +1,17 @@
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: planning-poker-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - planning-poker
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   frontend:
     build:
       context: ./frontend/planning-poker-front
@@ -8,8 +21,13 @@ services:
     container_name: planning-poker-frontend
     ports:
       - "3000:3000"
+    profiles:
+      - app
     networks:
       - planning-poker
+    depends_on:
+      backend:
+        condition: service_healthy
 
   backend:
     build:
@@ -20,8 +38,17 @@ services:
     environment:
       - CORS_ALLOWED_ORIGINS=http://localhost:3000,http://frontend:3000
       - LOG_LEVEL=DEBUG
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      - REDIS_DB=0
+    profiles:
+      - app
     networks:
       - planning-poker
+    depends_on:
+      redis:
+        condition: service_healthy
 
 networks:
   planning-poker:

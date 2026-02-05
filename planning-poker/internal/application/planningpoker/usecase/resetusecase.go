@@ -40,6 +40,10 @@ func (uc ResetUseCase) Execute(ctx context.Context, cmd ResetCommand) error {
 			return err
 		}
 
+		if err := uc.hub.SaveRoom(ctx, room); err != nil {
+			return err
+		}
+
 		if err := uc.hub.BroadcastToRoom(ctx, room.ID, dto.NewRoomStateCommand(room)); err != nil {
 			return err
 		}

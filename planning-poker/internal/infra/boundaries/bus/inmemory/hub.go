@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"planning-poker/internal/domain"
 	"planning-poker/internal/domain/entity"
+	"planning-poker/internal/infra/boundaries/bus/clientcollection"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
 	"github.com/bruno303/go-toolkit/pkg/trace"
@@ -32,7 +33,7 @@ func NewHub() *InMemoryHub {
 func (h *InMemoryHub) NewRoom(ctx context.Context, owner string) *entity.Room {
 	room, _ := trace.Trace(ctx, trace.NameConfig("InMemoryHub", "NewRoom"), func(ctx context.Context) (any, error) {
 
-		room := entity.NewRoom(NewInMemoryClientCollection())
+		room := entity.NewRoom(clientcollection.New())
 		h.Rooms[room.ID] = room
 		return room, nil
 	})
@@ -90,6 +91,11 @@ func (h *InMemoryHub) RemoveClient(ctx context.Context, clientID string, roomID 
 	})
 
 	return err
+}
+
+func (h *InMemoryHub) SaveRoom(ctx context.Context, room *entity.Room) error {
+	// In-memory hub doesn't need to persist
+	return nil
 }
 
 func (h *InMemoryHub) BroadcastToRoom(ctx context.Context, roomID string, message any) error {

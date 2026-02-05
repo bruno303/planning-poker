@@ -40,6 +40,10 @@ func (uc *voteAgainUseCase) Execute(ctx context.Context, cmd VoteAgainCommand) e
 			return err
 		}
 
+		if err := uc.hub.SaveRoom(ctx, room); err != nil {
+			return err
+		}
+
 		if err := uc.hub.BroadcastToRoom(ctx, room.ID, dto.NewRoomStateCommand(room)); err != nil {
 			return err
 		}

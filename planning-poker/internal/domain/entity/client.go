@@ -29,6 +29,16 @@ func newClient(id string) *Client {
 	}
 }
 
+func (c *Client) WithLogger(logger log.Logger) *Client {
+	c.logger = logger
+	return c
+}
+
+func (c *Client) WithRoom(room *Room) *Client {
+	c.room = room
+	return c
+}
+
 func (c *Client) Vote(ctx context.Context, vote *string) {
 	if c.room.Reveal {
 		c.logger.Debug(ctx, "Vote ignored for client %s because votes are already revealed", c.ID)

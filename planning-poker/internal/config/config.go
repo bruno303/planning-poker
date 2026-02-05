@@ -35,6 +35,12 @@ type Config struct {
 		Port    int    `env:"METRICS_PORT" yaml:"port"`
 		Path    string `env:"METRICS_PATH" yaml:"path"`
 	} `yaml:"metrics"`
+	Redis struct {
+		Host     string `env:"REDIS_HOST" yaml:"host"`
+		Port     int    `env:"REDIS_PORT" yaml:"port"`
+		Password string `env:"REDIS_PASSWORD" yaml:"password"`
+		DB       int    `env:"REDIS_DB" yaml:"db"`
+	} `yaml:"redis"`
 }
 
 func LoadConfig() (*Config, error) {

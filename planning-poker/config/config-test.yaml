@@ -19,3 +19,8 @@ metrics:
   enabled: true
   port: 9090
   path: "/metrics"
+redis:
+  host: "localhost"
+  port: 6379
+  password: ""
+  db: 1
