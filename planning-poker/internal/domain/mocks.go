@@ -42,15 +42,15 @@ func (m *MockHub) EXPECT() *MockHubMockRecorder {
 }
 
 // AddBus mocks base method.
-func (m *MockHub) AddBus(clientID string, bus Bus) {
+func (m *MockHub) AddBus(ctx context.Context, clientID string, bus Bus) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AddBus", clientID, bus)
+	m.ctrl.Call(m, "AddBus", ctx, clientID, bus)
 }
 
 // AddBus indicates an expected call of AddBus.
-func (mr *MockHubMockRecorder) AddBus(clientID, bus any) *MockHubAddBusCall {
+func (mr *MockHubMockRecorder) AddBus(ctx, clientID, bus any) *MockHubAddBusCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddBus", reflect.TypeOf((*MockHub)(nil).AddBus), clientID, bus)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddBus", reflect.TypeOf((*MockHub)(nil).AddBus), ctx, clientID, bus)
 	return &MockHubAddBusCall{Call: call}
 }
 
@@ -66,13 +66,13 @@ func (c *MockHubAddBusCall) Return() *MockHubAddBusCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHubAddBusCall) Do(f func(string, Bus)) *MockHubAddBusCall {
+func (c *MockHubAddBusCall) Do(f func(context.Context, string, Bus)) *MockHubAddBusCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHubAddBusCall) DoAndReturn(f func(string, Bus)) *MockHubAddBusCall {
+func (c *MockHubAddBusCall) DoAndReturn(f func(context.Context, string, Bus)) *MockHubAddBusCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -307,15 +307,15 @@ func (c *MockHubNewRoomCall) DoAndReturn(f func(context.Context, string) *entity
 }
 
 // RemoveBus mocks base method.
-func (m *MockHub) RemoveBus(clientID string) {
+func (m *MockHub) RemoveBus(ctx context.Context, clientID string) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "RemoveBus", clientID)
+	m.ctrl.Call(m, "RemoveBus", ctx, clientID)
 }
 
 // RemoveBus indicates an expected call of RemoveBus.
-func (mr *MockHubMockRecorder) RemoveBus(clientID any) *MockHubRemoveBusCall {
+func (mr *MockHubMockRecorder) RemoveBus(ctx, clientID any) *MockHubRemoveBusCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveBus", reflect.TypeOf((*MockHub)(nil).RemoveBus), clientID)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveBus", reflect.TypeOf((*MockHub)(nil).RemoveBus), ctx, clientID)
 	return &MockHubRemoveBusCall{Call: call}
 }
 
@@ -331,13 +331,13 @@ func (c *MockHubRemoveBusCall) Return() *MockHubRemoveBusCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHubRemoveBusCall) Do(f func(string)) *MockHubRemoveBusCall {
+func (c *MockHubRemoveBusCall) Do(f func(context.Context, string)) *MockHubRemoveBusCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHubRemoveBusCall) DoAndReturn(f func(string)) *MockHubRemoveBusCall {
+func (c *MockHubRemoveBusCall) DoAndReturn(f func(context.Context, string)) *MockHubRemoveBusCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -610,6 +610,44 @@ func (c *MockBusListenCall) Do(f func(context.Context)) *MockBusListenCall {
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockBusListenCall) DoAndReturn(f func(context.Context)) *MockBusListenCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// RoomID mocks base method.
+func (m *MockBus) RoomID() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RoomID")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// RoomID indicates an expected call of RoomID.
+func (mr *MockBusMockRecorder) RoomID() *MockBusRoomIDCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RoomID", reflect.TypeOf((*MockBus)(nil).RoomID))
+	return &MockBusRoomIDCall{Call: call}
+}
+
+// MockBusRoomIDCall wrap *gomock.Call
+type MockBusRoomIDCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockBusRoomIDCall) Return(arg0 string) *MockBusRoomIDCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockBusRoomIDCall) Do(f func() string) *MockBusRoomIDCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockBusRoomIDCall) DoAndReturn(f func() string) *MockBusRoomIDCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

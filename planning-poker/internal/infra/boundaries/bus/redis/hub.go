@@ -16,6 +16,15 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+type RedisClient interface {
+	Set(ctx context.Context, key string, value any, expiration time.Duration) *redis.StatusCmd
+	Get(ctx context.Context, key string) *redis.StringCmd
+	Del(ctx context.Context, keys ...string) *redis.IntCmd
+	Publish(ctx context.Context, channel string, message any) *redis.IntCmd
+	Subscribe(ctx context.Context, channels ...string) *redis.PubSub
+	Scan(ctx context.Context, count uint64, match string, cursor int64) *redis.ScanCmd
+}
+
 const (
 	roomKeyPrefix   = "planning-poker:room:"
 	clientKeyPrefix = "planning-poker:client:"
@@ -26,12 +35,14 @@ const (
 
 type (
 	RedisHub struct {
-		client  *redis.Client
-		logger  log.Logger
-		buses   map[string]domain.Bus
-		busMux  sync.RWMutex
-		pubsub  *redis.PubSub
-		closeCh chan struct{}
+		client           RedisClient
+		logger           log.Logger
+		buses            map[string]domain.Bus
+		busMux           sync.RWMutex
+		pubsub           *redis.PubSub
+		closeCh          chan struct{}
+		roomSubs         sync.Map
+		roomClientCounts map[string]int
 	}
 	BroadcastMessage struct {
 		RoomID  string `json:"roomId"`
@@ -44,17 +55,15 @@ var (
 	_ domain.AdminHub = (*RedisHub)(nil)
 )
 
-func NewRedisHub(ctx context.Context, redisClient *redis.Client) (*RedisHub, error) {
+func NewRedisHub(ctx context.Context, redisClient RedisClient) (*RedisHub, error) {
 	hub := &RedisHub{
-		client:  redisClient,
-		logger:  log.NewLogger("redis.hub"),
-		buses:   make(map[string]domain.Bus),
-		closeCh: make(chan struct{}),
+		client:           redisClient,
+		logger:           log.NewLogger("redis.hub"),
+		buses:            make(map[string]domain.Bus),
+		closeCh:          make(chan struct{}),
+		roomClientCounts: make(map[string]int),
 	}
-	hub.pubsub = redisClient.PSubscribe(ctx, pubsubChannel+"*")
-	go hub.listenToPubSub(ctx)
-
-	hub.logger.Info(ctx, "RedisHub initialized and listening to pub/sub")
+	hub.logger.Info(ctx, "RedisHub initialized")
 	return hub, nil
 }
 
@@ -78,6 +87,10 @@ func (h *RedisHub) NewRoom(ctx context.Context, owner string) *entity.Room {
 	})
 
 	return room.(*entity.Room)
+}
+
+func (h *RedisHub) GetClientsOfRoom(roomID string) int {
+	return h.roomClientCounts[roomID]
 }
 
 func (h *RedisHub) GetRoom(ctx context.Context, roomID string) (*entity.Room, bool) {
@@ -139,10 +152,23 @@ func (h *RedisHub) AddClient(c *entity.Client) {
 	}
 }
 
-func (h *RedisHub) AddBus(clientID string, bus domain.Bus) {
+func (h *RedisHub) AddBus(ctx context.Context, clientID string, bus domain.Bus) {
 	h.busMux.Lock()
 	defer h.busMux.Unlock()
 	h.buses[clientID] = bus
+
+	roomID := bus.RoomID()
+	if roomID == "" {
+		h.logger.Warn(ctx, "Bus for client %s has empty RoomID", clientID)
+		return
+	}
+	h.roomClientCounts[roomID]++
+	if _, exists := h.roomSubs.Load(roomID); !exists {
+		sub := h.client.Subscribe(ctx, pubsubChannel+roomID)
+		h.roomSubs.Store(roomID, sub)
+		go h.listenToRoomPubSub(ctx, roomID, sub)
+		h.logger.Info(ctx, "Subscribed to pub/sub for room %s", roomID)
+	}
 }
 
 func (h *RedisHub) GetBus(clientID string) (domain.Bus, bool) {
@@ -152,10 +178,55 @@ func (h *RedisHub) GetBus(clientID string) (domain.Bus, bool) {
 	return bus, ok
 }
 
-func (h *RedisHub) RemoveBus(clientID string) {
+func (h *RedisHub) RemoveBus(ctx context.Context, clientID string) {
 	h.busMux.Lock()
 	defer h.busMux.Unlock()
+	bus, ok := h.buses[clientID]
+	var roomID string
+	if ok {
+		roomID = bus.RoomID()
+	}
 	delete(h.buses, clientID)
+
+	if roomID != "" {
+		if h.roomClientCounts[roomID] > 0 {
+			h.roomClientCounts[roomID]--
+		}
+		last := h.roomClientCounts[roomID] == 0
+		if last {
+			delete(h.roomClientCounts, roomID)
+			if subVal, exists := h.roomSubs.Load(roomID); exists {
+				sub := subVal.(*redis.PubSub)
+				h.roomSubs.Delete(roomID)
+				go func() {
+					_ = sub.Close()
+					h.logger.Info(ctx, "Unsubscribed from pub/sub for room %s", roomID)
+				}()
+			}
+		}
+	}
+}
+
+func (h *RedisHub) listenToRoomPubSub(ctx context.Context, roomID string, sub *redis.PubSub) {
+	ch := sub.Channel()
+	for {
+		select {
+		case msg, ok := <-ch:
+			if !ok {
+				h.logger.Info(ctx, "Pub/Sub channel closed for room %s", roomID)
+				return
+			}
+			var broadcastMsg BroadcastMessage
+			if err := json.Unmarshal([]byte(msg.Payload), &broadcastMsg); err != nil {
+				h.logger.Error(ctx, "Failed to unmarshal broadcast message", err)
+				continue
+			}
+			h.forwardToLocalClients(ctx, broadcastMsg.RoomID, broadcastMsg.Payload)
+		case <-h.closeCh:
+			h.logger.Info(ctx, "Stopping pub/sub listener for room %s", roomID)
+			return
+		}
+	}
 }
 
 func (h *RedisHub) RemoveClient(ctx context.Context, clientID string, roomID string) error {
@@ -165,7 +236,7 @@ func (h *RedisHub) RemoveClient(ctx context.Context, clientID string, roomID str
 			h.logger.Error(ctx, fmt.Sprintf("Failed to delete client %s from Redis", clientID), err)
 		}
 
-		h.RemoveBus(clientID)
+		h.RemoveBus(ctx, clientID)
 
 		room, ok := h.GetRoom(ctx, roomID)
 		if !ok {
@@ -269,31 +340,6 @@ func (h *RedisHub) loadRoom(ctx context.Context, roomID string) (*entity.Room, e
 	return room, nil
 }
 
-func (h *RedisHub) listenToPubSub(ctx context.Context) {
-	ch := h.pubsub.Channel()
-
-	for {
-		select {
-		case msg := <-ch:
-			if msg == nil {
-				continue
-			}
-
-			var broadcastMsg BroadcastMessage
-			if err := json.Unmarshal([]byte(msg.Payload), &broadcastMsg); err != nil {
-				h.logger.Error(ctx, "Failed to unmarshal broadcast message", err)
-				continue
-			}
-
-			h.forwardToLocalClients(ctx, broadcastMsg.RoomID, broadcastMsg.Payload)
-
-		case <-h.closeCh:
-			h.logger.Info(ctx, "Stopping pub/sub listener")
-			return
-		}
-	}
-}
-
 func (h *RedisHub) forwardToLocalClients(ctx context.Context, roomID string, message any) {
 	h.busMux.RLock()
 	defer h.busMux.RUnlock()
@@ -309,7 +355,7 @@ func (h *RedisHub) forwardToLocalClients(ctx context.Context, roomID string, mes
 			continue
 		}
 		if err := bus.Send(ctx, message); err != nil {
-			h.logger.Warn(ctx, fmt.Sprintf("Failed to send message to client %s: %v", client.ID, err))
+			h.logger.Warn(ctx, "Failed to send message to client %s: %v", client.ID, err)
 		}
 	}
 }

@@ -59,7 +59,7 @@ func (uc JoinRoomUseCase) Execute(ctx context.Context, cmd JoinRoomCommand) (*Jo
 
 		uc.logger.Debug(ctx, "creating bus for client %s on room %s", clientID, room.ID)
 		bus := cmd.BusFactory(client.ID)
-		uc.hub.AddBus(client.ID, bus)
+		uc.hub.AddBus(ctx, client.ID, bus)
 
 		uc.metric.IncrementUsersTotal(ctx)
 		uc.metric.IncrementActiveUsers(ctx)

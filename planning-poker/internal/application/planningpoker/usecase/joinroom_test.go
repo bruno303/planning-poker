@@ -55,7 +55,7 @@ func TestJoinRoomUseCase_Execute_Success(t *testing.T) {
 
 	mockHub.EXPECT().GetRoom(ctx, roomID).Return(room, true)
 	mockHub.EXPECT().AddClient(gomock.Any())
-	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any())
+	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
 
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(nil)
@@ -157,7 +157,7 @@ func TestJoinRoomUseCase_Execute_SendError(t *testing.T) {
 
 	mockHub.EXPECT().GetRoom(ctx, roomID).Return(room, true)
 	mockHub.EXPECT().AddClient(gomock.Any())
-	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any())
+	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(expectedError)
 
 	busFactory := func(clientID string) domain.Bus {

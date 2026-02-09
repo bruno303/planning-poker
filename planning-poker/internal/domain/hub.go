@@ -18,8 +18,8 @@ type (
 		BroadcastToRoom(ctx context.Context, roomID string, message any) error
 
 		GetBus(clientID string) (Bus, bool)
-		AddBus(clientID string, bus Bus)
-		RemoveBus(clientID string)
+		AddBus(ctx context.Context, clientID string, bus Bus)
+		RemoveBus(ctx context.Context, clientID string)
 	}
 	AdminHub interface {
 		GetRooms() []*entity.Room

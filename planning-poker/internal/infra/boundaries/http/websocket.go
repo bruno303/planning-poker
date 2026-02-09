@@ -36,6 +36,7 @@ type (
 		logger log.Logger
 		cfg    WebSocketConfig
 		calls  map[string]useCaseCall
+		roomID string
 	}
 
 	WebSocketConfig struct {
@@ -90,7 +91,7 @@ func (api *WebsocketAPI) Handle() http.Handler {
 			RoomID:   roomID,
 			SenderID: uuid.NewString(),
 			BusFactory: func(clientID string) domain.Bus {
-				return NewWebsocketBus(clientID, ws, api.hub, api.usecases, api.websocketCfg)
+				return NewWebsocketBus(clientID, roomID, ws, api.hub, api.usecases, api.websocketCfg)
 			},
 		})
 		if err != nil {
@@ -118,6 +119,7 @@ func (api *WebsocketAPI) Handle() http.Handler {
 
 func NewWebsocketBus(
 	id string,
+	roomID string,
 	socket *websocket.Conn,
 	hub domain.Hub,
 	usecases usecase.UseCasesFacade,
@@ -130,7 +132,12 @@ func NewWebsocketBus(
 		cfg:    websocketCfg,
 		logger: log.NewLogger("websocket.client"),
 		calls:  mapUsecases(usecases),
+		roomID: roomID,
 	}
+}
+
+func (c *WebsocketBus) RoomID() string {
+	return c.roomID
 }
 
 func (c *WebsocketBus) Close() error {
