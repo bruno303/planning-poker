@@ -20,11 +20,11 @@ export default function Header({ handleBackToHome, generateShareableLink, childr
               cursor: 'pointer',
             }}
             onMouseEnter={e => {
-              (e.target as HTMLElement).style.backgroundColor = '#e0e7ff';
+              (e.target as HTMLElement).style.backgroundColor = '#f3f4f6';
               (e.target as HTMLElement).style.cursor = 'pointer';
             }}
             onMouseLeave={e => {
-              (e.target as HTMLElement).style.backgroundColor = '#f3f4f6';
+              (e.target as HTMLElement).style.backgroundColor = '#e0e7ff';
             }}
             title="Click to copy shareable link"
             onClick={async () => {

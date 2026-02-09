@@ -279,9 +279,9 @@ export const styles = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '1rem 2rem',
-    backgroundColor: 'white',
-    boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+    padding: '0.5rem 1.5rem',
+    background: 'linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%)',
+    boxShadow: 'none',
     marginBottom: '0'
   },
   roomInfo: {
@@ -297,7 +297,7 @@ export const styles = {
     fontSize: '1rem',
     fontWeight: '600',
     color: '#1f2937',
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#e0e7ff',
     padding: '0.25rem 0.5rem',
     borderRadius: '0.25rem',
     fontFamily: 'Monaco, "Lucida Console", monospace'

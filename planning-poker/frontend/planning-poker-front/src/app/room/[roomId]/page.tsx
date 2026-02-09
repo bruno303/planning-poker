@@ -42,7 +42,7 @@ export default function PlanningPoker() {
   useEffect(() => {
     const storedUserName = sessionStorage.getItem('userName');
     if (!storedUserName) {
-      router.push('/join');
+      router.push(`/join/${roomId}`);
       return;
     }
     setUserName(storedUserName);
@@ -175,7 +175,7 @@ export default function PlanningPoker() {
 
     <Header
       handleBackToHome={handleBackToHome}
-      generateShareableLink={() => `${window.location.origin}/join/${roomId}`}
+      generateShareableLink={() => `${window.location.origin}/room/${roomId}`}
     >
       <div style={styles.container}>
         <div style={styles.maxWidth}>
