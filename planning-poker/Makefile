@@ -60,13 +60,13 @@ test-coverage:
 	echo "Generated coverage report at coverage.html"
 	echo "If using WSL, run 'explorer.exe coverage.html' to view the report."
 
-.PHONY: lint
-lint:
-	golangci-lint run
-
 .PHONY: fmt
 fmt:
 	golangci-lint fmt
+
+.PHONY: lint
+lint:
+	golangci-lint run
 
 .PHONY: generate
 generate:
