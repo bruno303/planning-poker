@@ -1,5 +1,6 @@
 'use client'
 
+import { useToast } from '@/context/toast/toastContext';
 import { Loader2, LogIn, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
@@ -11,10 +12,10 @@ export default function PlanningPokerHome({ params }: { params: Promise<{ roomId
   const [userName, setUserName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
-  const [error, setError] = useState('');
   const myParams = React.use(params);
   const nameInputRef = React.useRef<HTMLInputElement | null>(null);
   const hasRoomParam = Boolean(myParams?.roomId);
+  const { pushError } = useToast();
 
   useEffect(() => {
     if (myParams.roomId) {
@@ -24,13 +25,10 @@ export default function PlanningPokerHome({ params }: { params: Promise<{ roomId
 
   useEffect(() => { nameInputRef.current?.focus(); }, []);
 
-  // Mock API call to create a new room
   const createRoom = async (userName: string) => {
     try {
       setIsCreating(true);
-      setError('');
-      
-      // Simulate API call
+
       const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/planning/room`, {
         method: 'POST',
         headers: {
@@ -41,16 +39,13 @@ export default function PlanningPokerHome({ params }: { params: Promise<{ roomId
         }),
         credentials: 'include'
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to create room');
       }
-      
+
       const data = await response.json();
-      return data.roomId; // Assuming API returns { roomId: "uuid-here" }
-      
-    } catch (err: any) {
-      throw new Error(err.message || 'Failed to create room. Please try again.');
+      return data.roomId;
     } finally {
       setIsCreating(false);
     }
@@ -58,7 +53,7 @@ export default function PlanningPokerHome({ params }: { params: Promise<{ roomId
 
   const handleCreateRoom = async () => {
     if (!userName.trim()) {
-      setError('Please enter your name');
+      pushError('Name not informed');
       return;
     }
 
@@ -67,46 +62,47 @@ export default function PlanningPokerHome({ params }: { params: Promise<{ roomId
       sessionStorage.setItem('userName', userName.trim());
       router.push(`/room/${newRoomId}`);
     } catch (err: any) {
-      setError(err.message || 'Failed to create room. Please try again.');
+      const message = err?.message || 'Failed to create room. Please try again.';
+      pushError(message);
     }
   };
 
   const handleJoinRoom = async () => {
     if (!userName.trim()) {
-      setError('Please enter your name');
+      pushError('Name not informed');
       return;
     }
-    
+
     if (!roomCode.trim()) {
-      setError('Please enter a room code');
+      pushError('Room code not informed');
       return;
     }
 
     try {
-
-      // Simulate API call to join room
       const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/planning/room/${roomCode}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
       });
-      
+
       if (response.status === 404) {
-        setError('Room not found');
+        pushError('Room not found');
         return
       }
 
       if (!response.ok) {
-        setError('Failed to join room');
-        console.log(await response.text());
+        const text = await response.text();
+        const message = text || 'Failed to join room';
+        pushError(message);
         return
       }
 
       sessionStorage.setItem('userName', userName.trim());
       router.push(`/room/${roomCode.trim()}`);
     } catch (err: any) {
-      setError(err.message || 'Failed to join room. Please try again.');
+      const message = err?.message || 'Failed to join room. Please try again.';
+      pushError(message);
     } finally {
       setIsJoining(false);
     }
@@ -148,16 +144,7 @@ export default function PlanningPokerHome({ params }: { params: Promise<{ roomId
               onKeyDown={async (e) => await handleEnterPressed(e)}
             />
           </div>
-
-          {/* Room code is provided by route param; no input shown here */}
         </div>
-
-        {/* Error Message */}
-        {error && (
-          <div style={styles.error}>
-            {error}
-          </div>
-        )}
 
         {/* Buttons */}
         <div style={styles.buttonsContainer}>
