@@ -125,6 +125,11 @@ export const styles = {
     transform: 'scale(1.05)',
     boxShadow: '0 0 0 4px rgba(59, 130, 246, 0.3)'
   },
+  pokerCardDisabled: {
+    cursor: 'not-allowed',
+    opacity: 0.85,
+    transform: 'none'
+  },
   buttonsContainer: {
     display: 'flex',
     gap: '1rem',

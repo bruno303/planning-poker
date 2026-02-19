@@ -259,19 +259,22 @@ export default function PlanningPoker() {
                   {cards.map((card) => (
                     <button
                       key={card}
-                      onClick={() => handleCardSelect(card)}
+                      onClick={() => !isRevealed && handleCardSelect(card)}
+                      aria-disabled={isRevealed}
+                      aria-pressed={selectedCard === card}
                       style={{
                         ...styles.pokerCard,
-                        backgroundColor: getCardColor(card),
+                        ...(isRevealed ? styles.pokerCardDisabled : {}),
+                        backgroundColor: isRevealed ? '#9ca3af' : getCardColor(card),
                         ...(selectedCard === card ? styles.pokerCardSelected : {})
                       }}
                       onMouseEnter={(e) => {
-                        if (selectedCard !== card) {
+                        if (!isRevealed && selectedCard !== card) {
                           (e.target as HTMLButtonElement).style.transform = 'scale(1.05)';
                         }
                       }}
                       onMouseLeave={(e) => {
-                        if (selectedCard !== card) {
+                        if (!isRevealed && selectedCard !== card) {
                           (e.target as HTMLButtonElement).style.transform = 'scale(1)';
                         }
                       }}
