@@ -38,7 +38,7 @@ func NewCreateRoomUseCase(hub domain.Hub, metric metric.PlanningPokerMetric) cre
 }
 
 func (uc createRoomUseCase) Execute(ctx context.Context, cmd CreateRoomCommand) (CreateRoomOutput, error) {
-	room := uc.hub.NewRoom(ctx, cmd.SenderID)
+	room := uc.hub.NewRoom(ctx)
 	uc.metric.IncrementActiveRoomsCounter(ctx)
 
 	uc.logger.Info(ctx, "Room created with ID: %s by: %s", room.ID, cmd.SenderID)

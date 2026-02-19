@@ -2,7 +2,6 @@ package redishub_test
 
 import (
 	"context"
-	"os"
 	redishub "planning-poker/internal/infra/boundaries/bus/redis"
 	"testing"
 	"time"
@@ -12,28 +11,22 @@ import (
 )
 
 func setupRedisClient() *redis.Client {
-	addr := os.Getenv("REDIS_HOST")
-	port := os.Getenv("REDIS_PORT")
-	if port == "" {
-		port = "6379"
-	}
-	if addr == "" {
-		addr = "localhost"
-	}
-	return redis.NewClient(&redis.Options{
-		Addr: addr + ":" + port,
-		DB:   1,
+	client := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+		DB:   5,
 	})
+	client.FlushDB(context.Background())
+	return client
 }
 
 func TestIntegration_RoomLifecycle(t *testing.T) {
 	client := setupRedisClient()
-	client.FlushDB(context.Background())
+	defer client.Close()
 
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
 
-	room := hub.NewRoom(context.Background(), "owner1")
+	room := hub.NewRoom(context.Background())
 	assert.NotNil(t, room)
 	assert.NotEmpty(t, room.ID)
 
@@ -64,12 +57,12 @@ func TestIntegration_RoomLifecycle(t *testing.T) {
 
 func TestIntegration_RoomTTLExpiry(t *testing.T) {
 	client := setupRedisClient()
-	client.FlushDB(context.Background())
+	defer client.Close()
 
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
 
-	room := hub.NewRoom(context.Background(), "owner2")
+	room := hub.NewRoom(context.Background())
 	assert.NotNil(t, room)
 
 	// Set short TTL for test
@@ -83,12 +76,12 @@ func TestIntegration_RoomTTLExpiry(t *testing.T) {
 
 func TestIntegration_GetBus(t *testing.T) {
 	client := setupRedisClient()
-	client.FlushDB(context.Background())
+	defer client.Close()
 
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
 
-	room := hub.NewRoom(context.Background(), "owner-getbus")
+	room := hub.NewRoom(context.Background())
 	assert.NotNil(t, room)
 
 	client1 := room.NewClient("client-getbus-1")
@@ -109,12 +102,12 @@ func TestIntegration_GetBus(t *testing.T) {
 
 func TestIntegration_PubSubInvalidMessage(t *testing.T) {
 	client := setupRedisClient()
-	client.FlushDB(context.Background())
+	defer client.Close()
 
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
 
-	room := hub.NewRoom(context.Background(), "owner-pubsub")
+	room := hub.NewRoom(context.Background())
 	assert.NotNil(t, room)
 
 	client1 := room.NewClient("client-pubsub-1")
@@ -161,12 +154,12 @@ func TestIntegration_PubSubInvalidMessage(t *testing.T) {
 
 func TestIntegration_PubSubUnsubscribe(t *testing.T) {
 	client := setupRedisClient()
-	client.FlushDB(context.Background())
+	defer client.Close()
 
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
 
-	room := hub.NewRoom(context.Background(), "owner-unsub")
+	room := hub.NewRoom(context.Background())
 	assert.NotNil(t, room)
 
 	// Add two clients to the same room
@@ -207,12 +200,12 @@ func TestIntegration_PubSubUnsubscribe(t *testing.T) {
 
 func TestIntegration_BroadcastToRoom(t *testing.T) {
 	client := setupRedisClient()
-	client.FlushDB(context.Background())
+	defer client.Close()
 
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
 
-	room := hub.NewRoom(context.Background(), "owner-broadcast")
+	room := hub.NewRoom(context.Background())
 	assert.NotNil(t, room)
 
 	client1 := room.NewClient("client-broadcast-1")
@@ -243,7 +236,7 @@ func TestIntegration_BroadcastToRoom(t *testing.T) {
 
 func TestIntegration_GetRooms(t *testing.T) {
 	client := setupRedisClient()
-	client.FlushDB(context.Background())
+	defer client.Close()
 
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
@@ -253,9 +246,9 @@ func TestIntegration_GetRooms(t *testing.T) {
 	assert.Empty(t, rooms)
 
 	// Create multiple rooms
-	room1 := hub.NewRoom(context.Background(), "owner-rooms-1")
-	room2 := hub.NewRoom(context.Background(), "owner-rooms-2")
-	room3 := hub.NewRoom(context.Background(), "owner-rooms-3")
+	room1 := hub.NewRoom(context.Background())
+	room2 := hub.NewRoom(context.Background())
+	room3 := hub.NewRoom(context.Background())
 
 	// Get all rooms
 	rooms = hub.GetRooms()
@@ -273,12 +266,12 @@ func TestIntegration_GetRooms(t *testing.T) {
 
 func TestIntegration_SaveRoom(t *testing.T) {
 	client := setupRedisClient()
-	client.FlushDB(context.Background())
+	defer client.Close()
 
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
 
-	room := hub.NewRoom(context.Background(), "owner-save")
+	room := hub.NewRoom(context.Background())
 	assert.NotNil(t, room)
 
 	// Modify room state
@@ -302,12 +295,12 @@ func TestIntegration_SaveRoom(t *testing.T) {
 
 func TestIntegration_Close(t *testing.T) {
 	client := setupRedisClient()
-	client.FlushDB(context.Background())
+	defer client.Close()
 
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
 
-	room := hub.NewRoom(context.Background(), "owner-close")
+	room := hub.NewRoom(context.Background())
 	client1 := room.NewClient("client-close-1")
 	room.Clients.Add(client1)
 	client1.WithRoom(room)

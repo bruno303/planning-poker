@@ -39,10 +39,12 @@ type (
 		logger           log.Logger
 		buses            map[string]domain.Bus
 		busMux           sync.RWMutex
-		pubsub           *redis.PubSub
+		wg               sync.WaitGroup
 		closeCh          chan struct{}
 		roomSubs         sync.Map
 		roomClientCounts map[string]int
+		ctx              context.Context
+		cancel           context.CancelFunc
 	}
 	BroadcastMessage struct {
 		RoomID  string `json:"roomId"`
@@ -56,12 +58,15 @@ var (
 )
 
 func NewRedisHub(ctx context.Context, redisClient RedisClient) (*RedisHub, error) {
+	hctx, cancel := context.WithCancel(context.Background())
 	hub := &RedisHub{
 		client:           redisClient,
 		logger:           log.NewLogger("redis.hub"),
 		buses:            make(map[string]domain.Bus),
 		closeCh:          make(chan struct{}),
 		roomClientCounts: make(map[string]int),
+		ctx:              hctx,
+		cancel:           cancel,
 	}
 	hub.logger.Info(ctx, "RedisHub initialized")
 	return hub, nil
@@ -69,13 +74,27 @@ func NewRedisHub(ctx context.Context, redisClient RedisClient) (*RedisHub, error
 
 func (h *RedisHub) Close() error {
 	close(h.closeCh)
-	if h.pubsub != nil {
-		return h.pubsub.Close()
+
+	if h.cancel != nil {
+		h.cancel()
 	}
+
+	h.wg.Wait()
+
+	h.roomSubs.Range(func(key, value any) bool {
+		roomID := key.(string)
+		if sub, ok := value.(*redis.PubSub); ok && sub != nil {
+			_ = sub.Close()
+			h.logger.Info(context.Background(), "Unsubscribed from pub/sub for room %s", roomID)
+		}
+		h.roomSubs.Delete(roomID)
+		return true
+	})
+
 	return nil
 }
 
-func (h *RedisHub) NewRoom(ctx context.Context, owner string) *entity.Room {
+func (h *RedisHub) NewRoom(ctx context.Context) *entity.Room {
 	room, _ := trace.Trace(ctx, trace.NameConfig("RedisHub", "NewRoom"), func(ctx context.Context) (any, error) {
 		room := entity.NewRoom(clientcollection.New())
 		if err := h.saveRoom(ctx, room); err != nil {
@@ -90,6 +109,8 @@ func (h *RedisHub) NewRoom(ctx context.Context, owner string) *entity.Room {
 }
 
 func (h *RedisHub) GetClientsOfRoom(roomID string) int {
+	h.busMux.RLock()
+	defer h.busMux.RUnlock()
 	return h.roomClientCounts[roomID]
 }
 
@@ -154,33 +175,37 @@ func (h *RedisHub) AddClient(c *entity.Client) {
 
 func (h *RedisHub) AddBus(ctx context.Context, clientID string, bus domain.Bus) {
 	h.busMux.Lock()
-	defer h.busMux.Unlock()
 	h.buses[clientID] = bus
-
 	roomID := bus.RoomID()
 	if roomID == "" {
+		h.busMux.Unlock()
 		h.logger.Warn(ctx, "Bus for client %s has empty RoomID", clientID)
 		return
 	}
+
 	h.roomClientCounts[roomID]++
-	if _, exists := h.roomSubs.Load(roomID); !exists {
-		sub := h.client.Subscribe(ctx, pubsubChannel+roomID)
+	_, exists := h.roomSubs.Load(roomID)
+	if !exists {
+		sub := h.client.Subscribe(h.ctx, pubsubChannel+roomID)
 		h.roomSubs.Store(roomID, sub)
-		go h.listenToRoomPubSub(ctx, roomID, sub)
+		h.wg.Go(func() {
+			h.listenToRoomPubSub(h.ctx, roomID, sub)
+		})
 		h.logger.Info(ctx, "Subscribed to pub/sub for room %s", roomID)
 	}
+	h.busMux.Unlock()
 }
 
 func (h *RedisHub) GetBus(clientID string) (domain.Bus, bool) {
 	h.busMux.RLock()
-	defer h.busMux.RUnlock()
 	bus, ok := h.buses[clientID]
+	h.busMux.RUnlock()
 	return bus, ok
 }
 
 func (h *RedisHub) RemoveBus(ctx context.Context, clientID string) {
+	h.logger.Debug(ctx, "Removing bus for client %s", clientID)
 	h.busMux.Lock()
-	defer h.busMux.Unlock()
 	bus, ok := h.buses[clientID]
 	var roomID string
 	if ok {
@@ -193,18 +218,21 @@ func (h *RedisHub) RemoveBus(ctx context.Context, clientID string) {
 			h.roomClientCounts[roomID]--
 		}
 		last := h.roomClientCounts[roomID] == 0
+		h.logger.Debug(ctx, "Client %s left room %s, remaining clients: %d", clientID, roomID, h.roomClientCounts[roomID])
 		if last {
 			delete(h.roomClientCounts, roomID)
 			if subVal, exists := h.roomSubs.Load(roomID); exists {
 				sub := subVal.(*redis.PubSub)
 				h.roomSubs.Delete(roomID)
-				go func() {
-					_ = sub.Close()
+				if err := sub.Close(); err != nil {
+					h.logger.Error(ctx, fmt.Sprintf("Error closing pub/sub for room %s", roomID), err)
+				} else {
 					h.logger.Info(ctx, "Unsubscribed from pub/sub for room %s", roomID)
-				}()
+				}
 			}
 		}
 	}
+	h.busMux.Unlock()
 }
 
 func (h *RedisHub) listenToRoomPubSub(ctx context.Context, roomID string, sub *redis.PubSub) {
@@ -221,8 +249,13 @@ func (h *RedisHub) listenToRoomPubSub(ctx context.Context, roomID string, sub *r
 				h.logger.Error(ctx, "Failed to unmarshal broadcast message", err)
 				continue
 			}
-			h.forwardToLocalClients(ctx, broadcastMsg.RoomID, broadcastMsg.Payload)
+			opCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			h.forwardToLocalClients(opCtx, broadcastMsg.RoomID, broadcastMsg.Payload)
+			cancel()
 		case <-h.closeCh:
+			opCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			_ = sub.Unsubscribe(opCtx, pubsubChannel+roomID)
+			cancel()
 			h.logger.Info(ctx, "Stopping pub/sub listener for room %s", roomID)
 			return
 		}
@@ -230,6 +263,7 @@ func (h *RedisHub) listenToRoomPubSub(ctx context.Context, roomID string, sub *r
 }
 
 func (h *RedisHub) RemoveClient(ctx context.Context, clientID string, roomID string) error {
+	h.logger.Debug(ctx, "Removing client %s from room %s", clientID, roomID)
 	_, err := trace.Trace(ctx, trace.NameConfig("RedisHub", "RemoveClient"), func(ctx context.Context) (any, error) {
 		clientKey := clientKeyPrefix + clientID
 		if err := h.client.Del(ctx, clientKey).Err(); err != nil {
@@ -343,7 +377,6 @@ func (h *RedisHub) loadRoom(ctx context.Context, roomID string) (*entity.Room, e
 func (h *RedisHub) forwardToLocalClients(ctx context.Context, roomID string, message any) {
 	h.busMux.RLock()
 	defer h.busMux.RUnlock()
-
 	room, ok := h.GetRoom(ctx, roomID)
 	if !ok {
 		return

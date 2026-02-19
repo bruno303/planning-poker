@@ -38,6 +38,15 @@ func NewRedisLockManager(client *redis.Client) *RedisLockManager {
 	}
 }
 
+func (m *RedisLockManager) SetRetry(maxRetries int, retryDelay time.Duration) {
+	m.maxRetries = maxRetries
+	m.retryDelay = retryDelay
+}
+
+func (m *RedisLockManager) SetLockTimeout(timeout time.Duration) {
+	m.lockTimeout = timeout
+}
+
 func (m *RedisLockManager) acquireLock(ctx context.Context, key string) (string, error) {
 	lockKey := lockKeyPrefix + key
 	lockValue := fmt.Sprintf("%d", time.Now().UnixNano())
@@ -76,7 +85,10 @@ func (m *RedisLockManager) releaseLock(ctx context.Context, key string, lockValu
 		end
 	`
 
-	result, err := m.client.Eval(ctx, script, []string{lockKey}, lockValue).Result()
+	opCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	result, err := m.client.Eval(opCtx, script, []string{lockKey}, lockValue).Result()
 	if err != nil {
 		return fmt.Errorf("failed to release lock: %w", err)
 	}

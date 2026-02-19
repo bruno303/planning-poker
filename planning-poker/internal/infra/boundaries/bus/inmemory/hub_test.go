@@ -13,9 +13,7 @@ import (
 func TestNewRoom(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
-	owner := "test-owner"
-
-	room := hub.NewRoom(ctx, owner)
+	room := hub.NewRoom(ctx)
 
 	if room == nil {
 		t.Fatal("expected room to be non-nil")
@@ -34,8 +32,7 @@ func TestNewRoom(t *testing.T) {
 func TestGetRoom(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
-	owner := "owner1"
-	room := hub.NewRoom(ctx, owner)
+	room := hub.NewRoom(ctx)
 
 	got, ok := hub.GetRoom(ctx, room.ID)
 	if !ok {
@@ -54,8 +51,8 @@ func TestGetRoom(t *testing.T) {
 func TestRemoveRoom(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
-	room1 := hub.NewRoom(ctx, "owner1")
-	room2 := hub.NewRoom(ctx, "owner2")
+	room1 := hub.NewRoom(ctx)
+	room2 := hub.NewRoom(ctx)
 
 	if len(hub.Rooms) != 2 {
 		t.Fatalf("expected 2 rooms, got %d", len(hub.Rooms))
@@ -165,7 +162,7 @@ func TestRemoveClient_Success(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
 
-	room := hub.NewRoom(ctx, "owner1")
+	room := hub.NewRoom(ctx)
 	client := &entity.Client{ID: "client1", Name: "Alice"}
 	hub.AddClient(client)
 
@@ -225,7 +222,7 @@ func TestRemoveClient_EmptyRoomRemoval(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
 
-	room := hub.NewRoom(ctx, "owner1")
+	room := hub.NewRoom(ctx)
 	client := &entity.Client{ID: "client1", Name: "Alice"}
 	hub.AddClient(client)
 
@@ -257,7 +254,7 @@ func TestBroadcastToRoom_Success(t *testing.T) {
 	defer ctrl.Finish()
 
 	hub := NewHub()
-	room := hub.NewRoom(ctx, "owner1")
+	room := hub.NewRoom(ctx)
 
 	client1 := &entity.Client{ID: "client1", Name: "Alice"}
 	client2 := &entity.Client{ID: "client2", Name: "Bob"}
@@ -302,7 +299,7 @@ func TestBroadcastToRoom_BusNotFound(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
 
-	room := hub.NewRoom(ctx, "owner1")
+	room := hub.NewRoom(ctx)
 	client := &entity.Client{ID: "client1", Name: "Alice"}
 	hub.AddClient(client)
 	room.Clients.Add(client)
@@ -323,7 +320,7 @@ func TestBroadcastToRoom_SendError(t *testing.T) {
 	defer ctrl.Finish()
 
 	hub := NewHub()
-	room := hub.NewRoom(ctx, "owner1")
+	room := hub.NewRoom(ctx)
 
 	client := &entity.Client{ID: "client1", Name: "Alice"}
 	hub.AddClient(client)
@@ -357,9 +354,9 @@ func TestGetRooms(t *testing.T) {
 	}
 
 	// Add rooms
-	room1 := hub.NewRoom(ctx, "owner1")
-	room2 := hub.NewRoom(ctx, "owner2")
-	room3 := hub.NewRoom(ctx, "owner3")
+	room1 := hub.NewRoom(ctx)
+	room2 := hub.NewRoom(ctx)
+	room3 := hub.NewRoom(ctx)
 
 	rooms = hub.GetRooms()
 	if len(rooms) != 3 {
@@ -391,8 +388,7 @@ func TestInterfaceCompliance(t *testing.T) {
 func TestSaveRoom(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
-	owner := "owner-save"
-	room := hub.NewRoom(ctx, owner)
+	room := hub.NewRoom(ctx)
 
 	// Change some state in the room
 	room.Reveal = true

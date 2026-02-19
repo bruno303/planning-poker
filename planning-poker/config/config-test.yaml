@@ -1,5 +1,5 @@
 service: "planning-poker-api-test"
-log_level: "INFO"
+log_level: "DEBUG"
 environment: "test"
 trace:
   enabled: false

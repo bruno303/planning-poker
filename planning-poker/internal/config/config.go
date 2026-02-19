@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"planning-poker/config"
 	"time"
 
@@ -46,5 +47,12 @@ type Config struct {
 func LoadConfig() (*Config, error) {
 	cfg := &Config{}
 	toolkitconfig.LoadConfig(cfg, config.ConfigFS)
+	return cfg, nil
+}
+
+func LoadTestConfig() (*Config, error) {
+	_ = os.Setenv("CONFIG_FILE", "config-test.yaml")
+	cfg := &Config{}
+	toolkitconfig.LoadConfigWithoutEnvs(cfg, config.ConfigFS)
 	return cfg, nil
 }

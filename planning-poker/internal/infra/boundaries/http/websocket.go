@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"planning-poker/internal/application/planningpoker/usecase"
 	"planning-poker/internal/domain"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
@@ -30,13 +32,18 @@ type (
 	}
 
 	WebsocketBus struct {
-		ID     string
-		conn   *websocket.Conn
-		hub    domain.Hub
-		logger log.Logger
-		cfg    WebSocketConfig
-		calls  map[string]useCaseCall
-		roomID string
+		ID        string
+		conn      *websocket.Conn
+		hub       domain.Hub
+		logger    log.Logger
+		cfg       WebSocketConfig
+		calls     map[string]useCaseCall
+		usecases  usecase.UseCasesFacade
+		roomID    string
+		closed    atomic.Bool
+		closeOnce sync.Once
+		writeMu   sync.Mutex // Protects writes to conn (required by gorilla/websocket)
+		done      chan struct{}
 	}
 
 	WebSocketConfig struct {
@@ -102,17 +109,6 @@ func (api *WebsocketAPI) Handle() http.Handler {
 
 		api.logger.Info(r.Context(), "New client connected: %v on room: %v", output.Client.ID, output.Room.ID)
 
-		defer func() { _ = output.Bus.Close() }()
-		defer func() {
-			err := api.usecases.LeaveRoom.Execute(r.Context(), usecase.LeaveRoomCommand{
-				RoomID:   output.Room.ID,
-				SenderID: output.Client.ID,
-			})
-			if err != nil {
-				api.logger.Error(r.Context(), fmt.Sprintf("Error leaving room %s", roomID), err)
-			}
-		}()
-
 		output.Bus.Listen(r.Context())
 	})
 }
@@ -126,13 +122,15 @@ func NewWebsocketBus(
 	websocketCfg WebSocketConfig,
 ) *WebsocketBus {
 	return &WebsocketBus{
-		ID:     id,
-		conn:   socket,
-		hub:    hub,
-		cfg:    websocketCfg,
-		logger: log.NewLogger("websocket.client"),
-		calls:  mapUsecases(usecases),
-		roomID: roomID,
+		ID:       id,
+		conn:     socket,
+		hub:      hub,
+		cfg:      websocketCfg,
+		logger:   log.NewLogger("websocket.client"),
+		usecases: usecases,
+		calls:    mapUsecases(usecases),
+		roomID:   roomID,
+		done:     make(chan struct{}),
 	}
 }
 
@@ -141,11 +139,25 @@ func (c *WebsocketBus) RoomID() string {
 }
 
 func (c *WebsocketBus) Close() error {
-	return c.conn.Close()
+	var err error
+	c.closeOnce.Do(func() {
+		c.closed.Store(true)
+		close(c.done)
+		err1 := c.leaveRoom(context.Background())
+		err2 := c.conn.Close()
+		err = errors.Join(err1, err2)
+	})
+	return err
 }
 
 func (c *WebsocketBus) Send(ctx context.Context, message any) error {
+	if c.closed.Load() {
+		c.logger.Warn(ctx, "Attempted to send message to closed connection for client %v", c.ID)
+		return errors.New("connection closed")
+	}
 	c.logger.Debug(ctx, "Sending message to client: %v", message)
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
 	_ = c.conn.SetWriteDeadline(time.Now().Add(c.cfg.WriteTimeout))
 	return c.conn.WriteJSON(message)
 }
@@ -164,9 +176,10 @@ func (c *WebsocketBus) Listen(ctx context.Context) {
 
 	for {
 		msg, err := c.receive()
+		_ = c.conn.SetReadDeadline(time.Now().Add(c.cfg.ReadTimeout))
+
 		if err != nil {
 			c.handleReceiveError(ctx, err)
-
 			return
 		}
 		c.logger.Info(ctx, "Message received from client %v: %v", c.ID, msg)
@@ -221,15 +234,19 @@ func (c *WebsocketBus) pinger(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			if err := c.conn.SetWriteDeadline(time.Now().Add(c.cfg.WriteTimeout)); err != nil {
-				c.logger.Error(ctx, "Error while setting the write deadline", err)
-				return
+			c.writeMu.Lock()
+			err := c.conn.SetWriteDeadline(time.Now().Add(c.cfg.WriteTimeout))
+			if err == nil {
+				err = c.conn.WriteMessage(websocket.PingMessage, nil)
 			}
+			c.writeMu.Unlock()
 
-			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+			if err != nil {
 				c.logger.Error(ctx, "Error while pinging the client", err)
 				return
 			}
+		case <-c.done:
+			return
 		case <-ctx.Done():
 			return
 		}
@@ -298,4 +315,11 @@ func mapUsecases(usecases usecase.UseCasesFacade) map[string]useCaseCall {
 			})
 		},
 	}
+}
+
+func (c *WebsocketBus) leaveRoom(ctx context.Context) error {
+	return c.usecases.LeaveRoom.Execute(ctx, usecase.LeaveRoomCommand{
+		RoomID:   c.roomID,
+		SenderID: c.ID,
+	})
 }

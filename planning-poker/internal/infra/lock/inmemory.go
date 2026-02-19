@@ -11,7 +11,7 @@ import (
 
 type (
 	InMemoryLockManager struct {
-		locks map[string]*inMemoryLock
+		locks sync.Map
 		log   log.Logger
 	}
 	inMemoryLock struct {
@@ -26,7 +26,7 @@ var (
 
 func NewInMemoryLockManager() *InMemoryLockManager {
 	return &InMemoryLockManager{
-		locks: make(map[string]*inMemoryLock),
+		locks: sync.Map{},
 		log:   log.NewLogger("inmemory.lockmanager"),
 	}
 }
@@ -39,15 +39,9 @@ func newInMemoryLock() *inMemoryLock {
 
 func (m *InMemoryLockManager) getLock(ctx context.Context, key string) *inMemoryLock {
 	lock, _ := trace.Trace(ctx, trace.NameConfig("InMemoryLockManager", "getLock"), func(ctx context.Context) (any, error) {
-		if lock, exists := m.locks[key]; exists {
-			m.log.Debug(ctx, "reusing lock for key '%s'", key)
-			return lock, nil
-		}
-
-		m.log.Debug(ctx, "creating new lock for key '%s'", key)
 		lock := newInMemoryLock()
-		m.locks[key] = lock
-		return lock, nil
+		actual, _ := m.locks.LoadOrStore(key, lock)
+		return actual, nil
 	})
 
 	return lock.(*inMemoryLock)

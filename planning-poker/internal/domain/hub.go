@@ -11,7 +11,7 @@ type (
 		AddClient(c *entity.Client)
 		RemoveClient(ctx context.Context, clientID string, roomID string) error
 
-		NewRoom(ctx context.Context, owner string) *entity.Room
+		NewRoom(ctx context.Context) *entity.Room
 		GetRoom(ctx context.Context, roomID string) (*entity.Room, bool)
 		RemoveRoom(roomID string)
 		SaveRoom(ctx context.Context, room *entity.Room) error

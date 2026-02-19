@@ -13,106 +13,6 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// Helper function to create a room and return the room ID
-func createRoom(t *testing.T, ts *integration.TestServer) string {
-	t.Helper()
-
-	requestBody := map[string]string{}
-	jsonBody, err := json.Marshal(requestBody)
-	if err != nil {
-		t.Fatalf("failed to marshal request: %v", err)
-	}
-
-	resp, err := http.Post(
-		ts.Server.URL+"/planning/room",
-		"application/json",
-		bytes.NewBuffer(jsonBody),
-	)
-	if err != nil {
-		t.Fatalf("request failed: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("expected status 201, got %d", resp.StatusCode)
-	}
-
-	var response struct {
-		RoomID string `json:"roomId"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	return response.RoomID
-}
-
-// Helper function to connect to WebSocket
-func connectWebSocket(t *testing.T, ts *integration.TestServer, roomID string) *websocket.Conn {
-	t.Helper()
-
-	wsURL := strings.Replace(ts.Server.URL, "http://", "ws://", 1)
-	wsURL = fmt.Sprintf("%s/planning/%s/ws", wsURL, roomID)
-
-	dialer := websocket.Dialer{
-		HandshakeTimeout: 5 * time.Second,
-	}
-
-	conn, _, err := dialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("failed to connect to websocket: %v", err)
-	}
-
-	return conn
-}
-
-// Helper to receive a message with timeout
-func receiveMessage(t *testing.T, conn *websocket.Conn, timeout time.Duration) map[string]any {
-	t.Helper()
-
-	_ = conn.SetReadDeadline(time.Now().Add(timeout))
-
-	var msg map[string]any
-	err := conn.ReadJSON(&msg)
-	if err != nil {
-		t.Fatalf("failed to read message: %v", err)
-	}
-
-	return msg
-}
-
-// Helper to send a message
-func sendMessage(t *testing.T, conn *websocket.Conn, msg map[string]any) {
-	t.Helper()
-
-	if err := conn.WriteJSON(msg); err != nil {
-		t.Fatalf("failed to send message: %v", err)
-	}
-}
-
-// Helper to extract client ID from first message
-func getClientID(t *testing.T, conn *websocket.Conn) string {
-	t.Helper()
-
-	// First message: update-client-id
-	msg1 := receiveMessage(t, conn, 2*time.Second)
-	if msg1["type"] != "update-client-id" {
-		t.Fatalf("expected first message type 'update-client-id', got '%v'", msg1["type"])
-	}
-	clientID, ok := msg1["clientId"].(string)
-	if !ok || clientID == "" {
-		t.Fatal("clientId not found in update-client-id message")
-	}
-
-	// Consume the initial room-state message that comes after joining
-	msg2 := receiveMessage(t, conn, 2*time.Second)
-	if msg2["type"] != "room-state" {
-		t.Fatalf("expected second message type 'room-state', got '%v'", msg2["type"])
-	}
-
-	return clientID
-}
-
 func TestWebSocketConnection(t *testing.T) {
 	ts := integration.NewTestServer(t)
 	defer ts.Close()
@@ -120,7 +20,7 @@ func TestWebSocketConnection(t *testing.T) {
 	t.Run("successful connection to existing room", func(t *testing.T) {
 		roomID := createRoom(t, ts)
 		conn := connectWebSocket(t, ts, roomID)
-		defer conn.Close()
+		defer closeAndWait(conn)
 
 		// Should receive update-client-id message
 		msg1 := receiveMessage(t, conn, 2*time.Second)
@@ -142,7 +42,7 @@ func TestWebSocketConnection(t *testing.T) {
 
 		conn, resp, err := dialer.Dial(wsURL, nil)
 		if err == nil {
-			defer conn.Close()
+			defer closeAndWait(conn)
 		}
 
 		if err == nil && resp.StatusCode == http.StatusOK {
@@ -158,7 +58,7 @@ func TestWebSocketUpdateName(t *testing.T) {
 	roomID := createRoom(t, ts)
 	conn := connectWebSocket(t, ts, roomID)
 
-	defer conn.Close()
+	defer closeAndWait(conn)
 
 	clientID := getClientID(t, conn)
 
@@ -171,7 +71,8 @@ func TestWebSocketUpdateName(t *testing.T) {
 		})
 
 		// Should receive room-state update
-		msg := receiveMessage(t, conn, 2*time.Second)
+		msgs := readMessages(t, conn)
+		msg := msgs[0]
 		if msg["type"] != "room-state" {
 			t.Errorf("expected room-state message, got '%v'", msg["type"])
 		}
@@ -197,15 +98,15 @@ func TestWebSocketVoting(t *testing.T) {
 
 	// Connect first client (owner)
 	conn1 := connectWebSocket(t, ts, roomID)
-	defer conn1.Close()
+	defer closeAndWait(conn1)
 	clientID1 := getClientID(t, conn1)
 
 	// Connect second client
 	conn2 := connectWebSocket(t, ts, roomID)
-	defer conn2.Close()
+	defer closeAndWait(conn2)
 	clientID2 := getClientID(t, conn2)
 	// Client1 receives broadcast when client2 joins
-	_ = receiveMessage(t, conn1, 2*time.Second)
+	consumeMessages(t, conn1)
 
 	t.Run("client can vote", func(t *testing.T) {
 		sendMessage(t, conn1, map[string]any{
@@ -216,18 +117,16 @@ func TestWebSocketVoting(t *testing.T) {
 		})
 
 		// Both clients should receive room-state update
-		msg1 := receiveMessage(t, conn1, 2*time.Second)
-		if msg1["type"] != "room-state" {
-			t.Errorf("expected room-state message, got '%v'", msg1["type"])
-		}
+		msgs := readMessages(t, conn1, conn2)
 
-		msg2 := receiveMessage(t, conn2, 2*time.Second)
-		if msg2["type"] != "room-state" {
-			t.Errorf("expected room-state message, got '%v'", msg2["type"])
+		for _, msg := range msgs {
+			if msg["type"] != "room-state" {
+				t.Error("both clients should receive room-state update")
+			}
 		}
 
 		// Vote should not be revealed yet
-		if msg1["reveal"] != false {
+		if msgs[0]["reveal"] != false {
 			t.Error("votes should not be revealed yet")
 		}
 	})
@@ -241,20 +140,17 @@ func TestWebSocketVoting(t *testing.T) {
 		})
 
 		// Both clients should receive room-state update with reveal=true
-		msg1 := receiveMessage(t, conn1, 2*time.Second)
-		msg2 := receiveMessage(t, conn2, 2*time.Second)
-
-		if msg1["reveal"] != true {
-			t.Error("votes should be auto-revealed after all clients vote")
-		}
-		if msg2["reveal"] != true {
-			t.Error("votes should be auto-revealed after all clients vote")
+		msgs := readMessages(t, conn1, conn2)
+		for _, msg := range msgs {
+			if msg["reveal"] != true {
+				t.Error("votes should be auto-revealed after all clients vote")
+			}
 		}
 
 		// Result should be calculated (5+8)/2 = 6.5
-		result, ok := msg1["result"].(float64)
+		result, ok := msgs[0]["result"].(float64)
 		if !ok || result != 6.5 {
-			t.Errorf("expected result 6.5, got %v", msg1["result"])
+			t.Errorf("expected result 6.5, got %v", msgs[0]["result"])
 		}
 	})
 }
@@ -266,7 +162,7 @@ func TestWebSocketRevealVotes(t *testing.T) {
 	roomID := createRoom(t, ts)
 	conn := connectWebSocket(t, ts, roomID)
 
-	defer conn.Close()
+	defer closeAndWait(conn)
 
 	clientID := getClientID(t, conn)
 
@@ -279,7 +175,7 @@ func TestWebSocketRevealVotes(t *testing.T) {
 			"vote":     "3",
 		})
 		// When there's only 1 client, voting auto-reveals, so consume that message
-		msg := receiveMessage(t, conn, 2*time.Second)
+		msg := readMessages(t, conn)[0]
 
 		// Verify it was auto-revealed
 		if msg["reveal"] != true {
@@ -293,7 +189,7 @@ func TestWebSocketRevealVotes(t *testing.T) {
 			"clientId": clientID,
 		})
 
-		msg = receiveMessage(t, conn, 2*time.Second)
+		msg = readMessages(t, conn)[0]
 		if msg["reveal"] != false {
 			t.Error("votes should be hidden after toggling reveal")
 		}
@@ -307,7 +203,7 @@ func TestWebSocketReset(t *testing.T) {
 	roomID := createRoom(t, ts)
 	conn := connectWebSocket(t, ts, roomID)
 
-	defer conn.Close()
+	defer closeAndWait(conn)
 
 	clientID := getClientID(t, conn)
 
@@ -319,7 +215,7 @@ func TestWebSocketReset(t *testing.T) {
 			"clientId": clientID,
 			"vote":     "5",
 		})
-		_ = receiveMessage(t, conn, 2*time.Second) // consume room-state
+		consumeMessages(t, conn) // consume room-state
 
 		// Reset
 		sendMessage(t, conn, map[string]any{
@@ -328,7 +224,7 @@ func TestWebSocketReset(t *testing.T) {
 			"clientId": clientID,
 		})
 
-		msg := receiveMessage(t, conn, 2*time.Second)
+		msg := readMessages(t, conn)[0]
 		if msg["reveal"] != false {
 			t.Error("votes should not be revealed after reset")
 		}
@@ -350,16 +246,16 @@ func TestWebSocketToggleSpectator(t *testing.T) {
 	// Connect owner
 	conn1 := connectWebSocket(t, ts, roomID)
 
-	defer conn1.Close()
+	defer closeAndWait(conn1)
 	ownerID := getClientID(t, conn1)
 
 	// Connect second client
 	conn2 := connectWebSocket(t, ts, roomID)
 
-	defer conn2.Close()
+	defer closeAndWait(conn2)
 	clientID2 := getClientID(t, conn2)
 	// Client1 receives broadcast when client2 joins
-	_ = receiveMessage(t, conn1, 2*time.Second)
+	consumeMessages(t, conn1)
 
 	t.Run("owner can toggle spectator mode", func(t *testing.T) {
 		sendMessage(t, conn1, map[string]any{
@@ -370,7 +266,7 @@ func TestWebSocketToggleSpectator(t *testing.T) {
 		})
 
 		// Both clients should receive room-state update
-		msg1 := receiveMessage(t, conn1, 2*time.Second)
+		msg1 := readMessages(t, conn1)[0]
 
 		// Find the target client in participants
 		participants := msg1["participants"].([]any)
@@ -402,16 +298,16 @@ func TestWebSocketToggleOwner(t *testing.T) {
 	// Connect owner
 	conn1 := connectWebSocket(t, ts, roomID)
 
-	defer conn1.Close()
+	defer closeAndWait(conn1)
 	ownerID := getClientID(t, conn1)
 
 	// Connect second client
 	conn2 := connectWebSocket(t, ts, roomID)
 
-	defer conn2.Close()
+	defer closeAndWait(conn2)
 	clientID2 := getClientID(t, conn2)
 	// Client1 receives broadcast when client2 joins
-	_ = receiveMessage(t, conn1, 2*time.Second)
+	consumeMessages(t, conn1)
 
 	t.Run("owner can promote another user to owner", func(t *testing.T) {
 		sendMessage(t, conn1, map[string]any{
@@ -422,7 +318,7 @@ func TestWebSocketToggleOwner(t *testing.T) {
 		})
 
 		// Both clients should receive room-state update
-		msg1 := receiveMessage(t, conn1, 2*time.Second)
+		msg1 := readMessages(t, conn1)[0]
 
 		// Find the target client in participants
 		participants := msg1["participants"].([]any)
@@ -452,7 +348,7 @@ func TestWebSocketUpdateStory(t *testing.T) {
 	roomID := createRoom(t, ts)
 	conn := connectWebSocket(t, ts, roomID)
 
-	defer conn.Close()
+	defer closeAndWait(conn)
 
 	clientID := getClientID(t, conn)
 
@@ -464,7 +360,7 @@ func TestWebSocketUpdateStory(t *testing.T) {
 			"story":    "User story #123",
 		})
 
-		msg := receiveMessage(t, conn, 2*time.Second)
+		msg := readMessages(t, conn)[0]
 		if msg["currentStory"] != "User story #123" {
 			t.Errorf("expected currentStory 'User story #123', got '%v'", msg["currentStory"])
 		}
@@ -478,7 +374,7 @@ func TestWebSocketNewVoting(t *testing.T) {
 	roomID := createRoom(t, ts)
 	conn := connectWebSocket(t, ts, roomID)
 
-	defer conn.Close()
+	defer closeAndWait(conn)
 
 	clientID := getClientID(t, conn)
 
@@ -490,7 +386,7 @@ func TestWebSocketNewVoting(t *testing.T) {
 			"clientId": clientID,
 			"vote":     "5",
 		})
-		_ = receiveMessage(t, conn, 2*time.Second) // consume room-state
+		consumeMessages(t, conn) // consume room-state
 
 		// Set story
 		sendMessage(t, conn, map[string]any{
@@ -499,7 +395,7 @@ func TestWebSocketNewVoting(t *testing.T) {
 			"clientId": clientID,
 			"story":    "Old story",
 		})
-		_ = receiveMessage(t, conn, 2*time.Second) // consume room-state
+		consumeMessages(t, conn) // consume room-state
 
 		// Start new voting
 		sendMessage(t, conn, map[string]any{
@@ -508,7 +404,7 @@ func TestWebSocketNewVoting(t *testing.T) {
 			"clientId": clientID,
 		})
 
-		msg := receiveMessage(t, conn, 2*time.Second)
+		msg := readMessages(t, conn)[0]
 
 		// Story should be cleared
 		if msg["currentStory"] != "" {
@@ -535,7 +431,7 @@ func TestWebSocketVoteAgain(t *testing.T) {
 	roomID := createRoom(t, ts)
 	conn := connectWebSocket(t, ts, roomID)
 
-	defer conn.Close()
+	defer closeAndWait(conn)
 
 	clientID := getClientID(t, conn)
 
@@ -547,7 +443,7 @@ func TestWebSocketVoteAgain(t *testing.T) {
 			"clientId": clientID,
 			"vote":     "5",
 		})
-		_ = receiveMessage(t, conn, 2*time.Second) // consume room-state
+		consumeMessages(t, conn) // consume room-state
 
 		// Vote again
 		sendMessage(t, conn, map[string]any{
@@ -556,7 +452,7 @@ func TestWebSocketVoteAgain(t *testing.T) {
 			"clientId": clientID,
 		})
 
-		msg := receiveMessage(t, conn, 2*time.Second)
+		msg := readMessages(t, conn)[0]
 
 		// Votes should be cleared but story preserved
 		if msg["reveal"] != false {
@@ -579,21 +475,20 @@ func TestWebSocketMultipleClients(t *testing.T) {
 
 	// Connect 3 clients
 	conn1 := connectWebSocket(t, ts, roomID)
-	defer conn1.Close()
+	defer closeAndWait(conn1)
 	clientID1 := getClientID(t, conn1)
 
 	conn2 := connectWebSocket(t, ts, roomID)
-	defer conn2.Close()
+	defer closeAndWait(conn2)
 	clientID2 := getClientID(t, conn2)
 	// Client1 receives broadcast when client2 joins
-	_ = receiveMessage(t, conn1, 2*time.Second)
+	consumeMessages(t, conn1)
 
 	conn3 := connectWebSocket(t, ts, roomID)
-	defer conn3.Close()
+	defer closeAndWait(conn3)
 	clientID3 := getClientID(t, conn3)
 	// Client1 and Client2 receive broadcasts when client3 joins
-	_ = receiveMessage(t, conn1, 2*time.Second)
-	_ = receiveMessage(t, conn2, 2*time.Second)
+	consumeMessages(t, conn1, conn2)
 
 	t.Run("all clients receive updates when one client votes", func(t *testing.T) {
 		sendMessage(t, conn1, map[string]any{
@@ -604,11 +499,9 @@ func TestWebSocketMultipleClients(t *testing.T) {
 		})
 
 		// All three clients should receive the update
-		msg1 := receiveMessage(t, conn1, 2*time.Second)
-		msg2 := receiveMessage(t, conn2, 2*time.Second)
-		msg3 := receiveMessage(t, conn3, 2*time.Second)
+		msgs := readMessages(t, conn1, conn2, conn3)
 
-		for _, msg := range []map[string]any{msg1, msg2, msg3} {
+		for _, msg := range msgs {
 			if msg["type"] != "room-state" {
 				t.Error("all clients should receive room-state update")
 			}
@@ -628,9 +521,7 @@ func TestWebSocketMultipleClients(t *testing.T) {
 			"clientId": clientID1,
 		})
 		// Consume reset messages
-		_ = receiveMessage(t, conn1, 2*time.Second)
-		_ = receiveMessage(t, conn2, 2*time.Second)
-		_ = receiveMessage(t, conn3, 2*time.Second)
+		consumeMessages(t, conn1, conn2, conn3)
 
 		// Now have all 3 clients vote
 		sendMessage(t, conn1, map[string]any{
@@ -640,9 +531,7 @@ func TestWebSocketMultipleClients(t *testing.T) {
 			"vote":     "3",
 		})
 		// Consume vote messages
-		_ = receiveMessage(t, conn1, 2*time.Second)
-		_ = receiveMessage(t, conn2, 2*time.Second)
-		_ = receiveMessage(t, conn3, 2*time.Second)
+		consumeMessages(t, conn1, conn2, conn3)
 
 		// Client 2 votes
 		sendMessage(t, conn2, map[string]any{
@@ -652,9 +541,7 @@ func TestWebSocketMultipleClients(t *testing.T) {
 			"vote":     "5",
 		})
 		// Consume room-state updates from all clients
-		_ = receiveMessage(t, conn1, 2*time.Second)
-		_ = receiveMessage(t, conn2, 2*time.Second)
-		_ = receiveMessage(t, conn3, 2*time.Second)
+		consumeMessages(t, conn1, conn2, conn3)
 
 		// Client 3 votes - should trigger auto-reveal
 		sendMessage(t, conn3, map[string]any{
@@ -665,11 +552,8 @@ func TestWebSocketMultipleClients(t *testing.T) {
 		})
 
 		// Now get the reveal messages
-		msg1 := receiveMessage(t, conn1, 2*time.Second)
-		msg2 := receiveMessage(t, conn2, 2*time.Second)
-		msg3 := receiveMessage(t, conn3, 2*time.Second)
-
-		for _, msg := range []map[string]any{msg1, msg2, msg3} {
+		msgs := readMessages(t, conn1, conn2, conn3)
+		for _, msg := range msgs {
 			if msg["reveal"] != true {
 				t.Error("votes should be auto-revealed when all clients vote")
 			}
@@ -703,14 +587,8 @@ func TestWebSocketDisconnection(t *testing.T) {
 		conn2 := connectWebSocket(t, ts, roomID)
 		clientID2 := getClientID(t, conn2)
 
-		// Close the first connection
-		err := conn1.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-		if err != nil {
-			t.Logf("error sending close message: %v", err)
-		}
 		conn1.Close()
 
-		// Give server time to process disconnection
 		time.Sleep(100 * time.Millisecond)
 
 		// Verify the second client is still connected and the room still exists
@@ -730,4 +608,118 @@ func TestWebSocketDisconnection(t *testing.T) {
 
 		conn2.Close()
 	})
+}
+
+func consumeMessages(t *testing.T, conns ...*websocket.Conn) {
+	t.Helper()
+	readMessages(t, conns...)
+}
+
+func readMessages(t *testing.T, conns ...*websocket.Conn) []map[string]any {
+	t.Helper()
+	messages := make([]map[string]any, len(conns))
+	for i, conn := range conns {
+		messages[i] = receiveMessage(t, conn, 2*time.Second)
+	}
+	return messages
+}
+
+func createRoom(t *testing.T, ts *integration.TestServer) string {
+	t.Helper()
+
+	requestBody := map[string]string{}
+	jsonBody, err := json.Marshal(requestBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	resp, err := http.Post(
+		ts.Server.URL+"/planning/room",
+		"application/json",
+		bytes.NewBuffer(jsonBody),
+	)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d", resp.StatusCode)
+	}
+
+	var response struct {
+		RoomID string `json:"roomId"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	return response.RoomID
+}
+
+func connectWebSocket(t *testing.T, ts *integration.TestServer, roomID string) *websocket.Conn {
+	t.Helper()
+
+	wsURL := strings.Replace(ts.Server.URL, "http://", "ws://", 1)
+	wsURL = fmt.Sprintf("%s/planning/%s/ws", wsURL, roomID)
+
+	dialer := websocket.Dialer{
+		HandshakeTimeout: 5 * time.Second,
+	}
+
+	conn, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to connect to websocket: %v", err)
+	}
+
+	return conn
+}
+
+func receiveMessage(t *testing.T, conn *websocket.Conn, timeout time.Duration) map[string]any {
+	t.Helper()
+
+	_ = conn.SetReadDeadline(time.Now().Add(timeout))
+
+	var msg map[string]any
+	err := conn.ReadJSON(&msg)
+	if err != nil {
+		t.Fatalf("failed to read message: %v", err)
+	}
+
+	return msg
+}
+
+func sendMessage(t *testing.T, conn *websocket.Conn, msg map[string]any) {
+	t.Helper()
+
+	if err := conn.WriteJSON(msg); err != nil {
+		t.Fatalf("failed to send message: %v", err)
+	}
+}
+
+func closeAndWait(conn *websocket.Conn) {
+	_ = conn.Close()
+	time.Sleep(100 * time.Millisecond)
+}
+
+func getClientID(t *testing.T, conn *websocket.Conn) string {
+	t.Helper()
+
+	// First message: update-client-id
+	msg1 := receiveMessage(t, conn, 2*time.Second)
+	if msg1["type"] != "update-client-id" {
+		t.Fatalf("expected first message type 'update-client-id', got '%v'", msg1["type"])
+	}
+	clientID, ok := msg1["clientId"].(string)
+	if !ok || clientID == "" {
+		t.Fatal("clientId not found in update-client-id message")
+	}
+
+	// Consume the initial room-state message that comes after joining
+	msg2 := receiveMessage(t, conn, 2*time.Second)
+	if msg2["type"] != "room-state" {
+		t.Fatalf("expected second message type 'room-state', got '%v'", msg2["type"])
+	}
+
+	return clientID
 }

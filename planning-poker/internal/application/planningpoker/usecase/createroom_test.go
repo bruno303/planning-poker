@@ -39,7 +39,7 @@ func TestCreateRoomUseCase_Execute_Success(t *testing.T) {
 	senderID := "user123"
 
 	mockHub.EXPECT().
-		NewRoom(ctx, senderID).
+		NewRoom(ctx).
 		Return(expectedRoom)
 
 	uc := NewCreateRoomUseCase(mockHub, mockMetric)
@@ -66,7 +66,7 @@ func TestCreateRoomUseCase_Execute_EmptySenderID(t *testing.T) {
 	expectedRoom := &entity.Room{ID: "room123"}
 
 	mockHub.EXPECT().
-		NewRoom(ctx, "").
+		NewRoom(ctx).
 		Return(expectedRoom)
 
 	uc := NewCreateRoomUseCase(mockHub, mockMetric)
