@@ -51,7 +51,7 @@ func (api HealthcheckAPI) Endpoint() string {
 }
 
 func (api HealthcheckAPI) Methods() []string {
-	return []string{"GET"}
+	return []string{"GET", "HEAD"}
 }
 
 func (api HealthcheckAPI) Handle() http.Handler {

@@ -37,11 +37,14 @@ func TestHealthcheckAPI_Methods(t *testing.T) {
 	api := NewHealthcheckAPI()
 	methods := api.Methods()
 
-	if len(methods) != 1 {
-		t.Fatalf("Methods() length = %v, want %v", len(methods), 1)
+	if len(methods) != 2 {
+		t.Fatalf("Methods() length = %v, want %v", len(methods), 2)
 	}
 	if methods[0] != "GET" {
 		t.Errorf("Methods()[0] = %v, want %v", methods[0], "GET")
+	}
+	if methods[1] != "HEAD" {
+		t.Errorf("Methods()[1] = %v, want %v", methods[1], "HEAD")
 	}
 }
 
