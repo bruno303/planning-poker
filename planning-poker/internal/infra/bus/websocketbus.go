@@ -28,7 +28,27 @@ type (
 		RoomID   string
 		Socket   *websocket.Conn
 	}
-	useCaseCall func(context.Context, map[string]any) error
+	WebSocketMessage struct {
+		Type    string `json:"type"`
+		Payload any    `json:"payload"`
+	}
+	UpdateNamePayload struct {
+		Username string `json:"username"`
+	}
+	ToggleSpectatorPayload struct {
+		TargetClientID string `json:"targetClientId"`
+	}
+	ToggleOwnerPayload struct {
+		TargetClientID string `json:"targetClientId"`
+	}
+	UpdateStoryPayload struct {
+		Story string `json:"story"`
+	}
+	VotePayload struct {
+		Vote string `json:"vote"`
+	}
+	useCaseCall  func(context.Context, map[string]any) error
+	useCaseCall2 func(context.Context, WebSocketMessage) error
 
 	WebsocketBus struct {
 		ID        string
@@ -37,6 +57,7 @@ type (
 		logger    log.Logger
 		cfg       WebSocketConfig
 		calls     map[string]useCaseCall
+		calls2    map[string]useCaseCall2
 		usecases  usecase.UseCasesFacade
 		roomID    string
 		closed    atomic.Bool
@@ -89,6 +110,7 @@ func NewWebsocketBus(
 		logger:   log.NewLogger("websocket.client"),
 		usecases: usecases,
 		calls:    mapUsecases(usecases, id, roomID),
+		calls2:   mapUsecases2(usecases, id, roomID),
 		roomID:   roomID,
 		done:     make(chan struct{}),
 	}
@@ -159,17 +181,45 @@ func (c *WebsocketBus) Listen(ctx context.Context) {
 			continue
 		}
 
-		usecaseCall, exists := c.calls[eventType]
-		if !exists {
-			c.logger.Error(ctx, fmt.Sprintf("Unknown event type '%v' for client %v", eventType, c.ID), errors.New("unknown event type"))
+		if msg["payload"] != nil {
+			c.processAsMessage(ctx, eventType, msg)
 			continue
 		}
 
-		err = usecaseCall(ctx, msg)
-		if err != nil {
-			c.logger.Error(ctx, fmt.Sprintf("Error handling event for client %v", c.ID), err)
-			continue
-		}
+		c.processAsMap(ctx, eventType, msg)
+	}
+}
+
+func (c *WebsocketBus) processAsMap(ctx context.Context, eventType string, msg map[string]any) {
+	c.logger.Debug(ctx, "Processing message as map for event type '%v' with payload: %v", eventType, msg)
+	usecaseCall, exists := c.calls[eventType]
+	if !exists {
+		c.logger.Error(ctx, fmt.Sprintf("Unknown event type '%v' for client %v", eventType, c.ID), errors.New("unknown event type"))
+		return
+	}
+
+	err := usecaseCall(ctx, msg)
+	if err != nil {
+		c.logger.Error(ctx, fmt.Sprintf("Error handling event for client %v", c.ID), err)
+		return
+	}
+}
+
+func (c *WebsocketBus) processAsMessage(ctx context.Context, eventType string, msg map[string]any) {
+	c.logger.Debug(ctx, "Processing message as WebSocketMessage for event type '%v' with payload: %v", eventType, msg)
+	usecaseCall, exists := c.calls2[eventType]
+	if !exists {
+		c.logger.Error(ctx, fmt.Sprintf("Unknown event type '%v' for client %v", eventType, c.ID), errors.New("unknown event type"))
+		return
+	}
+
+	err := usecaseCall(ctx, WebSocketMessage{
+		Type:    eventType,
+		Payload: c.buildPayload(eventType, msg["payload"].(map[string]any)),
+	})
+	if err != nil {
+		c.logger.Error(ctx, fmt.Sprintf("Error handling event for client %v", c.ID), err)
+		return
 	}
 }
 
@@ -288,6 +338,117 @@ func mapUsecases(usecases usecase.UseCasesFacade, clientID, roomID string) map[s
 				SenderID: clientID,
 			})
 		},
+	}
+}
+
+func mapUsecases2(usecases usecase.UseCasesFacade, clientID, roomID string) map[string]useCaseCall2 {
+	return map[string]useCaseCall2{
+		"update-name": func(ctx context.Context, msg WebSocketMessage) error {
+			payload, ok := msg.Payload.(UpdateNamePayload)
+			if !ok {
+				return errors.New("invalid payload")
+			}
+			return usecases.UpdateName.Execute(ctx, usecase.UpdateNameCommand{
+				RoomID:   roomID,
+				SenderID: clientID,
+				Username: payload.Username,
+			})
+		},
+		"vote": func(ctx context.Context, msg WebSocketMessage) error {
+			payload, ok := msg.Payload.(VotePayload)
+			if !ok {
+				return errors.New("invalid payload")
+			}
+			return usecases.Vote.Execute(ctx, usecase.VoteCommand{
+				RoomID:   roomID,
+				SenderID: clientID,
+				Vote:     lo.ToPtr(payload.Vote),
+			})
+		},
+		"reset": func(ctx context.Context, msg WebSocketMessage) error {
+			return usecases.Reset.Execute(ctx, usecase.ResetCommand{
+				RoomID:   roomID,
+				SenderID: clientID,
+			})
+		},
+		"reveal-votes": func(ctx context.Context, msg WebSocketMessage) error {
+			return usecases.Reveal.Execute(ctx, usecase.RevealCommand{
+				RoomID:   roomID,
+				SenderID: clientID,
+			})
+		},
+		"toggle-spectator": func(ctx context.Context, msg WebSocketMessage) error {
+			payload, ok := msg.Payload.(ToggleSpectatorPayload)
+			if !ok {
+				return errors.New("invalid payload")
+			}
+			return usecases.ToggleSpectator.Execute(ctx, usecase.ToggleSpectatorCommand{
+				RoomID:         roomID,
+				SenderID:       clientID,
+				TargetClientID: payload.TargetClientID,
+			})
+		},
+		"toggle-owner": func(ctx context.Context, msg WebSocketMessage) error {
+			payload, ok := msg.Payload.(ToggleOwnerPayload)
+			if !ok {
+				return errors.New("invalid payload")
+			}
+			return usecases.ToggleOwner.Execute(ctx, usecase.ToggleOwnerCommand{
+				RoomID:         roomID,
+				SenderID:       clientID,
+				TargetClientID: payload.TargetClientID,
+			})
+		},
+		"update-story": func(ctx context.Context, msg WebSocketMessage) error {
+			payload, ok := msg.Payload.(UpdateStoryPayload)
+			if !ok {
+				return errors.New("invalid payload")
+			}
+			return usecases.UpdateStory.Execute(ctx, usecase.UpdateStoryCommand{
+				RoomID:   roomID,
+				SenderID: clientID,
+				Story:    payload.Story,
+			})
+		},
+		"new-voting": func(ctx context.Context, msg WebSocketMessage) error {
+			return usecases.NewVoting.Execute(ctx, usecase.NewVotingCommand{
+				RoomID:   roomID,
+				SenderID: clientID,
+			})
+		},
+		"vote-again": func(ctx context.Context, msg WebSocketMessage) error {
+			return usecases.VoteAgain.Execute(ctx, usecase.VoteAgainCommand{
+				RoomID:   roomID,
+				SenderID: clientID,
+			})
+		},
+	}
+}
+
+func (c *WebsocketBus) buildPayload(eventType string, payload map[string]any) any {
+	switch eventType {
+	case "update-name":
+		return UpdateNamePayload{
+			Username: payload["username"].(string),
+		}
+	case "vote":
+		return VotePayload{
+			Vote: payload["vote"].(string),
+		}
+	case "toggle-spectator":
+		return ToggleSpectatorPayload{
+			TargetClientID: payload["targetClientId"].(string),
+		}
+	case "toggle-owner":
+		return ToggleOwnerPayload{
+			TargetClientID: payload["targetClientId"].(string),
+		}
+	case "update-story":
+		return UpdateStoryPayload{
+			Story: payload["story"].(string),
+		}
+	default:
+		return nil
 	}
 }
 
