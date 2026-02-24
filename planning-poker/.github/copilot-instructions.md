@@ -83,7 +83,7 @@ See [websocket.go](../internal/infra/boundaries/http/websocket.go) for handler m
 
 ### Hub (Redis-based)
 
-Central registry managing rooms, clients, and WebSocket buses. **Stateless** - all room state persists in Redis. Uses Redis pub/sub to broadcast updates across multiple backend instances. See [redis/hub.go](../internal/infra/boundaries/bus/redis/hub.go).
+Central registry managing rooms, clients, and WebSocket buses. **Stateless** - all room state persists in Redis. Uses Redis pub/sub to broadcast updates across multiple backend instances. See [redis/hub.go](../internal/infra/boundaries/hub/redis/hub.go).
 
 **Key Features**:
 
@@ -92,7 +92,7 @@ Central registry managing rooms, clients, and WebSocket buses. **Stateless** - a
 - Each instance maintains local WebSocket `Bus` map for connected clients
 - Supports horizontal scaling - multiple backend instances can serve the same room
 
-**In-Memory Alternative**: [inmemory/hub.go](../internal/infra/boundaries/bus/inmemory/hub.go) available for testing/single-instance deployments.
+**In-Memory Alternative**: [inmemory/hub.go](../internal/infra/boundaries/hub/inmemory/hub.go) available for testing/single-instance deployments.
 
 ## Configuration
 

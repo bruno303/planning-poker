@@ -2,7 +2,7 @@ package dto
 
 import (
 	"planning-poker/internal/domain/entity"
-	"planning-poker/internal/infra/boundaries/bus/clientcollection"
+	"planning-poker/internal/infra/boundaries/hub/clientcollection"
 	"reflect"
 	"testing"
 

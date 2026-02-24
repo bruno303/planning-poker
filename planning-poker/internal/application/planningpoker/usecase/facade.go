@@ -1,22 +1,19 @@
 package usecase
 
-import (
-	"planning-poker/internal/application"
-)
-
 type (
 	UseCasesFacade struct {
-		UpdateName      application.UseCase[UpdateNameCommand]
-		Vote            application.UseCase[VoteCommand]
-		Reveal          application.UseCase[RevealCommand]
-		Reset           application.UseCase[ResetCommand]
-		ToggleSpectator application.UseCase[ToggleSpectatorCommand]
-		ToggleOwner     application.UseCase[ToggleOwnerCommand]
-		UpdateStory     application.UseCase[UpdateStoryCommand]
-		NewVoting       application.UseCase[NewVotingCommand]
-		VoteAgain       application.UseCase[VoteAgainCommand]
-		LeaveRoom       application.UseCase[LeaveRoomCommand]
-		JoinRoom        application.UseCaseR[JoinRoomCommand, *JoinRoomOutput]
-		CreateRoom      application.UseCaseR[CreateRoomCommand, CreateRoomOutput]
+		UpdateName      UseCase[UpdateNameCommand]
+		Vote            UseCase[VoteCommand]
+		Reveal          UseCase[RevealCommand]
+		Reset           UseCase[ResetCommand]
+		ToggleSpectator UseCase[ToggleSpectatorCommand]
+		ToggleOwner     UseCase[ToggleOwnerCommand]
+		UpdateStory     UseCase[UpdateStoryCommand]
+		NewVoting       UseCase[NewVotingCommand]
+		VoteAgain       UseCase[VoteAgainCommand]
+		LeaveRoom       UseCase[LeaveRoomCommand]
+		JoinRoom        UseCaseR[JoinRoomCommand, *JoinRoomOutput]
+		CreateRoom      UseCaseR[CreateRoomCommand, CreateRoomOutput]
+		CreateClient    UseCaseO[CreateClientOutput]
 	}
 )

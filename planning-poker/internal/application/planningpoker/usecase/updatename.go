@@ -3,7 +3,6 @@ package usecase
 import (
 	"context"
 	"fmt"
-	"planning-poker/internal/application"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
 	"planning-poker/internal/domain"
 )
@@ -19,7 +18,7 @@ type (
 	}
 )
 
-var _ application.UseCase[UpdateNameCommand] = (*UpdateNameUseCase)(nil)
+var _ UseCase[UpdateNameCommand] = (*UpdateNameUseCase)(nil)
 
 func NewUpdateNameUseCase(hub domain.Hub) UpdateNameUseCase {
 	return UpdateNameUseCase{

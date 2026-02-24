@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"planning-poker/internal/application"
 	"planning-poker/internal/application/lock"
 	"planning-poker/internal/application/planningpoker/metric"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
@@ -24,7 +23,7 @@ type (
 	}
 )
 
-var _ application.UseCase[LeaveRoomCommand] = (*leaveRoomUseCase)(nil)
+var _ UseCase[LeaveRoomCommand] = (*leaveRoomUseCase)(nil)
 
 func NewLeaveRoomUseCase(hub domain.Hub, lockManager lock.LockManager, metric metric.PlanningPokerMetric) *leaveRoomUseCase {
 	return &leaveRoomUseCase{

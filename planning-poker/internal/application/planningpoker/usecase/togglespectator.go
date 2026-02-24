@@ -3,7 +3,6 @@ package usecase
 import (
 	"context"
 	"fmt"
-	"planning-poker/internal/application"
 	"planning-poker/internal/application/lock"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
 	"planning-poker/internal/domain"
@@ -21,7 +20,7 @@ type (
 	}
 )
 
-var _ application.UseCase[ToggleSpectatorCommand] = (*ToggleSpectatorUseCase)(nil)
+var _ UseCase[ToggleSpectatorCommand] = (*ToggleSpectatorUseCase)(nil)
 
 func NewToggleSpectatorUseCase(hub domain.Hub, lockManager lock.LockManager) ToggleSpectatorUseCase {
 	return ToggleSpectatorUseCase{

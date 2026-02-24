@@ -3,7 +3,6 @@ package usecase
 import (
 	"context"
 	"fmt"
-	"planning-poker/internal/application"
 	"planning-poker/internal/application/lock"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
 	"planning-poker/internal/domain"
@@ -21,7 +20,7 @@ type (
 	}
 )
 
-var _ application.UseCase[ToggleOwnerCommand] = (*ToggleOwnerUseCase)(nil)
+var _ UseCase[ToggleOwnerCommand] = (*ToggleOwnerUseCase)(nil)
 
 func NewToggleOwnerUseCase(hub domain.Hub, lockManager lock.LockManager) ToggleOwnerUseCase {
 	return ToggleOwnerUseCase{

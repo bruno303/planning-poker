@@ -2,7 +2,7 @@ package redis
 
 import (
 	"planning-poker/internal/domain/entity"
-	"planning-poker/internal/infra/boundaries/bus/clientcollection"
+	"planning-poker/internal/infra/boundaries/hub/clientcollection"
 	"testing"
 
 	"github.com/samber/lo"

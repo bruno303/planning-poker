@@ -7,7 +7,7 @@ import (
 	"planning-poker/internal/application/planningpoker/metric"
 	"planning-poker/internal/domain"
 	"planning-poker/internal/domain/entity"
-	"planning-poker/internal/infra/boundaries/bus/clientcollection"
+	"planning-poker/internal/infra/boundaries/hub/clientcollection"
 	"testing"
 
 	"go.uber.org/mock/gomock"
@@ -60,15 +60,11 @@ func TestJoinRoomUseCase_Execute_Success(t *testing.T) {
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(nil)
 
-	busFactory := func(clientID string) domain.Bus {
-		return mockBus
-	}
-
 	uc := NewJoinRoomUseCase(mockHub, mockLockManager, mockMetric)
 	cmd := JoinRoomCommand{
-		RoomID:     roomID,
-		SenderID:   "sender123",
-		BusFactory: busFactory,
+		RoomID:   roomID,
+		SenderID: "sender123",
+		Bus:      mockBus,
 	}
 
 	output, err := uc.Execute(ctx, cmd)
@@ -85,9 +81,6 @@ func TestJoinRoomUseCase_Execute_Success(t *testing.T) {
 	if output.Room != room {
 		t.Errorf("expected room %v, got %v", room, output.Room)
 	}
-	if output.Bus != mockBus {
-		t.Error("expected bus to match mockBus")
-	}
 }
 
 func TestJoinRoomUseCase_Execute_RoomNotFound(t *testing.T) {
@@ -96,6 +89,7 @@ func TestJoinRoomUseCase_Execute_RoomNotFound(t *testing.T) {
 
 	ctx := context.Background()
 	mockHub := domain.NewMockHub(ctrl)
+	mockBus := domain.NewMockBus(ctrl)
 	mockLockManager := lock.NewMockLockManager(ctrl)
 	mockMetric := metric.NewPlanningPokerMetric()
 
@@ -113,9 +107,7 @@ func TestJoinRoomUseCase_Execute_RoomNotFound(t *testing.T) {
 	cmd := JoinRoomCommand{
 		RoomID:   roomID,
 		SenderID: "sender123",
-		BusFactory: func(clientID string) domain.Bus {
-			return nil
-		},
+		Bus:      mockBus,
 	}
 
 	output, err := uc.Execute(ctx, cmd)
@@ -160,15 +152,11 @@ func TestJoinRoomUseCase_Execute_SendError(t *testing.T) {
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(expectedError)
 
-	busFactory := func(clientID string) domain.Bus {
-		return mockBus
-	}
-
 	uc := NewJoinRoomUseCase(mockHub, mockLockManager, mockMetric)
 	cmd := JoinRoomCommand{
-		RoomID:     roomID,
-		SenderID:   "sender123",
-		BusFactory: busFactory,
+		RoomID:   roomID,
+		SenderID: "sender123",
+		Bus:      mockBus,
 	}
 
 	output, err := uc.Execute(ctx, cmd)
@@ -178,5 +166,33 @@ func TestJoinRoomUseCase_Execute_SendError(t *testing.T) {
 	}
 	if output != nil {
 		t.Error("expected output to be nil when send fails")
+	}
+}
+
+func TestJoinRoomUseCase_Execute_NilDependencies(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMetric := metric.NewPlanningPokerMetric()
+
+	tests := []struct {
+		name string
+		hub  domain.Hub
+		lock lock.LockManager
+	}{
+		{name: "nil hub", hub: nil, lock: lock.NewMockLockManager(ctrl)},
+		{name: "nil lockmanager", hub: domain.NewMockHub(ctrl), lock: nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r == nil {
+					t.Fatal("expected panic, but none occurred")
+				}
+			}()
+
+			_ = NewJoinRoomUseCase(tc.hub, tc.lock, mockMetric)
+		})
 	}
 }

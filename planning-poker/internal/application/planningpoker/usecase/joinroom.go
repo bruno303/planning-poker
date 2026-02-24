@@ -3,7 +3,6 @@ package usecase
 import (
 	"context"
 	"fmt"
-	"planning-poker/internal/application"
 	"planning-poker/internal/application/lock"
 	"planning-poker/internal/application/planningpoker/metric"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
@@ -11,19 +10,17 @@ import (
 	"planning-poker/internal/domain/entity"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
-	"github.com/google/uuid"
 )
 
 type (
 	JoinRoomCommand struct {
-		RoomID     string
-		SenderID   string
-		BusFactory func(clientID string) domain.Bus
+		RoomID   string
+		SenderID string
+		Bus      domain.Bus
 	}
 	JoinRoomOutput struct {
 		Client *entity.Client
 		Room   *entity.Room
-		Bus    domain.Bus
 	}
 	JoinRoomUseCase struct {
 		hub         domain.Hub
@@ -33,9 +30,16 @@ type (
 	}
 )
 
-var _ application.UseCaseR[JoinRoomCommand, *JoinRoomOutput] = (*JoinRoomUseCase)(nil)
+var _ UseCaseR[JoinRoomCommand, *JoinRoomOutput] = (*JoinRoomUseCase)(nil)
 
 func NewJoinRoomUseCase(hub domain.Hub, lockManager lock.LockManager, metric metric.PlanningPokerMetric) JoinRoomUseCase {
+	if hub == nil {
+		panic("hub cannot be nil")
+	}
+	if lockManager == nil {
+		panic("lockManager cannot be nil")
+	}
+
 	return JoinRoomUseCase{
 		hub:         hub,
 		lockManager: lockManager,
@@ -53,21 +57,19 @@ func (uc JoinRoomUseCase) Execute(ctx context.Context, cmd JoinRoomCommand) (*Jo
 		}
 
 		uc.logger.Debug(ctx, "creating client for room %s", room.ID)
-		clientID := uuid.NewString()
-		client := room.NewClient(clientID)
+		client := room.NewClient(cmd.SenderID)
 		uc.hub.AddClient(client)
 
-		uc.logger.Debug(ctx, "creating bus for client %s on room %s", clientID, room.ID)
-		bus := cmd.BusFactory(client.ID)
-		uc.hub.AddBus(ctx, client.ID, bus)
+		uc.logger.Debug(ctx, "creating bus for client %s on room %s", client.ID, room.ID)
+		uc.hub.AddBus(ctx, client.ID, cmd.Bus)
 
 		uc.metric.IncrementUsersTotal(ctx)
 		uc.metric.IncrementActiveUsers(ctx)
 
-		output := &JoinRoomOutput{Client: client, Room: room, Bus: bus}
+		output := &JoinRoomOutput{Client: client, Room: room}
 
-		uc.logger.Debug(ctx, "sending update client ID command for client %s on room %s", clientID, room.ID)
-		if err := bus.Send(ctx, dto.NewUpdateClientIDCommand(client.ID)); err != nil {
+		uc.logger.Debug(ctx, "sending update client ID command for client %s on room %s", client.ID, room.ID)
+		if err := cmd.Bus.Send(ctx, dto.NewUpdateClientIDCommand(client.ID)); err != nil {
 			return output, fmt.Errorf("failed to send update client ID command: %w", err)
 		}
 

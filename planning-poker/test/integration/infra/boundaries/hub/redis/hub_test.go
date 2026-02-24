@@ -2,7 +2,7 @@ package redishub_test
 
 import (
 	"context"
-	redishub "planning-poker/internal/infra/boundaries/bus/redis"
+	redishub "planning-poker/internal/infra/boundaries/hub/redis"
 	"testing"
 	"time"
 

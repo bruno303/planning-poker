@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"planning-poker/internal/application"
 	"planning-poker/internal/application/planningpoker/metric"
 	"planning-poker/internal/domain"
 	"planning-poker/internal/domain/entity"
@@ -27,7 +26,7 @@ type (
 	}
 )
 
-var _ application.UseCaseR[CreateRoomCommand, CreateRoomOutput] = (*createRoomUseCase)(nil)
+var _ UseCaseR[CreateRoomCommand, CreateRoomOutput] = (*createRoomUseCase)(nil)
 
 func NewCreateRoomUseCase(hub domain.Hub, metric metric.PlanningPokerMetric) createRoomUseCase {
 	return createRoomUseCase{

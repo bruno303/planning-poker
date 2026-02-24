@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"planning-poker/internal/config"
-	"planning-poker/internal/infra/boundaries/bus/redis"
+	"planning-poker/internal/infra/boundaries/hub/redis"
 	"planning-poker/internal/setup"
 	"testing"
 	"time"
@@ -43,7 +43,7 @@ func NewTestServer(t *testing.T) *TestServer {
 
 func (ts *TestServer) Close() {
 	ts.Server.Close()
-	if hub, ok := ts.Container.Hub.(*redis.RedisHub); ok {
+	if hub, ok := ts.Container.Infra.Hub.(*redis.RedisHub); ok {
 		_ = hub.Close()
 	}
 

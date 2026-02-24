@@ -3,7 +3,6 @@ package usecase
 import (
 	"context"
 	"fmt"
-	"planning-poker/internal/application"
 	"planning-poker/internal/application/lock"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
 	"planning-poker/internal/domain"
@@ -20,7 +19,7 @@ type (
 	}
 )
 
-var _ application.UseCase[NewVotingCommand] = (*NewVotingUseCase)(nil)
+var _ UseCase[NewVotingCommand] = (*NewVotingUseCase)(nil)
 
 func NewNewVotingUseCase(hub domain.Hub, lockManager lock.LockManager) NewVotingUseCase {
 	return NewVotingUseCase{

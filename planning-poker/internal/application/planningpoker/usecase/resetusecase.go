@@ -3,7 +3,6 @@ package usecase
 import (
 	"context"
 	"fmt"
-	"planning-poker/internal/application"
 	"planning-poker/internal/application/lock"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
 	"planning-poker/internal/domain"
@@ -20,7 +19,7 @@ type (
 	}
 )
 
-var _ application.UseCase[ResetCommand] = (*ResetUseCase)(nil)
+var _ UseCase[ResetCommand] = (*ResetUseCase)(nil)
 
 func NewResetUseCase(hub domain.Hub, lockManager lock.LockManager) ResetUseCase {
 	return ResetUseCase{

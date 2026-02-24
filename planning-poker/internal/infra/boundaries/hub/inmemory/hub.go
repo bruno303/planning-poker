@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"planning-poker/internal/domain"
 	"planning-poker/internal/domain/entity"
-	"planning-poker/internal/infra/boundaries/bus/clientcollection"
+	"planning-poker/internal/infra/boundaries/hub/clientcollection"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
 	"github.com/bruno303/go-toolkit/pkg/trace"
