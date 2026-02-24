@@ -1,6 +1,15 @@
 'use client'
 
+
 import FocusableComponent from '@/components/focusableInput/focusableInput';
+import {
+  ToggleOwnerPayload,
+  ToggleSpectatorPayload,
+  UpdateNamePayload,
+  UpdateStoryPayload,
+  VotePayload,
+  WebSocketMessage
+} from '@/components/messages/websocket';
 import { useRoom } from '@/context/room/roomContext';
 import { useToast } from '@/context/toast/toastContext';
 import { Eye, EyeOff, Repeat, RotateCcw, Shield, Users, X } from 'lucide-react';
@@ -61,45 +70,45 @@ export default function PlanningPoker() {
     }
   }, [participants, clientId]);
 
+  const sendMessage = <T,>(message: WebSocketMessage<T>) => {
+    socket.current?.send(JSON.stringify(message));
+  }
+
   const handleCardSelect = (card: Card) => {
     if (!isRevealed) {
-      socket.current?.send(JSON.stringify({ roomId: roomId, type: 'vote', vote: card, clientId: clientId }));
+      const payload: VotePayload = { vote: card };
+      sendMessage<VotePayload>({ type: 'vote', payload });
     }
   };
 
   const handleRevealVotes = () => {
-    socket.current?.send(JSON.stringify({ roomId: roomId, type: 'reveal-votes', clientId: clientId }));
+    const payload: any = null;
+    sendMessage<any>({ type: 'reveal-votes', payload });
   };
 
   const handleNewVoting = () => {
-    socket.current?.send(JSON.stringify({ roomId: roomId, type: 'new-voting', clientId: clientId }));
+    const payload: any = null;
+    sendMessage<any>({ type: 'new-voting', payload });
   };
 
   const handleToggleSpectator = (participantId: string) => {
-    socket.current?.send(JSON.stringify({
-      roomId: roomId,
-      type: 'toggle-spectator',
-      targetClientId: participantId,
-      clientId: clientId
-    }));
+    const payload: ToggleSpectatorPayload = { targetClientId: participantId };
+    sendMessage<ToggleSpectatorPayload>({ type: 'toggle-spectator', payload });
   };
 
   const handleToggleAdmin = (participantId: string) => {
-    socket.current?.send(JSON.stringify({
-      roomId: roomId,
-      type: 'toggle-owner',
-      targetClientId: participantId,
-      clientId: clientId
-    }));
+    const payload: ToggleOwnerPayload = { targetClientId: participantId };
+    sendMessage<ToggleOwnerPayload>({ type: 'toggle-owner', payload });
   };
 
   const handleVoteAgain = () => {
-    socket.current?.send(JSON.stringify({ roomId: roomId, type: 'vote-again', clientId: clientId }));
+    const payload: any = null;
+    sendMessage<any>({ type: 'vote-again', payload });
   }
 
   const connectWebSocket = async (roomCode: string | null, userName: string) => {
     if (!roomCode) {
-      return
+      return;
     }
     socket.current = new WebSocket(`${process.env.NEXT_PUBLIC_WEBSOCKET_URL}/planning/${roomCode}/ws`);
 
@@ -117,8 +126,8 @@ export default function PlanningPoker() {
 
         } else if (data.type === 'update-client-id') {
           setClientId(data.clientId);
-          const updateClientMessage = { roomId: roomId, type: 'update-name', username: userName, clientId: data.clientId }
-          socket.current?.send(JSON.stringify(updateClientMessage));
+          const payload: UpdateNamePayload = { username: userName };
+          sendMessage<UpdateNamePayload>({ type: 'update-name', payload });
 
         } else {
           throw new Error('Invalid message from websocket');
@@ -140,7 +149,7 @@ export default function PlanningPoker() {
     socket.current.onerror = () => {
       pushError('Error occurred while connecting to websocket');
     };
-  }
+  };
 
   const getCurrentUser = () => {
     return participants.filter((p: any) => p.id == clientId)[0];
@@ -192,7 +201,8 @@ export default function PlanningPoker() {
                         onChange={e => setCurrentStory(e.target.value)}
                         onKeyDown={e => {
                           if (e.key === 'Enter') {
-                            socket.current?.send(JSON.stringify({ roomId: roomId, clientId: clientId, type: 'update-story', story: currentStory }));
+                            const payload: UpdateStoryPayload = { story: currentStory };
+                            sendMessage<UpdateStoryPayload>({ type: 'update-story', payload });
                             setIsEditingStory(false);
                           }
                         }}
@@ -200,7 +210,8 @@ export default function PlanningPoker() {
                       <button
                         style={{ ...styles.button, ...styles.primaryButton, padding: '0.5rem 1rem', fontSize: '0.875rem' }}
                         onClick={() => {
-                          socket.current?.send(JSON.stringify({ roomId: roomId, clientId: clientId, type: 'update-story', story: currentStory }))
+                          const payload: UpdateStoryPayload = { story: currentStory };
+                          sendMessage<UpdateStoryPayload>({ type: 'update-story', payload });
                           setIsEditingStory(false);
                         }}
                       >
