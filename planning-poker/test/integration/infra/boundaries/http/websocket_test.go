@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"planning-poker/internal/infra/bus"
 	"planning-poker/test/integration"
 	"strings"
 	"testing"
@@ -60,14 +61,14 @@ func TestWebSocketUpdateName(t *testing.T) {
 
 	defer closeAndWait(conn)
 
-	clientID := getClientID(t, conn)
+	_ = getClientID(t, conn)
 
 	t.Run("update name successfully", func(t *testing.T) {
-		sendMessage(t, conn, map[string]any{
-			"type":     "update-name",
-			"roomId":   roomID,
-			"clientId": clientID,
-			"username": "Alice",
+		send(t, conn, bus.WebSocketMessage{
+			Type: "update-name",
+			Payload: bus.UpdateNamePayload{
+				Username: "Alice",
+			},
 		})
 
 		// Should receive room-state update
@@ -99,21 +100,21 @@ func TestWebSocketVoting(t *testing.T) {
 	// Connect first client (owner)
 	conn1 := connectWebSocket(t, ts, roomID)
 	defer closeAndWait(conn1)
-	clientID1 := getClientID(t, conn1)
+	_ = getClientID(t, conn1)
 
 	// Connect second client
 	conn2 := connectWebSocket(t, ts, roomID)
 	defer closeAndWait(conn2)
-	clientID2 := getClientID(t, conn2)
+	_ = getClientID(t, conn2)
 	// Client1 receives broadcast when client2 joins
 	consumeMessages(t, conn1)
 
 	t.Run("client can vote", func(t *testing.T) {
-		sendMessage(t, conn1, map[string]any{
-			"type":     "vote",
-			"roomId":   roomID,
-			"clientId": clientID1,
-			"vote":     "5",
+		send(t, conn1, bus.WebSocketMessage{
+			Type: "vote",
+			Payload: bus.VotePayload{
+				Vote: "5",
+			},
 		})
 
 		// Both clients should receive room-state update
@@ -132,11 +133,11 @@ func TestWebSocketVoting(t *testing.T) {
 	})
 
 	t.Run("votes auto-reveal when all clients vote", func(t *testing.T) {
-		sendMessage(t, conn2, map[string]any{
-			"type":     "vote",
-			"roomId":   roomID,
-			"clientId": clientID2,
-			"vote":     "8",
+		send(t, conn2, bus.WebSocketMessage{
+			Type: "vote",
+			Payload: bus.VotePayload{
+				Vote: "8",
+			},
 		})
 
 		// Both clients should receive room-state update with reveal=true
@@ -164,15 +165,15 @@ func TestWebSocketRevealVotes(t *testing.T) {
 
 	defer closeAndWait(conn)
 
-	clientID := getClientID(t, conn)
+	_ = getClientID(t, conn)
 
 	t.Run("owner can manually reveal votes", func(t *testing.T) {
 		// Vote first
-		sendMessage(t, conn, map[string]any{
-			"type":     "vote",
-			"roomId":   roomID,
-			"clientId": clientID,
-			"vote":     "3",
+		send(t, conn, bus.WebSocketMessage{
+			Type: "vote",
+			Payload: bus.VotePayload{
+				Vote: "3",
+			},
 		})
 		// When there's only 1 client, voting auto-reveals, so consume that message
 		msg := readMessages(t, conn)[0]
@@ -183,10 +184,8 @@ func TestWebSocketRevealVotes(t *testing.T) {
 		}
 
 		// Now toggle reveal off
-		sendMessage(t, conn, map[string]any{
-			"type":     "reveal-votes",
-			"roomId":   roomID,
-			"clientId": clientID,
+		send(t, conn, bus.WebSocketMessage{
+			Type: "reveal-votes",
 		})
 
 		msg = readMessages(t, conn)[0]
@@ -205,23 +204,21 @@ func TestWebSocketReset(t *testing.T) {
 
 	defer closeAndWait(conn)
 
-	clientID := getClientID(t, conn)
+	_ = getClientID(t, conn)
 
 	t.Run("owner can reset voting", func(t *testing.T) {
 		// Vote and reveal
-		sendMessage(t, conn, map[string]any{
-			"type":     "vote",
-			"roomId":   roomID,
-			"clientId": clientID,
-			"vote":     "5",
+		send(t, conn, bus.WebSocketMessage{
+			Type: "vote",
+			Payload: bus.VotePayload{
+				Vote: "5",
+			},
 		})
 		consumeMessages(t, conn) // consume room-state
 
 		// Reset
-		sendMessage(t, conn, map[string]any{
-			"type":     "reset",
-			"roomId":   roomID,
-			"clientId": clientID,
+		send(t, conn, bus.WebSocketMessage{
+			Type: "reset",
 		})
 
 		msg := readMessages(t, conn)[0]
@@ -247,7 +244,7 @@ func TestWebSocketToggleSpectator(t *testing.T) {
 	conn1 := connectWebSocket(t, ts, roomID)
 
 	defer closeAndWait(conn1)
-	ownerID := getClientID(t, conn1)
+	_ = getClientID(t, conn1)
 
 	// Connect second client
 	conn2 := connectWebSocket(t, ts, roomID)
@@ -258,11 +255,11 @@ func TestWebSocketToggleSpectator(t *testing.T) {
 	consumeMessages(t, conn1)
 
 	t.Run("owner can toggle spectator mode", func(t *testing.T) {
-		sendMessage(t, conn1, map[string]any{
-			"type":           "toggle-spectator",
-			"roomId":         roomID,
-			"clientId":       ownerID,
-			"targetClientId": clientID2,
+		send(t, conn1, bus.WebSocketMessage{
+			Type: "toggle-spectator",
+			Payload: bus.ToggleSpectatorPayload{
+				TargetClientID: clientID2,
+			},
 		})
 
 		// Both clients should receive room-state update
@@ -299,7 +296,7 @@ func TestWebSocketToggleOwner(t *testing.T) {
 	conn1 := connectWebSocket(t, ts, roomID)
 
 	defer closeAndWait(conn1)
-	ownerID := getClientID(t, conn1)
+	_ = getClientID(t, conn1)
 
 	// Connect second client
 	conn2 := connectWebSocket(t, ts, roomID)
@@ -310,11 +307,11 @@ func TestWebSocketToggleOwner(t *testing.T) {
 	consumeMessages(t, conn1)
 
 	t.Run("owner can promote another user to owner", func(t *testing.T) {
-		sendMessage(t, conn1, map[string]any{
-			"type":           "toggle-owner",
-			"roomId":         roomID,
-			"clientId":       ownerID,
-			"targetClientId": clientID2,
+		send(t, conn1, bus.WebSocketMessage{
+			Type: "toggle-owner",
+			Payload: bus.ToggleOwnerPayload{
+				TargetClientID: clientID2,
+			},
 		})
 
 		// Both clients should receive room-state update
@@ -350,14 +347,14 @@ func TestWebSocketUpdateStory(t *testing.T) {
 
 	defer closeAndWait(conn)
 
-	clientID := getClientID(t, conn)
+	_ = getClientID(t, conn)
 
 	t.Run("owner can update current story", func(t *testing.T) {
-		sendMessage(t, conn, map[string]any{
-			"type":     "update-story",
-			"roomId":   roomID,
-			"clientId": clientID,
-			"story":    "User story #123",
+		send(t, conn, bus.WebSocketMessage{
+			Type: "update-story",
+			Payload: bus.UpdateStoryPayload{
+				Story: "User story #123",
+			},
 		})
 
 		msg := readMessages(t, conn)[0]
@@ -376,32 +373,30 @@ func TestWebSocketNewVoting(t *testing.T) {
 
 	defer closeAndWait(conn)
 
-	clientID := getClientID(t, conn)
+	_ = getClientID(t, conn)
 
 	t.Run("owner can start new voting", func(t *testing.T) {
 		// Vote first
-		sendMessage(t, conn, map[string]any{
-			"type":     "vote",
-			"roomId":   roomID,
-			"clientId": clientID,
-			"vote":     "5",
+		send(t, conn, bus.WebSocketMessage{
+			Type: "vote",
+			Payload: bus.VotePayload{
+				Vote: "5",
+			},
 		})
 		consumeMessages(t, conn) // consume room-state
 
 		// Set story
-		sendMessage(t, conn, map[string]any{
-			"type":     "update-story",
-			"roomId":   roomID,
-			"clientId": clientID,
-			"story":    "Old story",
+		send(t, conn, bus.WebSocketMessage{
+			Type: "update-story",
+			Payload: bus.UpdateStoryPayload{
+				Story: "Old story",
+			},
 		})
 		consumeMessages(t, conn) // consume room-state
 
 		// Start new voting
-		sendMessage(t, conn, map[string]any{
-			"type":     "new-voting",
-			"roomId":   roomID,
-			"clientId": clientID,
+		send(t, conn, bus.WebSocketMessage{
+			Type: "new-voting",
 		})
 
 		msg := readMessages(t, conn)[0]
@@ -433,23 +428,21 @@ func TestWebSocketVoteAgain(t *testing.T) {
 
 	defer closeAndWait(conn)
 
-	clientID := getClientID(t, conn)
+	_ = getClientID(t, conn)
 
 	t.Run("owner can trigger vote again", func(t *testing.T) {
 		// Vote first
-		sendMessage(t, conn, map[string]any{
-			"type":     "vote",
-			"roomId":   roomID,
-			"clientId": clientID,
-			"vote":     "5",
+		send(t, conn, bus.WebSocketMessage{
+			Type: "vote",
+			Payload: bus.VotePayload{
+				Vote: "5",
+			},
 		})
 		consumeMessages(t, conn) // consume room-state
 
 		// Vote again
-		sendMessage(t, conn, map[string]any{
-			"type":     "vote-again",
-			"roomId":   roomID,
-			"clientId": clientID,
+		send(t, conn, bus.WebSocketMessage{
+			Type: "vote-again",
 		})
 
 		msg := readMessages(t, conn)[0]
@@ -476,26 +469,26 @@ func TestWebSocketMultipleClients(t *testing.T) {
 	// Connect 3 clients
 	conn1 := connectWebSocket(t, ts, roomID)
 	defer closeAndWait(conn1)
-	clientID1 := getClientID(t, conn1)
+	_ = getClientID(t, conn1)
 
 	conn2 := connectWebSocket(t, ts, roomID)
 	defer closeAndWait(conn2)
-	clientID2 := getClientID(t, conn2)
+	_ = getClientID(t, conn2)
 	// Client1 receives broadcast when client2 joins
 	consumeMessages(t, conn1)
 
 	conn3 := connectWebSocket(t, ts, roomID)
 	defer closeAndWait(conn3)
-	clientID3 := getClientID(t, conn3)
+	_ = getClientID(t, conn3)
 	// Client1 and Client2 receive broadcasts when client3 joins
 	consumeMessages(t, conn1, conn2)
 
 	t.Run("all clients receive updates when one client votes", func(t *testing.T) {
-		sendMessage(t, conn1, map[string]any{
-			"type":     "vote",
-			"roomId":   roomID,
-			"clientId": clientID1,
-			"vote":     "3",
+		send(t, conn1, bus.WebSocketMessage{
+			Type: "vote",
+			Payload: bus.VotePayload{
+				Vote: "3",
+			},
 		})
 
 		// All three clients should receive the update
@@ -515,40 +508,38 @@ func TestWebSocketMultipleClients(t *testing.T) {
 
 	t.Run("votes auto-reveal when all 3 clients vote", func(t *testing.T) {
 		// Reset voting first to clear the vote from client1 in the previous test
-		sendMessage(t, conn1, map[string]any{
-			"type":     "reset",
-			"roomId":   roomID,
-			"clientId": clientID1,
+		send(t, conn1, bus.WebSocketMessage{
+			Type: "reset",
 		})
 		// Consume reset messages
 		consumeMessages(t, conn1, conn2, conn3)
 
 		// Now have all 3 clients vote
-		sendMessage(t, conn1, map[string]any{
-			"type":     "vote",
-			"roomId":   roomID,
-			"clientId": clientID1,
-			"vote":     "3",
+		send(t, conn1, bus.WebSocketMessage{
+			Type: "vote",
+			Payload: bus.VotePayload{
+				Vote: "3",
+			},
 		})
 		// Consume vote messages
 		consumeMessages(t, conn1, conn2, conn3)
 
 		// Client 2 votes
-		sendMessage(t, conn2, map[string]any{
-			"type":     "vote",
-			"roomId":   roomID,
-			"clientId": clientID2,
-			"vote":     "5",
+		send(t, conn2, bus.WebSocketMessage{
+			Type: "vote",
+			Payload: bus.VotePayload{
+				Vote: "5",
+			},
 		})
 		// Consume room-state updates from all clients
 		consumeMessages(t, conn1, conn2, conn3)
 
 		// Client 3 votes - should trigger auto-reveal
-		sendMessage(t, conn3, map[string]any{
-			"type":     "vote",
-			"roomId":   roomID,
-			"clientId": clientID3,
-			"vote":     "8",
+		send(t, conn3, bus.WebSocketMessage{
+			Type: "vote",
+			Payload: bus.VotePayload{
+				Vote: "8",
+			},
 		})
 
 		// Now get the reveal messages
@@ -585,7 +576,7 @@ func TestWebSocketDisconnection(t *testing.T) {
 		_ = getClientID(t, conn1)
 
 		conn2 := connectWebSocket(t, ts, roomID)
-		clientID2 := getClientID(t, conn2)
+		_ = getClientID(t, conn2)
 
 		conn1.Close()
 
@@ -593,11 +584,11 @@ func TestWebSocketDisconnection(t *testing.T) {
 
 		// Verify the second client is still connected and the room still exists
 		// We can verify this by sending a message
-		sendMessage(t, conn2, map[string]any{
-			"type":     "update-name",
-			"roomId":   roomID,
-			"clientId": clientID2,
-			"username": "Still Connected",
+		send(t, conn2, bus.WebSocketMessage{
+			Type: "update-name",
+			Payload: bus.UpdateNamePayload{
+				Username: "Still Connected",
+			},
 		})
 
 		// Should receive room-state update
@@ -608,6 +599,14 @@ func TestWebSocketDisconnection(t *testing.T) {
 
 		conn2.Close()
 	})
+}
+
+func send(t *testing.T, conn *websocket.Conn, msg bus.WebSocketMessage) {
+	t.Helper()
+
+	if err := conn.WriteJSON(msg); err != nil {
+		t.Fatalf("failed to send message: %v", err)
+	}
 }
 
 func consumeMessages(t *testing.T, conns ...*websocket.Conn) {
