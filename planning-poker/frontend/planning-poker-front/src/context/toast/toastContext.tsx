@@ -10,6 +10,9 @@ type ToastContextType = {
 };
 
 const ToastContext = createContext<ToastContextType | null>(null);
+const autoDismissMsByVariant: Partial<Record<ToastVariant, number>> = {
+  success: 10_000,
+};
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -28,8 +31,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     if (!message) return;
     const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     setToasts((prev) => [...prev, { id, message, variant }]);
-    const timeoutId = window.setTimeout(() => dismiss(id), 10_000);
-    timeouts.current[id] = timeoutId;
+    const autoDismissMs = autoDismissMsByVariant[variant];
+
+    if (autoDismissMs !== undefined) {
+      const timeoutId = window.setTimeout(() => dismiss(id), autoDismissMs);
+      timeouts.current[id] = timeoutId;
+    }
   }, [dismiss]);
 
   const pushError = useCallback((message: string) => pushToast(message, 'error'), [pushToast]);
