@@ -50,7 +50,7 @@ func TestVoteUseCase_Execute_Success(t *testing.T) {
 			return fn(ctx)
 		})
 
-	mockHub.EXPECT().GetRoom(ctx, roomID).Return(room, true)
+	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
 	mockHub.EXPECT().SaveRoom(ctx, room).Return(nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(nil)
 
@@ -93,7 +93,7 @@ func TestVoteUseCase_Execute_SaveRoomError(t *testing.T) {
 			return fn(ctx)
 		})
 
-	mockHub.EXPECT().GetRoom(ctx, roomID).Return(room, true)
+	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
 	mockHub.EXPECT().SaveRoom(ctx, room).Return(expectedError)
 
 	uc := NewVoteUseCase(mockHub, mockLockManager)
@@ -129,7 +129,7 @@ func TestVoteUseCase_Execute_RoomNotFound(t *testing.T) {
 			return fn(ctx)
 		})
 
-	mockHub.EXPECT().GetRoom(ctx, roomID).Return(nil, false)
+	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, domain.ErrRoomNotFound)
 
 	uc := NewVoteUseCase(mockHub, mockLockManager)
 	cmd := VoteCommand{
@@ -143,8 +143,8 @@ func TestVoteUseCase_Execute_RoomNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if err.Error() != "room nonexistent not found" {
-		t.Errorf("unexpected error message: %v", err.Error())
+	if !errors.Is(err, domain.ErrRoomNotFound) {
+		t.Errorf("expected ErrRoomNotFound, got %v", err)
 	}
 }
 
@@ -173,7 +173,7 @@ func TestVoteUseCase_Execute_BroadcastError(t *testing.T) {
 			return fn(ctx)
 		})
 
-	mockHub.EXPECT().GetRoom(ctx, roomID).Return(room, true)
+	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
 	mockHub.EXPECT().SaveRoom(ctx, room).Return(nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(expectedError)
 

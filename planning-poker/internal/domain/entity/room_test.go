@@ -215,6 +215,32 @@ func TestNewRoom(t *testing.T) {
 	}
 }
 
+func TestNewRoomWithID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockCC := NewMockClientCollection(ctrl)
+	mockCC.EXPECT().Add(gomock.Any())
+	mockCC.EXPECT().Count().Return(1)
+
+	room := NewRoomWithID("room-123", mockCC)
+
+	if room == nil {
+		t.Fatal("NewRoomWithID() returned nil")
+	}
+	if room.ID != "room-123" {
+		t.Fatalf("NewRoomWithID() ID = %v, want room-123", room.ID)
+	}
+	if room.Clients != mockCC {
+		t.Fatal("NewRoomWithID() Clients not set correctly")
+	}
+
+	client := room.NewClient("client1")
+	if !client.IsOwner {
+		t.Fatal("expected first client in explicit room to be owner")
+	}
+}
+
 func TestRoom_NewClient(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

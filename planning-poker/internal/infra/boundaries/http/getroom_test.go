@@ -54,8 +54,8 @@ func TestGetRoomAPI_Handle_Success(t *testing.T) {
 	}
 
 	mockHub.EXPECT().
-		GetRoom(gomock.Any(), roomID).
-		Return(expectedRoom, true)
+		LoadRoom(gomock.Any(), roomID).
+		Return(expectedRoom, nil)
 
 	handler := api.Handle()
 
@@ -92,8 +92,8 @@ func TestGetRoomAPI_Handle_RoomNotFound(t *testing.T) {
 	roomID := "nonexistent"
 
 	mockHub.EXPECT().
-		GetRoom(gomock.Any(), roomID).
-		Return(nil, false)
+		LoadRoom(gomock.Any(), roomID).
+		Return(nil, domain.ErrRoomNotFound)
 
 	handler := api.Handle()
 
@@ -116,6 +116,40 @@ func TestGetRoomAPI_Handle_RoomNotFound(t *testing.T) {
 
 	if errorResponse["error"] != "Room not found" {
 		t.Errorf("error message = %v, want %v", errorResponse["error"], "Room not found")
+	}
+}
+
+func TestGetRoomAPI_Handle_LoadRoomError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockHub := domain.NewMockHub(ctrl)
+	api := NewGetRoomAPI(mockHub)
+
+	mockHub.EXPECT().
+		LoadRoom(gomock.Any(), "room123").
+		Return(nil, context.DeadlineExceeded)
+
+	handler := api.Handle()
+	router := mux.NewRouter()
+	router.Handle("/planning/room/{roomID}", handler).Methods("GET")
+
+	req := httptest.NewRequest(http.MethodGet, "/planning/room/room123", nil)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status code = %v, want %v", rec.Code, http.StatusInternalServerError)
+	}
+
+	var errorResponse map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&errorResponse); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+
+	if errorResponse["error"] != "Failed to load room" {
+		t.Errorf("error message = %v, want %v", errorResponse["error"], "Failed to load room")
 	}
 }
 
@@ -157,10 +191,10 @@ func TestGetRoomAPI_Handle_ContextPropagation(t *testing.T) {
 
 	var capturedCtx context.Context
 	mockHub.EXPECT().
-		GetRoom(gomock.Any(), "room123").
-		DoAndReturn(func(ctx context.Context, roomID string) (*entity.Room, bool) {
+		LoadRoom(gomock.Any(), "room123").
+		DoAndReturn(func(ctx context.Context, roomID string) (*entity.Room, error) {
 			capturedCtx = ctx
-			return &entity.Room{ID: roomID}, true
+			return &entity.Room{ID: roomID}, nil
 		})
 
 	handler := api.Handle()

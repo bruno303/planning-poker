@@ -13,7 +13,10 @@ import (
 func TestNewRoom(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
-	room := hub.NewRoom(ctx)
+	room, err := hub.NewRoom(ctx)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 
 	if room == nil {
 		t.Fatal("expected room to be non-nil")
@@ -29,30 +32,59 @@ func TestNewRoom(t *testing.T) {
 	}
 }
 
-func TestGetRoom(t *testing.T) {
+func TestNewRoomWithID(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
-	room := hub.NewRoom(ctx)
 
-	got, ok := hub.GetRoom(ctx, room.ID)
-	if !ok {
-		t.Fatalf("expected to find room but got not found")
+	room, err := hub.NewRoomWithID(ctx, "room-123")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if room == nil {
+		t.Fatal("expected room to be non-nil")
+	}
+	if room.ID != "room-123" {
+		t.Fatalf("expected room ID room-123, got %s", room.ID)
+	}
+	if hub.Rooms[room.ID] != room {
+		t.Fatal("expected hub to store room under explicit ID")
+	}
+}
+
+func TestLoadRoom(t *testing.T) {
+	ctx := context.Background()
+	hub := NewHub()
+	room, err := hub.NewRoom(ctx)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	got, err := hub.LoadRoom(ctx, room.ID)
+	if err != nil {
+		t.Fatalf("expected to find room but got error: %v", err)
 	}
 	if got != room {
 		t.Errorf("expected to get the created room, got different room")
 	}
 
-	_, ok = hub.GetRoom(ctx, "non-existent-id")
-	if ok {
-		t.Error("expected \"false\" for non-existent room ID, got \"true\"")
+	_, err = hub.LoadRoom(ctx, "non-existent-id")
+	if !errors.Is(err, domain.ErrRoomNotFound) {
+		t.Fatalf("expected ErrRoomNotFound for non-existent room ID, got %v", err)
 	}
 }
 
 func TestRemoveRoom(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
-	room1 := hub.NewRoom(ctx)
-	room2 := hub.NewRoom(ctx)
+	room1, err := hub.NewRoom(ctx)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	room2, err := hub.NewRoom(ctx)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 
 	if len(hub.Rooms) != 2 {
 		t.Fatalf("expected 2 rooms, got %d", len(hub.Rooms))
@@ -162,7 +194,10 @@ func TestRemoveClient_Success(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
 
-	room := hub.NewRoom(ctx)
+	room, err := hub.NewRoom(ctx)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 	client := &entity.Client{ID: "client1", Name: "Alice"}
 	hub.AddClient(client)
 
@@ -174,7 +209,7 @@ func TestRemoveClient_Success(t *testing.T) {
 	// Add client to room
 	room.Clients.Add(client)
 
-	err := hub.RemoveClient(ctx, client.ID, room.ID)
+	err = hub.RemoveClient(ctx, client.ID, room.ID)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -222,7 +257,10 @@ func TestRemoveClient_EmptyRoomRemoval(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
 
-	room := hub.NewRoom(ctx)
+	room, err := hub.NewRoom(ctx)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 	client := &entity.Client{ID: "client1", Name: "Alice"}
 	hub.AddClient(client)
 
@@ -237,7 +275,7 @@ func TestRemoveClient_EmptyRoomRemoval(t *testing.T) {
 		t.Fatalf("expected 1 room, got %d", len(hub.Rooms))
 	}
 
-	err := hub.RemoveClient(ctx, client.ID, room.ID)
+	err = hub.RemoveClient(ctx, client.ID, room.ID)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -254,7 +292,10 @@ func TestBroadcastToRoom_Success(t *testing.T) {
 	defer ctrl.Finish()
 
 	hub := NewHub()
-	room := hub.NewRoom(ctx)
+	room, err := hub.NewRoom(ctx)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 
 	client1 := &entity.Client{ID: "client1", Name: "Alice"}
 	client2 := &entity.Client{ID: "client2", Name: "Bob"}
@@ -274,7 +315,7 @@ func TestBroadcastToRoom_Success(t *testing.T) {
 	mockBus1.EXPECT().Send(gomock.Any(), message).Return(nil)
 	mockBus2.EXPECT().Send(gomock.Any(), message).Return(nil)
 
-	err := hub.BroadcastToRoom(ctx, room.ID, message)
+	err = hub.BroadcastToRoom(ctx, room.ID, message)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -290,8 +331,8 @@ func TestBroadcastToRoom_RoomNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for non-existent room, got nil")
 	}
-	if err.Error() != "room non-existent-room not found" {
-		t.Errorf("unexpected error message: %v", err.Error())
+	if !errors.Is(err, domain.ErrRoomNotFound) {
+		t.Errorf("expected ErrRoomNotFound, got %v", err)
 	}
 }
 
@@ -299,7 +340,10 @@ func TestBroadcastToRoom_BusNotFound(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
 
-	room := hub.NewRoom(ctx)
+	room, err := hub.NewRoom(ctx)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 	client := &entity.Client{ID: "client1", Name: "Alice"}
 	hub.AddClient(client)
 	room.Clients.Add(client)
@@ -307,7 +351,7 @@ func TestBroadcastToRoom_BusNotFound(t *testing.T) {
 	// No bus added for client
 	message := map[string]string{"type": "test"}
 
-	err := hub.BroadcastToRoom(ctx, room.ID, message)
+	err = hub.BroadcastToRoom(ctx, room.ID, message)
 	// Should not error, just log warning
 	if err != nil {
 		t.Fatalf("expected no error when bus not found, got %v", err)
@@ -320,7 +364,10 @@ func TestBroadcastToRoom_SendError(t *testing.T) {
 	defer ctrl.Finish()
 
 	hub := NewHub()
-	room := hub.NewRoom(ctx)
+	room, err := hub.NewRoom(ctx)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 
 	client := &entity.Client{ID: "client1", Name: "Alice"}
 	hub.AddClient(client)
@@ -334,7 +381,7 @@ func TestBroadcastToRoom_SendError(t *testing.T) {
 
 	mockBus.EXPECT().Send(gomock.Any(), message).Return(expectedError)
 
-	err := hub.BroadcastToRoom(ctx, room.ID, message)
+	err = hub.BroadcastToRoom(ctx, room.ID, message)
 	if err == nil {
 		t.Fatal("expected error when send fails, got nil")
 	}
@@ -354,9 +401,18 @@ func TestGetRooms(t *testing.T) {
 	}
 
 	// Add rooms
-	room1 := hub.NewRoom(ctx)
-	room2 := hub.NewRoom(ctx)
-	room3 := hub.NewRoom(ctx)
+	room1, err := hub.NewRoom(ctx)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	room2, err := hub.NewRoom(ctx)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	room3, err := hub.NewRoom(ctx)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 
 	rooms = hub.GetRooms()
 	if len(rooms) != 3 {
@@ -388,19 +444,22 @@ func TestInterfaceCompliance(t *testing.T) {
 func TestSaveRoom(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
-	room := hub.NewRoom(ctx)
+	room, err := hub.NewRoom(ctx)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 
 	// Change some state in the room
 	room.Reveal = true
-	err := hub.SaveRoom(ctx, room)
+	err = hub.SaveRoom(ctx, room)
 	if err != nil {
 		t.Fatalf("expected no error from SaveRoom, got %v", err)
 	}
 
 	// Retrieve the room and check the state
-	got, ok := hub.GetRoom(ctx, room.ID)
-	if !ok {
-		t.Fatalf("expected to find room after SaveRoom, got not found")
+	got, err := hub.LoadRoom(ctx, room.ID)
+	if err != nil {
+		t.Fatalf("expected to find room after SaveRoom, got error: %v", err)
 	}
 	if !got.Reveal {
 		t.Errorf("expected room.Reveal to be true, got false")

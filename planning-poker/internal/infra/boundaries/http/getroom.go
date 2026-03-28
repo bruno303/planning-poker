@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	"net/http"
 	"planning-poker/internal/domain"
 
@@ -44,9 +45,14 @@ func (g GetRoomAPI) Handle() http.Handler {
 			return
 		}
 
-		_, ok := g.hub.GetRoom(ctx, roomID)
-		if !ok {
+		_, err := g.hub.LoadRoom(ctx, roomID)
+		if errors.Is(err, domain.ErrRoomNotFound) {
 			SendJsonErrorMsg(w, http.StatusNotFound, "Room not found")
+			return
+		}
+		if err != nil {
+			g.logger.Error(ctx, "Failed to load room", err)
+			SendJsonErrorMsg(w, http.StatusInternalServerError, "Failed to load room")
 			return
 		}
 

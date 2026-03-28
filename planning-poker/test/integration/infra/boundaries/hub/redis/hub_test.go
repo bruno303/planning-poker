@@ -2,6 +2,8 @@ package redishub_test
 
 import (
 	"context"
+	"errors"
+	"planning-poker/internal/domain"
 	redishub "planning-poker/internal/infra/boundaries/hub/redis"
 	"testing"
 	"time"
@@ -26,13 +28,14 @@ func TestIntegration_RoomLifecycle(t *testing.T) {
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
 
-	room := hub.NewRoom(context.Background())
+	room, err := hub.NewRoom(context.Background())
+	assert.NoError(t, err)
 	assert.NotNil(t, room)
 	assert.NotEmpty(t, room.ID)
 
 	// Room should be persisted in Redis
-	persisted, ok := hub.GetRoom(context.Background(), room.ID)
-	assert.True(t, ok)
+	persisted, err := hub.LoadRoom(context.Background(), room.ID)
+	assert.NoError(t, err)
 	assert.Equal(t, room.ID, persisted.ID)
 
 	// Add client and verify mapping
@@ -51,8 +54,39 @@ func TestIntegration_RoomLifecycle(t *testing.T) {
 
 	// Remove room and verify deletion
 	hub.RemoveRoom(room.ID)
-	_, ok = hub.GetRoom(context.Background(), room.ID)
+	_, err = hub.LoadRoom(context.Background(), room.ID)
+	assert.ErrorIs(t, err, domain.ErrRoomNotFound)
+}
+
+func TestIntegration_RemoveClient_WhenRoomIsAlreadyMissing_CleansUpAndSucceeds(t *testing.T) {
+	client := setupRedisClient()
+	defer client.Close()
+
+	hub, err := redishub.NewRedisHub(context.Background(), client)
+	assert.NoError(t, err)
+	defer func() { _ = hub.Close() }()
+
+	room, err := hub.NewRoom(context.Background())
+	assert.NoError(t, err)
+
+	client1 := room.NewClient("client-missing-room-1")
+	room.Clients.Add(client1)
+	client1.WithRoom(room)
+	hub.AddClient(client1)
+	hub.AddBus(context.Background(), client1.ID, &mockBus{roomID: room.ID})
+
+	hub.RemoveRoom(room.ID)
+
+	err = hub.RemoveClient(context.Background(), client1.ID, room.ID)
+	assert.NoError(t, err)
+
+	_, ok := hub.FindClientByID(client1.ID)
 	assert.False(t, ok)
+	_, ok = hub.GetBus(client1.ID)
+	assert.False(t, ok)
+	assert.Zero(t, hub.GetClientsOfRoom(room.ID))
+	_, err = hub.LoadRoom(context.Background(), room.ID)
+	assert.ErrorIs(t, err, domain.ErrRoomNotFound)
 }
 
 func TestIntegration_RoomTTLExpiry(t *testing.T) {
@@ -62,7 +96,8 @@ func TestIntegration_RoomTTLExpiry(t *testing.T) {
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
 
-	room := hub.NewRoom(context.Background())
+	room, err := hub.NewRoom(context.Background())
+	assert.NoError(t, err)
 	assert.NotNil(t, room)
 
 	// Set short TTL for test
@@ -70,8 +105,8 @@ func TestIntegration_RoomTTLExpiry(t *testing.T) {
 	client.Expire(context.Background(), key, 2*time.Second)
 
 	time.Sleep(3 * time.Second)
-	_, ok := hub.GetRoom(context.Background(), room.ID)
-	assert.False(t, ok)
+	_, err = hub.LoadRoom(context.Background(), room.ID)
+	assert.True(t, errors.Is(err, domain.ErrRoomNotFound))
 }
 
 func TestIntegration_GetBus(t *testing.T) {
@@ -81,7 +116,8 @@ func TestIntegration_GetBus(t *testing.T) {
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
 
-	room := hub.NewRoom(context.Background())
+	room, err := hub.NewRoom(context.Background())
+	assert.NoError(t, err)
 	assert.NotNil(t, room)
 
 	client1 := room.NewClient("client-getbus-1")
@@ -107,7 +143,8 @@ func TestIntegration_PubSubInvalidMessage(t *testing.T) {
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
 
-	room := hub.NewRoom(context.Background())
+	room, err := hub.NewRoom(context.Background())
+	assert.NoError(t, err)
 	assert.NotNil(t, room)
 
 	client1 := room.NewClient("client-pubsub-1")
@@ -159,7 +196,8 @@ func TestIntegration_PubSubUnsubscribe(t *testing.T) {
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
 
-	room := hub.NewRoom(context.Background())
+	room, err := hub.NewRoom(context.Background())
+	assert.NoError(t, err)
 	assert.NotNil(t, room)
 
 	// Add two clients to the same room
@@ -205,7 +243,8 @@ func TestIntegration_BroadcastToRoom(t *testing.T) {
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
 
-	room := hub.NewRoom(context.Background())
+	room, err := hub.NewRoom(context.Background())
+	assert.NoError(t, err)
 	assert.NotNil(t, room)
 
 	client1 := room.NewClient("client-broadcast-1")
@@ -246,9 +285,12 @@ func TestIntegration_GetRooms(t *testing.T) {
 	assert.Empty(t, rooms)
 
 	// Create multiple rooms
-	room1 := hub.NewRoom(context.Background())
-	room2 := hub.NewRoom(context.Background())
-	room3 := hub.NewRoom(context.Background())
+	room1, err := hub.NewRoom(context.Background())
+	assert.NoError(t, err)
+	room2, err := hub.NewRoom(context.Background())
+	assert.NoError(t, err)
+	room3, err := hub.NewRoom(context.Background())
+	assert.NoError(t, err)
 
 	// Get all rooms
 	rooms = hub.GetRooms()
@@ -271,7 +313,8 @@ func TestIntegration_SaveRoom(t *testing.T) {
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
 
-	room := hub.NewRoom(context.Background())
+	room, err := hub.NewRoom(context.Background())
+	assert.NoError(t, err)
 	assert.NotNil(t, room)
 
 	// Modify room state
@@ -285,8 +328,8 @@ func TestIntegration_SaveRoom(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Retrieve and verify the changes were persisted
-	retrieved, ok := hub.GetRoom(context.Background(), room.ID)
-	assert.True(t, ok)
+	retrieved, err := hub.LoadRoom(context.Background(), room.ID)
+	assert.NoError(t, err)
 	assert.Equal(t, "Updated Story", retrieved.CurrentStory)
 	assert.True(t, retrieved.Reveal)
 	assert.NotNil(t, retrieved.Result)
@@ -300,7 +343,8 @@ func TestIntegration_Close(t *testing.T) {
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
 
-	room := hub.NewRoom(context.Background())
+	room, err := hub.NewRoom(context.Background())
+	assert.NoError(t, err)
 	client1 := room.NewClient("client-close-1")
 	room.Clients.Add(client1)
 	client1.WithRoom(room)

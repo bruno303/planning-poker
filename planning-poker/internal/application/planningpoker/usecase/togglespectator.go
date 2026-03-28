@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"fmt"
 	"planning-poker/internal/application/lock"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
 	"planning-poker/internal/domain"
@@ -31,9 +30,9 @@ func NewToggleSpectatorUseCase(hub domain.Hub, lockManager lock.LockManager) Tog
 
 func (uc ToggleSpectatorUseCase) Execute(ctx context.Context, cmd ToggleSpectatorCommand) error {
 	return uc.lockManager.ExecuteWithLock(ctx, cmd.RoomID, func(ctx context.Context) error {
-		room, ok := uc.hub.GetRoom(ctx, cmd.RoomID)
-		if !ok {
-			return fmt.Errorf("room %s not found", cmd.RoomID)
+		room, err := uc.hub.LoadRoom(ctx, cmd.RoomID)
+		if err != nil {
+			return err
 		}
 
 		if err := room.ToggleSpectator(ctx, cmd.SenderID, cmd.TargetClientID); err != nil {

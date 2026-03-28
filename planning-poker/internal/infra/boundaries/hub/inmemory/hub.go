@@ -2,6 +2,7 @@ package inmemory
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"planning-poker/internal/domain"
 	"planning-poker/internal/domain/entity"
@@ -30,20 +31,33 @@ func NewHub() *InMemoryHub {
 	}
 }
 
-func (h *InMemoryHub) NewRoom(ctx context.Context) *entity.Room {
+func (h *InMemoryHub) NewRoom(ctx context.Context) (*entity.Room, error) {
 	room, _ := trace.Trace(ctx, trace.NameConfig("InMemoryHub", "NewRoom"), func(ctx context.Context) (any, error) {
-
 		room := entity.NewRoom(clientcollection.New())
 		h.Rooms[room.ID] = room
 		return room, nil
 	})
 
-	return room.(*entity.Room)
+	return room.(*entity.Room), nil
 }
 
-func (h *InMemoryHub) GetRoom(_ context.Context, roomID string) (*entity.Room, bool) {
+func (h *InMemoryHub) NewRoomWithID(ctx context.Context, roomID string) (*entity.Room, error) {
+	room, _ := trace.Trace(ctx, trace.NameConfig("InMemoryHub", "NewRoomWithID"), func(ctx context.Context) (any, error) {
+		room := entity.NewRoomWithID(roomID, clientcollection.New())
+		h.Rooms[room.ID] = room
+		return room, nil
+	})
+
+	return room.(*entity.Room), nil
+}
+
+func (h *InMemoryHub) LoadRoom(_ context.Context, roomID string) (*entity.Room, error) {
 	room, ok := h.Rooms[roomID]
-	return room, ok
+	if !ok {
+		return nil, domain.ErrRoomNotFound
+	}
+
+	return room, nil
 }
 
 func (h *InMemoryHub) RemoveRoom(roomID string) {
@@ -78,14 +92,21 @@ func (h *InMemoryHub) RemoveClient(ctx context.Context, clientID string, roomID 
 		delete(h.Clients, clientID)
 		h.RemoveBus(ctx, clientID)
 
-		if room, ok := h.GetRoom(ctx, roomID); ok {
-			err := room.RemoveClient(ctx, clientID)
-			if err != nil {
-				return nil, err
+		room, err := h.LoadRoom(ctx, roomID)
+		if err != nil {
+			if errors.Is(err, domain.ErrRoomNotFound) {
+				return nil, nil
 			}
-			if room.IsEmpty() {
-				h.RemoveRoom(room.ID)
-			}
+
+			return nil, err
+		}
+
+		err = room.RemoveClient(ctx, clientID)
+		if err != nil {
+			return nil, err
+		}
+		if room.IsEmpty() {
+			h.RemoveRoom(room.ID)
 		}
 		return nil, nil
 	})
@@ -101,9 +122,9 @@ func (h *InMemoryHub) SaveRoom(_ context.Context, room *entity.Room) error {
 func (h *InMemoryHub) BroadcastToRoom(ctx context.Context, roomID string, message any) error {
 	_, err := trace.Trace(ctx, trace.NameConfig("InMemoryHub", "BroadcastToRoom"), func(ctx context.Context) (any, error) {
 
-		room, ok := h.GetRoom(ctx, roomID)
-		if !ok {
-			return nil, fmt.Errorf("room %s not found", roomID)
+		room, err := h.LoadRoom(ctx, roomID)
+		if err != nil {
+			return nil, err
 		}
 
 		for _, client := range room.Clients.Values() {

@@ -33,8 +33,12 @@ type (
 )
 
 func NewRoom(clients ClientCollection) *Room {
+	return NewRoomWithID(uuid.NewString(), clients)
+}
+
+func NewRoomWithID(id string, clients ClientCollection) *Room {
 	return &Room{
-		ID:           uuid.NewString(),
+		ID:           id,
 		Clients:      clients,
 		CurrentStory: "",
 		Reveal:       false,

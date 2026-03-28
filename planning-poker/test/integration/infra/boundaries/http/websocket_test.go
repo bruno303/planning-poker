@@ -33,21 +33,80 @@ func TestWebSocketConnection(t *testing.T) {
 		}
 	})
 
-	t.Run("connection to non-existent room fails", func(t *testing.T) {
-		wsURL := strings.Replace(ts.Server.URL, "http://", "ws://", 1)
-		wsURL = fmt.Sprintf("%s/planning/non-existent-room/ws", wsURL)
+	t.Run("connection to non-existent room auto-creates room", func(t *testing.T) {
+		roomID := "auto-created-room"
 
-		dialer := websocket.Dialer{
-			HandshakeTimeout: 2 * time.Second,
+		conn1 := connectWebSocket(t, ts, roomID)
+		defer closeAndWait(conn1)
+
+		msg1 := receiveMessage(t, conn1, 2*time.Second)
+		if msg1["type"] != "update-client-id" {
+			t.Fatalf("expected first message type 'update-client-id', got '%v'", msg1["type"])
+		}
+		clientID1, ok := msg1["clientId"].(string)
+		if !ok || clientID1 == "" {
+			t.Fatal("clientId not found in update-client-id message")
 		}
 
-		conn, resp, err := dialer.Dial(wsURL, nil)
-		if err == nil {
-			defer closeAndWait(conn)
+		msg2 := receiveMessage(t, conn1, 2*time.Second)
+		if msg2["type"] != "room-state" {
+			t.Fatalf("expected second message type 'room-state', got '%v'", msg2["type"])
+		}
+		participants1 := msg2["participants"].([]any)
+		if len(participants1) != 1 {
+			t.Fatalf("expected 1 participant in auto-created room, got %d", len(participants1))
+		}
+		firstParticipant := participants1[0].(map[string]any)
+		if firstParticipant["id"] != clientID1 {
+			t.Fatalf("expected first participant id '%s', got '%v'", clientID1, firstParticipant["id"])
+		}
+		if firstParticipant["isOwner"] != true {
+			t.Fatal("expected first auto-created room participant to be owner")
 		}
 
-		if err == nil && resp.StatusCode == http.StatusOK {
-			t.Error("expected connection to non-existent room to fail")
+		conn2 := connectWebSocket(t, ts, roomID)
+		defer closeAndWait(conn2)
+
+		msg3 := receiveMessage(t, conn2, 2*time.Second)
+		if msg3["type"] != "update-client-id" {
+			t.Fatalf("expected first message type 'update-client-id', got '%v'", msg3["type"])
+		}
+		clientID2, ok := msg3["clientId"].(string)
+		if !ok || clientID2 == "" {
+			t.Fatal("clientId not found in update-client-id message")
+		}
+
+		msg4 := receiveMessage(t, conn2, 2*time.Second)
+		if msg4["type"] != "room-state" {
+			t.Fatalf("expected second message type 'room-state', got '%v'", msg4["type"])
+		}
+
+		msg5 := receiveMessage(t, conn1, 2*time.Second)
+		if msg5["type"] != "room-state" {
+			t.Fatalf("expected broadcast message type 'room-state', got '%v'", msg5["type"])
+		}
+
+		for _, msg := range []map[string]any{msg4, msg5} {
+			participants := msg["participants"].([]any)
+			if len(participants) != 2 {
+				t.Fatalf("expected 2 participants after second join, got %d", len(participants))
+			}
+
+			seenClient1 := false
+			seenClient2 := false
+			for _, p := range participants {
+				participant := p.(map[string]any)
+				switch participant["id"] {
+				case clientID1:
+					seenClient1 = true
+				case clientID2:
+					seenClient2 = true
+				}
+			}
+
+			if !seenClient1 || !seenClient2 {
+				t.Fatalf("expected both auto-created room participants to be present, got %#v", participants)
+			}
 		}
 	})
 }
@@ -598,6 +657,40 @@ func TestWebSocketDisconnection(t *testing.T) {
 		}
 
 		conn2.Close()
+	})
+
+	t.Run("last client disconnect cleans up room for future reconnect", func(t *testing.T) {
+		roomID := "disconnect-recreate-room"
+
+		conn1 := connectWebSocket(t, ts, roomID)
+		_ = getClientID(t, conn1)
+		closeAndWait(conn1)
+
+		conn2 := connectWebSocket(t, ts, roomID)
+		defer closeAndWait(conn2)
+
+		msg1 := receiveMessage(t, conn2, 2*time.Second)
+		if msg1["type"] != "update-client-id" {
+			t.Fatalf("expected first message type 'update-client-id', got '%v'", msg1["type"])
+		}
+
+		msg2 := receiveMessage(t, conn2, 2*time.Second)
+		if msg2["type"] != "room-state" {
+			t.Fatalf("expected second message type 'room-state', got '%v'", msg2["type"])
+		}
+
+		participants, ok := msg2["participants"].([]any)
+		if !ok {
+			t.Fatal("expected participants array")
+		}
+		if len(participants) != 1 {
+			t.Fatalf("expected recreated room to have 1 participant, got %d", len(participants))
+		}
+
+		participant := participants[0].(map[string]any)
+		if participant["isOwner"] != true {
+			t.Fatal("expected reconnected participant to own recreated room")
+		}
 	})
 }
 

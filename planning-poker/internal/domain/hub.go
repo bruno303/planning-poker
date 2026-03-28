@@ -2,8 +2,11 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"planning-poker/internal/domain/entity"
 )
+
+var ErrRoomNotFound = errors.New("room not found")
 
 type (
 	Hub interface {
@@ -11,8 +14,9 @@ type (
 		AddClient(c *entity.Client)
 		RemoveClient(ctx context.Context, clientID string, roomID string) error
 
-		NewRoom(ctx context.Context) *entity.Room
-		GetRoom(ctx context.Context, roomID string) (*entity.Room, bool)
+		NewRoom(ctx context.Context) (*entity.Room, error)
+		NewRoomWithID(ctx context.Context, roomID string) (*entity.Room, error)
+		LoadRoom(ctx context.Context, roomID string) (*entity.Room, error)
 		RemoveRoom(roomID string)
 		SaveRoom(ctx context.Context, room *entity.Room) error
 		BroadcastToRoom(ctx context.Context, roomID string, message any) error

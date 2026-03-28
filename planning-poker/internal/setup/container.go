@@ -13,6 +13,7 @@ import (
 	"planning-poker/internal/infra/decorators/usecasedecorators"
 	infralock "planning-poker/internal/infra/lock"
 
+	toolkitmetric "github.com/bruno303/go-toolkit/pkg/metric"
 	redislib "github.com/redis/go-redis/v9"
 )
 
@@ -76,7 +77,7 @@ func newInfraContainer(ctx context.Context, cfg *config.Config) *InfraContainer 
 }
 
 func newApplicationContainer(infra *InfraContainer) *ApplicationContainer {
-	planningPokerMetric := metric.NewPlanningPokerMetric()
+	planningPokerMetric := metric.NewPlanningPokerMetricWithMeter(toolkitmetric.GetMeter())
 	usecases := newUsecases(infra.Hub, infra.LockManager, planningPokerMetric)
 
 	return &ApplicationContainer{

@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"planning-poker/internal/application/lock"
 	"planning-poker/internal/application/planningpoker/metric"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
@@ -46,13 +47,17 @@ func (uc *leaveRoomUseCase) Execute(ctx context.Context, cmd LeaveRoomCommand) e
 
 		// if room still exists, broadcast the updated state
 		// otherwise, decrement active rooms metric
-		if room, ok := uc.hub.GetRoom(ctx, cmd.RoomID); ok {
+		room, err := uc.hub.LoadRoom(ctx, cmd.RoomID)
+		if err == nil {
 			if err := uc.hub.BroadcastToRoom(ctx, room.ID, dto.NewRoomStateCommand(room)); err != nil {
 				uc.logger.Error(ctx, "Error broadcasting room state", err)
 				return err
 			}
-		} else {
+		} else if errors.Is(err, domain.ErrRoomNotFound) {
 			uc.metric.DecrementActiveRoomsCounter(ctx)
+		} else {
+			uc.logger.Error(ctx, "Error loading room after client removal", err)
+			return err
 		}
 
 		uc.logger.Info(ctx, "Client %s left room %s successfully", cmd.SenderID, cmd.RoomID)

@@ -12,6 +12,7 @@ import (
 type (
 	CreateRoomCommand struct {
 		SenderID string
+		RoomID   string
 	}
 	CreateRoomOutput struct {
 		Room *entity.Room
@@ -37,7 +38,17 @@ func NewCreateRoomUseCase(hub domain.Hub, metric metric.PlanningPokerMetric) cre
 }
 
 func (uc createRoomUseCase) Execute(ctx context.Context, cmd CreateRoomCommand) (CreateRoomOutput, error) {
-	room := uc.hub.NewRoom(ctx)
+	var room *entity.Room
+	var err error
+	if cmd.RoomID != "" {
+		room, err = uc.hub.NewRoomWithID(ctx, cmd.RoomID)
+	} else {
+		room, err = uc.hub.NewRoom(ctx)
+	}
+	if err != nil {
+		return CreateRoomOutput{}, err
+	}
+
 	uc.metric.IncrementActiveRoomsCounter(ctx)
 
 	uc.logger.Info(ctx, "Room created with ID: %s by: %s", room.ID, cmd.SenderID)

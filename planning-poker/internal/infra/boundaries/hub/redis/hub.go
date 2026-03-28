@@ -26,11 +26,12 @@ type RedisClient interface {
 }
 
 const (
-	roomKeyPrefix   = "planning-poker:room:"
-	clientKeyPrefix = "planning-poker:client:"
-	pubsubChannel   = "planning-poker:updates:"
-	twentyFourHours = 24 * time.Hour
-	cursorSize      = 100
+	roomKeyPrefix    = "planning-poker:room:"
+	clientKeyPrefix  = "planning-poker:client:"
+	pubsubChannel    = "planning-poker:updates:"
+	twentyFourHours  = 24 * time.Hour
+	cursorSize       = 100
+	subscribeTimeout = 2 * time.Second
 )
 
 type (
@@ -94,8 +95,8 @@ func (h *RedisHub) Close() error {
 	return nil
 }
 
-func (h *RedisHub) NewRoom(ctx context.Context) *entity.Room {
-	room, _ := trace.Trace(ctx, trace.NameConfig("RedisHub", "NewRoom"), func(ctx context.Context) (any, error) {
+func (h *RedisHub) NewRoom(ctx context.Context) (*entity.Room, error) {
+	room, err := trace.Trace(ctx, trace.NameConfig("RedisHub", "NewRoom"), func(ctx context.Context) (any, error) {
 		room := entity.NewRoom(clientcollection.New())
 		if err := h.saveRoom(ctx, room); err != nil {
 			h.logger.Error(ctx, "Failed to save new room to Redis", err)
@@ -104,8 +105,28 @@ func (h *RedisHub) NewRoom(ctx context.Context) *entity.Room {
 
 		return room, nil
 	})
+	if err != nil {
+		return nil, err
+	}
 
-	return room.(*entity.Room)
+	return room.(*entity.Room), nil
+}
+
+func (h *RedisHub) NewRoomWithID(ctx context.Context, roomID string) (*entity.Room, error) {
+	room, err := trace.Trace(ctx, trace.NameConfig("RedisHub", "NewRoomWithID"), func(ctx context.Context) (any, error) {
+		room := entity.NewRoomWithID(roomID, clientcollection.New())
+		if err := h.saveRoom(ctx, room); err != nil {
+			h.logger.Error(ctx, "Failed to save new room to Redis", err)
+			return nil, err
+		}
+
+		return room, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return room.(*entity.Room), nil
 }
 
 func (h *RedisHub) GetClientsOfRoom(roomID string) int {
@@ -114,15 +135,18 @@ func (h *RedisHub) GetClientsOfRoom(roomID string) int {
 	return h.roomClientCounts[roomID]
 }
 
-func (h *RedisHub) GetRoom(ctx context.Context, roomID string) (*entity.Room, bool) {
+func (h *RedisHub) LoadRoom(ctx context.Context, roomID string) (*entity.Room, error) {
 	room, err := h.loadRoom(ctx, roomID)
 	if err != nil {
-		if !errors.Is(err, redis.Nil) {
-			h.logger.Error(ctx, fmt.Sprintf("Failed to load room %s from Redis", roomID), err)
+		if errors.Is(err, redis.Nil) {
+			return nil, domain.ErrRoomNotFound
 		}
-		return nil, false
+
+		h.logger.Error(ctx, fmt.Sprintf("Failed to load room %s from Redis", roomID), err)
+		return nil, fmt.Errorf("load room %s: %w", roomID, err)
 	}
-	return room, true
+
+	return room, nil
 }
 
 func (h *RedisHub) RemoveRoom(roomID string) {
@@ -145,8 +169,8 @@ func (h *RedisHub) FindClientByID(clientID string) (*entity.Client, bool) {
 		return nil, false
 	}
 
-	room, ok := h.GetRoom(ctx, roomID)
-	if !ok {
+	room, err := h.LoadRoom(ctx, roomID)
+	if err != nil {
 		return nil, false
 	}
 
@@ -187,6 +211,11 @@ func (h *RedisHub) AddBus(ctx context.Context, clientID string, bus domain.Bus) 
 	_, exists := h.roomSubs.Load(roomID)
 	if !exists {
 		sub := h.client.Subscribe(h.ctx, pubsubChannel+roomID)
+		subscribeCtx, cancel := context.WithTimeout(context.Background(), subscribeTimeout)
+		if _, err := sub.Receive(subscribeCtx); err != nil {
+			h.logger.Error(ctx, fmt.Sprintf("Failed to confirm pub/sub subscription for room %s", roomID), err)
+		}
+		cancel()
 		h.roomSubs.Store(roomID, sub)
 		h.wg.Go(func() {
 			h.listenToRoomPubSub(h.ctx, roomID, sub)
@@ -272,9 +301,13 @@ func (h *RedisHub) RemoveClient(ctx context.Context, clientID string, roomID str
 
 		h.RemoveBus(ctx, clientID)
 
-		room, ok := h.GetRoom(ctx, roomID)
-		if !ok {
-			return nil, fmt.Errorf("room %s not found", roomID)
+		room, err := h.LoadRoom(ctx, roomID)
+		if err != nil {
+			if errors.Is(err, domain.ErrRoomNotFound) {
+				return nil, nil
+			}
+
+			return nil, err
 		}
 
 		if err := room.RemoveClient(ctx, clientID); err != nil {
@@ -328,8 +361,8 @@ func (h *RedisHub) GetRooms() []*entity.Room {
 		roomKey := iter.Val()
 		roomID := roomKey[len(roomKeyPrefix):]
 
-		room, ok := h.GetRoom(ctx, roomID)
-		if ok {
+		room, err := h.LoadRoom(ctx, roomID)
+		if err == nil {
 			rooms = append(rooms, room)
 		}
 	}
@@ -377,8 +410,8 @@ func (h *RedisHub) loadRoom(ctx context.Context, roomID string) (*entity.Room, e
 func (h *RedisHub) forwardToLocalClients(ctx context.Context, roomID string, message any) {
 	h.busMux.RLock()
 	defer h.busMux.RUnlock()
-	room, ok := h.GetRoom(ctx, roomID)
-	if !ok {
+	room, err := h.LoadRoom(ctx, roomID)
+	if err != nil {
 		return
 	}
 

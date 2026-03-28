@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"fmt"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
 	"planning-poker/internal/domain"
 )
@@ -27,9 +26,9 @@ func NewUpdateNameUseCase(hub domain.Hub) UpdateNameUseCase {
 }
 
 func (uc UpdateNameUseCase) Execute(ctx context.Context, cmd UpdateNameCommand) error {
-	room, ok := uc.hub.GetRoom(ctx, cmd.RoomID)
-	if !ok {
-		return fmt.Errorf("room %s not found", cmd.RoomID)
+	room, err := uc.hub.LoadRoom(ctx, cmd.RoomID)
+	if err != nil {
+		return err
 	}
 
 	if err := room.UpdateClientName(ctx, cmd.SenderID, cmd.Username); err != nil {

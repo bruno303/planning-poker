@@ -229,51 +229,52 @@ func (c *MockHubGetBusCall) DoAndReturn(f func(string) (Bus, bool)) *MockHubGetB
 	return c
 }
 
-// GetRoom mocks base method.
-func (m *MockHub) GetRoom(ctx context.Context, roomID string) (*entity.Room, bool) {
+// LoadRoom mocks base method.
+func (m *MockHub) LoadRoom(ctx context.Context, roomID string) (*entity.Room, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetRoom", ctx, roomID)
+	ret := m.ctrl.Call(m, "LoadRoom", ctx, roomID)
 	ret0, _ := ret[0].(*entity.Room)
-	ret1, _ := ret[1].(bool)
+	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetRoom indicates an expected call of GetRoom.
-func (mr *MockHubMockRecorder) GetRoom(ctx, roomID any) *MockHubGetRoomCall {
+// LoadRoom indicates an expected call of LoadRoom.
+func (mr *MockHubMockRecorder) LoadRoom(ctx, roomID any) *MockHubLoadRoomCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRoom", reflect.TypeOf((*MockHub)(nil).GetRoom), ctx, roomID)
-	return &MockHubGetRoomCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadRoom", reflect.TypeOf((*MockHub)(nil).LoadRoom), ctx, roomID)
+	return &MockHubLoadRoomCall{Call: call}
 }
 
-// MockHubGetRoomCall wrap *gomock.Call
-type MockHubGetRoomCall struct {
+// MockHubLoadRoomCall wrap *gomock.Call
+type MockHubLoadRoomCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockHubGetRoomCall) Return(arg0 *entity.Room, arg1 bool) *MockHubGetRoomCall {
+func (c *MockHubLoadRoomCall) Return(arg0 *entity.Room, arg1 error) *MockHubLoadRoomCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHubGetRoomCall) Do(f func(context.Context, string) (*entity.Room, bool)) *MockHubGetRoomCall {
+func (c *MockHubLoadRoomCall) Do(f func(context.Context, string) (*entity.Room, error)) *MockHubLoadRoomCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHubGetRoomCall) DoAndReturn(f func(context.Context, string) (*entity.Room, bool)) *MockHubGetRoomCall {
+func (c *MockHubLoadRoomCall) DoAndReturn(f func(context.Context, string) (*entity.Room, error)) *MockHubLoadRoomCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // NewRoom mocks base method.
-func (m *MockHub) NewRoom(ctx context.Context) *entity.Room {
+func (m *MockHub) NewRoom(ctx context.Context) (*entity.Room, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NewRoom", ctx)
 	ret0, _ := ret[0].(*entity.Room)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // NewRoom indicates an expected call of NewRoom.
@@ -289,19 +290,58 @@ type MockHubNewRoomCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockHubNewRoomCall) Return(arg0 *entity.Room) *MockHubNewRoomCall {
-	c.Call = c.Call.Return(arg0)
+func (c *MockHubNewRoomCall) Return(arg0 *entity.Room, arg1 error) *MockHubNewRoomCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHubNewRoomCall) Do(f func(context.Context) *entity.Room) *MockHubNewRoomCall {
+func (c *MockHubNewRoomCall) Do(f func(context.Context) (*entity.Room, error)) *MockHubNewRoomCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHubNewRoomCall) DoAndReturn(f func(context.Context) *entity.Room) *MockHubNewRoomCall {
+func (c *MockHubNewRoomCall) DoAndReturn(f func(context.Context) (*entity.Room, error)) *MockHubNewRoomCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// NewRoomWithID mocks base method.
+func (m *MockHub) NewRoomWithID(ctx context.Context, roomID string) (*entity.Room, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewRoomWithID", ctx, roomID)
+	ret0, _ := ret[0].(*entity.Room)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// NewRoomWithID indicates an expected call of NewRoomWithID.
+func (mr *MockHubMockRecorder) NewRoomWithID(ctx, roomID any) *MockHubNewRoomWithIDCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewRoomWithID", reflect.TypeOf((*MockHub)(nil).NewRoomWithID), ctx, roomID)
+	return &MockHubNewRoomWithIDCall{Call: call}
+}
+
+// MockHubNewRoomWithIDCall wrap *gomock.Call
+type MockHubNewRoomWithIDCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockHubNewRoomWithIDCall) Return(arg0 *entity.Room, arg1 error) *MockHubNewRoomWithIDCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockHubNewRoomWithIDCall) Do(f func(context.Context, string) (*entity.Room, error)) *MockHubNewRoomWithIDCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockHubNewRoomWithIDCall) DoAndReturn(f func(context.Context, string) (*entity.Room, error)) *MockHubNewRoomWithIDCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
