@@ -2,54 +2,29 @@
 
 import { useToast } from '@/context/toast/toastContext';
 import { Loader2, LogIn, Plus } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 import { styles } from './page.styles';
 
-export default function PlanningPokerHome({ params }: { params: Promise<{ roomId: string | null }> }) {
+export default function PlanningPokerHome() {
   const router = useRouter();
+  const params = useParams<{ roomId?: string }>();
   const [roomCode, setRoomCode] = useState('');
   const [userName, setUserName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
-  const myParams = React.use(params);
   const nameInputRef = React.useRef<HTMLInputElement | null>(null);
-  const hasRoomParam = Boolean(myParams?.roomId);
+  const routeRoomId = typeof params?.roomId === 'string' ? params.roomId : '';
+  const hasRoomParam = Boolean(routeRoomId);
   const { pushError } = useToast();
 
+  const getRoomRoute = (value: string) => `/room/${encodeURIComponent(value.trim())}`;
+
   useEffect(() => {
-    if (myParams.roomId) {
-      setRoomCode(myParams.roomId);
-    }
-  }, []);
+    setRoomCode(routeRoomId);
+  }, [routeRoomId]);
 
   useEffect(() => { nameInputRef.current?.focus(); }, []);
-
-  const createRoom = async (userName: string) => {
-    try {
-      setIsCreating(true);
-
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/planning/room`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          createdBy: userName
-        }),
-        credentials: 'include'
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to create room');
-      }
-
-      const data = await response.json();
-      return data.roomId;
-    } finally {
-      setIsCreating(false);
-    }
-  };
 
   const handleCreateRoom = async () => {
     if (!userName.trim()) {
@@ -58,12 +33,15 @@ export default function PlanningPokerHome({ params }: { params: Promise<{ roomId
     }
 
     try {
-      const newRoomId = await createRoom(userName.trim());
+      setIsCreating(true);
+      const newRoomId = crypto.randomUUID();
       sessionStorage.setItem('userName', userName.trim());
-      router.push(`/room/${newRoomId}`);
+      router.push(getRoomRoute(newRoomId));
     } catch (err: any) {
       const message = err?.message || 'Failed to create room. Please try again.';
       pushError(message);
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -79,27 +57,9 @@ export default function PlanningPokerHome({ params }: { params: Promise<{ roomId
     }
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/planning/room/${roomCode}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.status === 404) {
-        pushError('Room not found');
-        return
-      }
-
-      if (!response.ok) {
-        const text = await response.text();
-        const message = text || 'Failed to join room';
-        pushError(message);
-        return
-      }
-
+      setIsJoining(true);
       sessionStorage.setItem('userName', userName.trim());
-      router.push(`/room/${roomCode.trim()}`);
+      router.push(getRoomRoute(roomCode));
     } catch (err: any) {
       const message = err?.message || 'Failed to join room. Please try again.';
       pushError(message);

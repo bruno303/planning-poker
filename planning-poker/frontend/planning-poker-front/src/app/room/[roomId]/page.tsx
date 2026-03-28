@@ -14,10 +14,14 @@ import { useRoom } from '@/context/room/roomContext';
 import { useToast } from '@/context/toast/toastContext';
 import { Eye, EyeOff, Repeat, RotateCcw, Shield, Users, X } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Header from './page.header';
 import gridStyles from './page.module.css';
 import { styles } from './page.styles';
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const isValidRoomId = (value: string): boolean => uuidPattern.test(value);
 
 type Card = string | null
 
@@ -35,7 +39,9 @@ export default function PlanningPoker() {
   const router = useRouter();
   const { socket, connected } = useRoom();
   const { pushError, pushSuccess } = useToast();
-  const roomId = params?.roomId as string ?? '00000000-0000-0000-0000-000000000000';
+  const routeRoomId = typeof params?.roomId === 'string' ? params.roomId : '';
+  const [roomId, setRoomId] = useState('');
+  const connectedRoomIdRef = useRef<string | null>(null);
 
   const [selectedCard, setSelectedCard] = useState<Card>(null);
   const [userName, setUserName] = useState('');
@@ -51,6 +57,21 @@ export default function PlanningPoker() {
   const cards = ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'];
 
   useEffect(() => {
+    if (isValidRoomId(routeRoomId)) {
+      setRoomId(routeRoomId);
+      return;
+    }
+
+    setRoomId('');
+    pushError('Invalid room code. Redirecting to join page.');
+    router.replace('/join');
+  }, [routeRoomId, router, pushError]);
+
+  useEffect(() => {
+    if (!roomId) {
+      return;
+    }
+
     const storedUserName = sessionStorage.getItem('userName');
     if (!storedUserName) {
       router.push(`/join/${roomId}`);
@@ -58,11 +79,24 @@ export default function PlanningPoker() {
     }
     setUserName(storedUserName);
 
-    if (!connected.current) {
-      connectWebSocket(roomId, storedUserName);
-      connected.current = true;
+    const hasSameRoomConnection =
+      connected.current &&
+      connectedRoomIdRef.current === roomId &&
+      socket.current?.readyState !== WebSocket.CLOSED;
+
+    if (hasSameRoomConnection) {
+      return;
     }
-  }, [roomId]);
+
+    cleanupSocket();
+    connectWebSocket(roomId, storedUserName);
+
+    return () => {
+      if (connectedRoomIdRef.current === roomId) {
+        cleanupSocket();
+      }
+    };
+  }, [roomId, router]);
 
   useEffect(() => {
     if (clientId && participants.length > 0) {
@@ -71,7 +105,21 @@ export default function PlanningPoker() {
   }, [participants, clientId]);
 
   const sendMessage = <T,>(message: WebSocketMessage<T>) => {
-    socket.current?.send(JSON.stringify(message));
+    const activeSocket = socket.current;
+
+    if (!activeSocket || activeSocket.readyState !== WebSocket.OPEN) {
+      pushError('Connection is not ready. Please wait and try again.');
+      return;
+    }
+
+    try {
+      activeSocket.send(JSON.stringify(message));
+    } catch (err: any) {
+      const errorMessage = err?.message
+        ? `Failed to send message: ${err.message}`
+        : 'Failed to send message.';
+      pushError(errorMessage);
+    }
   }
 
   const handleCardSelect = (card: Card) => {
@@ -106,13 +154,31 @@ export default function PlanningPoker() {
     sendMessage<any>({ type: 'vote-again', payload });
   }
 
-  const connectWebSocket = async (roomCode: string | null, userName: string) => {
-    if (!roomCode) {
-      return;
-    }
-    socket.current = new WebSocket(`${process.env.NEXT_PUBLIC_WEBSOCKET_URL}/planning/${roomCode}/ws`);
+  const resetConnectionState = () => {
+    connected.current = false;
+    connectedRoomIdRef.current = null;
+    socket.current = null;
+  };
 
-    socket.current.onmessage = (event) => {
+  const cleanupSocket = () => {
+    const activeSocket = socket.current;
+    if (activeSocket) {
+      activeSocket.onopen = null;
+      activeSocket.onmessage = null;
+      activeSocket.onclose = null;
+      activeSocket.onerror = null;
+      activeSocket.close();
+    }
+    resetConnectionState();
+  };
+
+  const connectWebSocket = (roomCode: string, userName: string) => {
+    const ws = new WebSocket(`${process.env.NEXT_PUBLIC_WEBSOCKET_URL}/planning/${roomCode}/ws`);
+    socket.current = ws;
+    connected.current = true;
+    connectedRoomIdRef.current = roomCode;
+
+    ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
 
@@ -138,16 +204,23 @@ export default function PlanningPoker() {
       }
     };
 
-    socket.current.onopen = () => {
+    ws.onopen = () => {
       pushSuccess('Connected');
     };
 
-    socket.current.onclose = () => {
+    ws.onclose = () => {
       pushError('Disconnected');
+      if (socket.current === ws) {
+        resetConnectionState();
+      }
     };
 
-    socket.current.onerror = () => {
+    ws.onerror = () => {
       pushError('Error occurred while connecting to websocket');
+      if (socket.current === ws) {
+        connected.current = false;
+        connectedRoomIdRef.current = null;
+      }
     };
   };
 
@@ -170,8 +243,7 @@ export default function PlanningPoker() {
   };
 
   const handleBackToHome = () => {
-    socket.current?.close();
-    connected.current = false;
+    cleanupSocket();
     router.push('/');
   };
 
