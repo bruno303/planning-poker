@@ -64,6 +64,17 @@ Regenerate after interface changes, especially when mocks are generated from `go
 - `make test-integration` - integration tests under `./test/integration/...`.
 - `make test-coverage` - generate `coverage.out` and `coverage.html`.
 
+### E2E tests (Playwright)
+
+- `make e2e-local` - preferred local E2E command. Builds app containers, waits for readiness, runs Playwright in Docker, and always tears down containers/volumes.
+- `make e2e-ci` - CI-friendly E2E flow (line reporter, `CI=1`).
+- `make e2e-compose-up` - start E2E stack (`redis`, `backend`, `frontend-e2e`) with build.
+- `make e2e-compose-wait` - wait for E2E stack health checks.
+- `make e2e-playwright` - run Playwright suite in Docker against `frontend-e2e`.
+- `make e2e-compose-down` - stop E2E stack and remove volumes/orphans.
+
+Important: prefer `make e2e-local` over host-only `npm run e2e` when possible. The Docker flow avoids host Playwright runtime dependency issues (for example missing system libs like `libnspr4.so`).
+
 Important: the real Makefile target is `make tests`, not `make test`.
 `.github/copilot-instructions.md` mentions `make test`, but that target does not exist in the Makefile.
 
@@ -167,5 +178,6 @@ Important: the real Makefile target is `make tests`, not `make test`.
 
 - Backend startup depends on Redis via the configured hub and lock manager.
 - Integration tests use `httptest.Server` and production-like container wiring.
-- Frontend scripts live only in `frontend/planning-poker-front/package.json`; there is no frontend lint or test script defined there today.
+- Frontend scripts live in `frontend/planning-poker-front/package.json`; available scripts include `test` (Vitest) and `e2e` (Playwright).
+- Playwright config defaults `PLAYWRIGHT_BASE_URL` to `http://frontend-e2e:3000`, which matches the Docker E2E network used by `make e2e-local`.
 - Keep documentation and agent guidance ASCII-only unless a file already requires Unicode.

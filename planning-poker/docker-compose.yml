@@ -6,6 +6,8 @@ services:
       - "6379:6379"
     networks:
       - planning-poker
+    profiles:
+      - app
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -16,8 +18,8 @@ services:
     build:
       context: ./frontend/planning-poker-front
       args:
-        - NEXT_PUBLIC_BACKEND_URL=http://backend:8080
-        - NEXT_PUBLIC_WEB_SOCKET_URL=ws://backend:8080
+        - NEXT_PUBLIC_BACKEND_URL=http://localhost:8080
+        - NEXT_PUBLIC_WEBSOCKET_URL=ws://localhost:8080
     container_name: planning-poker-frontend
     ports:
       - "3000:3000"
@@ -29,6 +31,37 @@ services:
       backend:
         condition: service_healthy
 
+  frontend-e2e:
+    build:
+      context: ./frontend/planning-poker-front
+      args:
+        - NEXT_PUBLIC_BACKEND_URL=http://backend:8080
+        - NEXT_PUBLIC_WEBSOCKET_URL=ws://backend:8080
+    container_name: planning-poker-frontend-e2e
+    profiles:
+      - e2e
+    networks:
+      - planning-poker
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.58.2-noble
+    container_name: planning-poker-playwright
+    working_dir: /work
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    volumes:
+      - ./frontend/planning-poker-front:/work
+      - playwright-node-modules:/work/node_modules
+    profiles:
+      - e2e
+    networks:
+      - planning-poker
+    depends_on:
+      frontend-e2e:
+        condition: service_started
+
   backend:
     build:
       context: ./
@@ -36,7 +69,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - CORS_ALLOWED_ORIGINS=http://localhost:3000,http://frontend:3000
+      - CORS_ALLOWED_ORIGINS=http://localhost:3000,http://frontend:3000,http://frontend-e2e:3000
       - LOG_LEVEL=DEBUG
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -46,9 +79,18 @@ services:
       - app
     networks:
       - planning-poker
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
     depends_on:
       redis:
         condition: service_healthy
 
 networks:
   planning-poker:
+
+volumes:
+  playwright-node-modules:
