@@ -3,6 +3,7 @@ BACKEND_URL=http://localhost:8080
 WEBSOCKET_URL=ws://localhost:8080
 DOCKER_COMPOSE=docker compose
 COMPOSE_APP_PROFILE=app
+COMPOSE_LOCAL_PROFILE=local
 COMPOSE_E2E_PROFILE=e2e
 E2E_READY_MAX_RETRIES ?= 60
 HOST_UID=$(shell id -u)
@@ -85,10 +86,18 @@ clean:
 
 .PHONY: infra-up
 infra-up:
-	$(DOCKER_COMPOSE) --profile $(COMPOSE_APP_PROFILE) up -d
+	$(DOCKER_COMPOSE) --profile $(COMPOSE_LOCAL_PROFILE) up -d
 
 .PHONY: infra-down
 infra-down:
+	$(DOCKER_COMPOSE) --profile $(COMPOSE_LOCAL_PROFILE) down
+
+.PHONY: app-compose-up
+app-compose-up:
+	$(DOCKER_COMPOSE) --profile $(COMPOSE_APP_PROFILE) up -d --build
+
+.PHONY: app-compose-down
+app-compose-down:
 	$(DOCKER_COMPOSE) --profile $(COMPOSE_APP_PROFILE) down
 
 .PHONY: e2e-compose-up
@@ -105,11 +114,11 @@ e2e-compose-down:
 
 .PHONY: e2e-playwright
 e2e-playwright:
-	$(DOCKER_COMPOSE) --profile $(COMPOSE_APP_PROFILE) --profile $(COMPOSE_E2E_PROFILE) run --rm --no-deps --user root playwright sh -lc "mkdir -p /work/node_modules /work/test-results /work/playwright-report && chown -R $(HOST_UID):$(HOST_GID) /work/node_modules /work/test-results /work/playwright-report" && HOST_UID=$(HOST_UID) HOST_GID=$(HOST_GID) $(DOCKER_COMPOSE) --profile $(COMPOSE_APP_PROFILE) --profile $(COMPOSE_E2E_PROFILE) run --rm --no-deps playwright sh -lc "npm ci && attempt=0; until node -e \"fetch('http://frontend-e2e:3000').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\"; do attempt=$$((attempt + 1)); if [ $$attempt -ge $(E2E_READY_MAX_RETRIES) ]; then echo 'frontend-e2e did not become ready in time'; exit 1; fi; sleep 1; done && npm run e2e"
+	$(DOCKER_COMPOSE) --profile $(COMPOSE_APP_PROFILE) --profile $(COMPOSE_E2E_PROFILE) run --rm --no-deps --user root playwright sh -lc "mkdir -p /work/node_modules /work/test-results /work/playwright-report && chown -R $(HOST_UID):$(HOST_GID) /work/node_modules /work/test-results /work/playwright-report" && $(DOCKER_COMPOSE) --profile $(COMPOSE_APP_PROFILE) --profile $(COMPOSE_E2E_PROFILE) run --rm --no-deps --user root playwright sh -lc "npm ci --cache /tmp/npm-cache && attempt=0; until node -e \"fetch('http://frontend-e2e:3000').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\"; do attempt=$$((attempt + 1)); if [ $$attempt -ge $(E2E_READY_MAX_RETRIES) ]; then echo 'frontend-e2e did not become ready in time'; exit 1; fi; sleep 1; done && npm run e2e"
 
 .PHONY: e2e-playwright-ci
 e2e-playwright-ci:
-	$(DOCKER_COMPOSE) --profile $(COMPOSE_APP_PROFILE) --profile $(COMPOSE_E2E_PROFILE) run --rm --no-deps --user root playwright sh -lc "mkdir -p /work/node_modules /work/test-results /work/playwright-report && chown -R $(HOST_UID):$(HOST_GID) /work/node_modules /work/test-results /work/playwright-report" && HOST_UID=$(HOST_UID) HOST_GID=$(HOST_GID) $(DOCKER_COMPOSE) --profile $(COMPOSE_APP_PROFILE) --profile $(COMPOSE_E2E_PROFILE) run --rm --no-deps playwright sh -lc "npm ci && attempt=0; until node -e \"fetch('http://frontend-e2e:3000').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\"; do attempt=$$((attempt + 1)); if [ $$attempt -ge $(E2E_READY_MAX_RETRIES) ]; then echo 'frontend-e2e did not become ready in time'; exit 1; fi; sleep 1; done && CI=1 npm run e2e -- --reporter=line"
+	$(DOCKER_COMPOSE) --profile $(COMPOSE_APP_PROFILE) --profile $(COMPOSE_E2E_PROFILE) run --rm --no-deps --user root playwright sh -lc "mkdir -p /work/node_modules /work/test-results /work/playwright-report && chown -R $(HOST_UID):$(HOST_GID) /work/node_modules /work/test-results /work/playwright-report" && $(DOCKER_COMPOSE) --profile $(COMPOSE_APP_PROFILE) --profile $(COMPOSE_E2E_PROFILE) run --rm --no-deps --user root playwright sh -lc "npm ci --cache /tmp/npm-cache && attempt=0; until node -e \"fetch('http://frontend-e2e:3000').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\"; do attempt=$$((attempt + 1)); if [ $$attempt -ge $(E2E_READY_MAX_RETRIES) ]; then echo 'frontend-e2e did not become ready in time'; exit 1; fi; sleep 1; done && CI=1 npm run e2e -- --reporter=line"
 
 .PHONY: e2e-local
 e2e-local:

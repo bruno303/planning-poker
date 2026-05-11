@@ -8,6 +8,7 @@ import (
 	"planning-poker/internal/config"
 	"planning-poker/internal/domain"
 	"planning-poker/internal/infra/boundaries/http"
+	"planning-poker/internal/infra/boundaries/http/middleware"
 	"planning-poker/internal/infra/boundaries/hub/redis"
 	"planning-poker/internal/infra/bus"
 	"planning-poker/internal/infra/decorators/usecasedecorators"
@@ -91,13 +92,21 @@ func newAPIContainer(cfg *config.Config, infra *InfraContainer, app *Application
 		http.NewRedisHealthChecker(infra.RedisClient, "redis"),
 	}
 
+	adminAuthMiddleware := middleware.NewAdminMiddleware(cfg.API.Admin.APIKey)
+	adminRemoveClientUseCase := usecasedecorators.NewTraceableUseCase(
+		usecase.NewAdminRemoveClientUseCase(app.Usecases.LeaveRoom, infra.Hub),
+		"AdminRemoveClientUseCase",
+		"AdminRemoveClient",
+	)
+
 	return &APIContainer{
 		APIs: []http.API{
 			http.NewWebsocketAPI(app.Usecases, infra.WebsocketBusFactory),
 			http.NewGetRoomAPI(infra.Hub),
 			http.NewCreateRoomAPI(app.Usecases.CreateRoom),
 			http.NewHealthcheckAPI(healthCheckers...),
-			http.NewGetAllRoomsStateAPI(infra.AdminHub, cfg.API.Admin.APIKey),
+			http.NewGetAllRoomsStateAPI(infra.AdminHub, adminAuthMiddleware),
+			http.NewDisconnectClientAPI(adminRemoveClientUseCase, adminAuthMiddleware),
 		},
 	}
 }

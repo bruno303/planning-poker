@@ -23,6 +23,10 @@ const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}
 
 const isValidRoomId = (value: string): boolean => uuidPattern.test(value);
 
+const RECONNECT_INITIAL_DELAY = 1000;
+const RECONNECT_MAX_DELAY = 30000;
+const RECONNECT_MULTIPLIER = 2;
+
 type Card = string | null
 
 type Participant = {
@@ -52,6 +56,10 @@ export default function PlanningPoker() {
   const [result, setResult] = useState<number | null>(null);
   const [mostAppearingVotes, setMostAppearingVotes] = useState<number[]>([]);
   const [isEditingStory, setIsEditingStory] = useState(false);
+  const [isConnected, setIsConnected] = useState(true);
+  const deliberateDisconnect = useRef(false);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectAttemptsRef = useRef(0);
 
   // Planning poker cards (Fibonacci sequence + special cards)
   const cards = ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'];
@@ -92,6 +100,7 @@ export default function PlanningPoker() {
     connectWebSocket(roomId, storedUserName);
 
     return () => {
+      cancelReconnect();
       if (connectedRoomIdRef.current === roomId) {
         cleanupSocket();
       }
@@ -154,13 +163,27 @@ export default function PlanningPoker() {
     sendMessage<any>({ type: 'vote-again', payload });
   }
 
-  const resetConnectionState = () => {
-    connected.current = false;
-    connectedRoomIdRef.current = null;
-    socket.current = null;
+  const cancelReconnect = () => {
+    if (reconnectTimeoutRef.current !== null) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+  };
+
+  const scheduleReconnect = (roomCode: string, storedUserName: string) => {
+    const delay = Math.min(
+      RECONNECT_INITIAL_DELAY * Math.pow(RECONNECT_MULTIPLIER, reconnectAttemptsRef.current),
+      RECONNECT_MAX_DELAY
+    );
+    reconnectAttemptsRef.current++;
+    reconnectTimeoutRef.current = setTimeout(() => {
+      connectWebSocket(roomCode, storedUserName);
+    }, delay);
   };
 
   const cleanupSocket = () => {
+    deliberateDisconnect.current = true;
+    cancelReconnect();
     const activeSocket = socket.current;
     if (activeSocket) {
       activeSocket.onopen = null;
@@ -169,12 +192,18 @@ export default function PlanningPoker() {
       activeSocket.onerror = null;
       activeSocket.close();
     }
-    resetConnectionState();
+    connected.current = false;
+    connectedRoomIdRef.current = null;
+    socket.current = null;
   };
 
   const connectWebSocket = (roomCode: string, userName: string) => {
+    deliberateDisconnect.current = false;
     const ws = new WebSocket(`${process.env.NEXT_PUBLIC_WEBSOCKET_URL}/planning/${roomCode}/ws`);
     socket.current = ws;
+    if (process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_EXPOSE_WS_GLOBAL === 'true') {
+      (window as any).__ws = ws;
+    }
     connected.current = true;
     connectedRoomIdRef.current = roomCode;
 
@@ -205,21 +234,27 @@ export default function PlanningPoker() {
     };
 
     ws.onopen = () => {
+      setIsConnected(true);
+      reconnectAttemptsRef.current = 0;
       pushSuccess('Connected');
     };
 
     ws.onclose = () => {
-      pushError('Disconnected');
+      setIsConnected(false);
       if (socket.current === ws) {
-        resetConnectionState();
+        socket.current = null;
+        connected.current = false;
+        connectedRoomIdRef.current = null
+      }
+      if (!deliberateDisconnect.current) {
+        scheduleReconnect(roomCode, userName);
       }
     };
 
     ws.onerror = () => {
-      pushError('Error occurred while connecting to websocket');
+      pushError('Connection error');
       if (socket.current === ws) {
         connected.current = false;
-        connectedRoomIdRef.current = null;
       }
     };
   };
@@ -256,6 +291,11 @@ export default function PlanningPoker() {
       handleBackToHome={handleBackToHome}
       generateShareableLink={() => `${window.location.origin}/room/${roomId}`}
     >
+      {!isConnected && (
+        <div style={styles.disconnectedBanner} className={gridStyles.disconnectedBanner}>
+          Connection lost. Reconnecting...
+        </div>
+      )}
       <div style={styles.container}>
         <div style={styles.maxWidth}>
           {/* Header */}

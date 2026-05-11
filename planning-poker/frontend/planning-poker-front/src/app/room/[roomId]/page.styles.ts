@@ -317,4 +317,14 @@ export const styles = {
     fontSize: '0.875rem',
     transition: 'background-color 0.2s'
   },
+  disconnectedBanner: {
+    backgroundColor: '#fef2f2',
+    border: '1px solid #fca5a5',
+    color: '#b91c1c',
+    padding: '0.75rem 1rem',
+    textAlign: 'center' as const,
+    fontWeight: '500',
+    borderRadius: '0.5rem',
+    margin: '0.5rem',
+  },
 };

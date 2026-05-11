@@ -7,6 +7,7 @@ import (
 )
 
 var ErrRoomNotFound = errors.New("room not found")
+var ErrClientNotFound = errors.New("client not found")
 
 type (
 	Hub interface {

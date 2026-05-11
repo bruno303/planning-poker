@@ -7,6 +7,7 @@ import (
 	"planning-poker/internal/domain"
 	"planning-poker/internal/domain/entity"
 	"planning-poker/internal/infra/boundaries/hub/clientcollection"
+	"planning-poker/internal/infra/boundaries/http/middleware"
 	"testing"
 
 	"go.uber.org/mock/gomock"
@@ -17,7 +18,7 @@ func TestGetAllRoomsStateAPI_Endpoint(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockHub := domain.NewMockAdminHub(ctrl)
-	api := NewGetAllRoomsStateAPI(mockHub, "test-api-key")
+	api := NewGetAllRoomsStateAPI(mockHub, middleware.NewAdminMiddleware("test-api-key"))
 
 	if api.Endpoint() != "/admin/rooms" {
 		t.Errorf("Endpoint() = %v, want %v", api.Endpoint(), "/admin/rooms")
@@ -29,7 +30,7 @@ func TestGetAllRoomsStateAPI_Methods(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockHub := domain.NewMockAdminHub(ctrl)
-	api := NewGetAllRoomsStateAPI(mockHub, "test-api-key")
+	api := NewGetAllRoomsStateAPI(mockHub, middleware.NewAdminMiddleware("test-api-key"))
 	methods := api.Methods()
 
 	if len(methods) != 1 {
@@ -46,7 +47,7 @@ func TestGetAllRoomsStateAPI_Handle_Success(t *testing.T) {
 
 	mockHub := domain.NewMockAdminHub(ctrl)
 	apiKey := "valid-api-key"
-	api := NewGetAllRoomsStateAPI(mockHub, apiKey)
+	api := NewGetAllRoomsStateAPI(mockHub, middleware.NewAdminMiddleware(apiKey))
 
 	client1 := &entity.Client{
 		ID:          "client1",
@@ -110,7 +111,7 @@ func TestGetAllRoomsStateAPI_Handle_Unauthorized(t *testing.T) {
 
 	mockHub := domain.NewMockAdminHub(ctrl)
 	apiKey := "valid-api-key"
-	api := NewGetAllRoomsStateAPI(mockHub, apiKey)
+	api := NewGetAllRoomsStateAPI(mockHub, middleware.NewAdminMiddleware(apiKey))
 
 	handler := api.Handle()
 	req := httptest.NewRequest(http.MethodGet, "/admin/rooms", nil)
@@ -130,7 +131,7 @@ func TestGetAllRoomsStateAPI_Handle_EmptyRooms(t *testing.T) {
 
 	mockHub := domain.NewMockAdminHub(ctrl)
 	apiKey := "valid-api-key"
-	api := NewGetAllRoomsStateAPI(mockHub, apiKey)
+	api := NewGetAllRoomsStateAPI(mockHub, middleware.NewAdminMiddleware(apiKey))
 
 	mockHub.EXPECT().
 		GetRooms().
@@ -163,7 +164,7 @@ func TestGetAllRoomsStateAPI_Handle_MissingAuthHeader(t *testing.T) {
 
 	mockHub := domain.NewMockAdminHub(ctrl)
 	apiKey := "valid-api-key"
-	api := NewGetAllRoomsStateAPI(mockHub, apiKey)
+	api := NewGetAllRoomsStateAPI(mockHub, middleware.NewAdminMiddleware(apiKey))
 
 	handler := api.Handle()
 	req := httptest.NewRequest(http.MethodGet, "/admin/rooms", nil)

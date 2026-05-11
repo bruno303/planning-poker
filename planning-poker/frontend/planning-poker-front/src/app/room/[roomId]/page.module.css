@@ -16,3 +16,18 @@
     grid-template-columns: 3fr 1fr;
   }
 }
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.disconnectedBanner {
+  animation: slideDown 0.3s ease-out;
+}

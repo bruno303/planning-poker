@@ -8,6 +8,7 @@ services:
       - planning-poker
     profiles:
       - app
+      - local
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -37,6 +38,7 @@ services:
       args:
         - NEXT_PUBLIC_BACKEND_URL=http://backend:8080
         - NEXT_PUBLIC_WEBSOCKET_URL=ws://backend:8080
+        - NEXT_PUBLIC_EXPOSE_WS_GLOBAL=true
     container_name: planning-poker-frontend-e2e
     profiles:
       - e2e

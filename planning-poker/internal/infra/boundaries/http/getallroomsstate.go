@@ -29,10 +29,10 @@ type (
 
 var _ API = (*GetAllRoomsStateAPI)(nil)
 
-func NewGetAllRoomsStateAPI(hub domain.AdminHub, apiKey string) GetAllRoomsStateAPI {
+func NewGetAllRoomsStateAPI(hub domain.AdminHub, adminAuthMiddleware middleware.AdminMiddleware) GetAllRoomsStateAPI {
 	return GetAllRoomsStateAPI{
 		hub:                 hub,
-		adminAuthMiddleware: middleware.NewAdminMiddleware(apiKey),
+		adminAuthMiddleware: adminAuthMiddleware,
 		logger:              log.NewLogger("getallroomsstateapi"),
 	}
 }
