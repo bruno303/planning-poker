@@ -98,6 +98,11 @@ func newAPIContainer(cfg *config.Config, infra *InfraContainer, app *Application
 		"AdminRemoveClientUseCase",
 		"AdminRemoveClient",
 	)
+	adminKickClientUseCase := usecasedecorators.NewTraceableUseCase(
+		usecase.NewAdminKickClientUseCase(app.Usecases.LeaveRoom, infra.Hub),
+		"AdminKickClientUseCase",
+		"AdminKickClient",
+	)
 
 	return &APIContainer{
 		APIs: []http.API{
@@ -107,6 +112,7 @@ func newAPIContainer(cfg *config.Config, infra *InfraContainer, app *Application
 			http.NewHealthcheckAPI(healthCheckers...),
 			http.NewGetAllRoomsStateAPI(infra.AdminHub, adminAuthMiddleware),
 			http.NewDisconnectClientAPI(adminRemoveClientUseCase, adminAuthMiddleware),
+			http.NewKickClientAPI(adminKickClientUseCase, adminAuthMiddleware),
 		},
 	}
 }

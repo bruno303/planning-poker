@@ -30,6 +30,10 @@ type (
 		Type     string `json:"type"`
 		ClientID string `json:"clientId"`
 	}
+
+	KickNotification struct {
+		Type string `json:"type"`
+	}
 )
 
 func NewRoomStateCommand(room *entity.Room) RoomState {
@@ -47,6 +51,12 @@ func NewUpdateClientIDCommand(clientID string) UpdateClientID {
 	return UpdateClientID{
 		Type:     "update-client-id",
 		ClientID: clientID,
+	}
+}
+
+func NewKickNotification() KickNotification {
+	return KickNotification{
+		Type: "kicked",
 	}
 }
 
