@@ -8,7 +8,8 @@ export type WebSocketMessageType =
   | 'toggle-owner'
   | 'vote-again'
   | 'update-name'
-  | 'update-story';
+  | 'update-story'
+  | 'kicked';
 
 export interface WebSocketMessage<T = any> {
   type: WebSocketMessageType;

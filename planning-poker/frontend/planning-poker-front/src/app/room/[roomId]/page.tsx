@@ -224,6 +224,12 @@ export default function PlanningPoker() {
           const payload: UpdateNamePayload = { username: userName };
           sendMessage<UpdateNamePayload>({ type: 'update-name', payload });
 
+        } else if (data.type === 'kicked') {
+          deliberateDisconnect.current = true;
+          cancelReconnect();
+          pushError('You have been kicked from the room');
+          router.push('/');
+
         } else {
           throw new Error('Invalid message from websocket');
         }
