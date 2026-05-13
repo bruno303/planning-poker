@@ -21,6 +21,17 @@ type (
 
 var _ API = (*KickClientAPI)(nil)
 
+// @Summary Kick a client
+// @Description Kicks a client from a room (admin only)
+// @Tags admin
+// @Produce json
+// @Param roomID path string true "Room ID"
+// @Param clientID path string true "Client ID"
+// @Success 200 {object} map[string]string
+// @Failure 401 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /admin/rooms/{roomID}/client/{clientID}/kick [post]
 func NewKickClientAPI(
 	adminKickClient usecase.UseCase[usecase.AdminKickClientCommand],
 	adminAuthMiddleware middleware.AdminMiddleware,

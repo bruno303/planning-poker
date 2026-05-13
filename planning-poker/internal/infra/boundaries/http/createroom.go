@@ -23,6 +23,15 @@ type (
 
 var _ API = (*CreateRoomAPI)(nil)
 
+// @Summary Create a new room
+// @Description Creates a new planning poker room
+// @Tags rooms
+// @Accept json
+// @Produce json
+// @Param body body CreateRoomRequest true "Create room request"
+// @Success 201 {object} CreateRoomResponse
+// @Failure 400 {object} ErrorResponse
+// @Router /planning/room [post]
 func NewCreateRoomAPI(usecase usecase.CreateRoomUseCase) CreateRoomAPI {
 	return CreateRoomAPI{
 		usecase: usecase,

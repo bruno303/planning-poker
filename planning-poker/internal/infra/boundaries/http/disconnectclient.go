@@ -21,6 +21,17 @@ type (
 
 var _ API = (*DisconnectClientAPI)(nil)
 
+// @Summary Disconnect a client
+// @Description Disconnects a client from a room (admin only)
+// @Tags admin
+// @Produce json
+// @Param roomID path string true "Room ID"
+// @Param clientID path string true "Client ID"
+// @Success 200 {object} map[string]string
+// @Failure 401 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /admin/rooms/{roomID}/client/{clientID} [delete]
 func NewDisconnectClientAPI(
 	adminRemoveClient usecase.UseCase[usecase.AdminRemoveClientCommand],
 	adminAuthMiddleware middleware.AdminMiddleware,

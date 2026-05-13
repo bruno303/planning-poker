@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"planning-poker/internal/domain"
 	"planning-poker/internal/domain/entity"
-	"planning-poker/internal/infra/boundaries/hub/clientcollection"
 	"planning-poker/internal/infra/boundaries/http/middleware"
+	"planning-poker/internal/infra/boundaries/hub/clientcollection"
 	"testing"
 
 	"go.uber.org/mock/gomock"

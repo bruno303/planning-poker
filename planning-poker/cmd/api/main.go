@@ -16,6 +16,15 @@ import (
 
 var cfg *config.Config
 
+// @title Planning Poker API
+// @version 1.0.0
+// @description API for the Planning Poker application. This API allows creating rooms, managing clients, voting, and administration.
+// @host localhost:8080
+// @BasePath /
+// @securityDefinitions.apikey ApiKeyAuth
+// @in header
+// @name Authorization
+// @description Bearer token format. Use: Bearer <api_key>
 func main() {
 	ctx := context.Background()
 

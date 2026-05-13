@@ -27,6 +27,12 @@ type (
 
 var _ API = (*WebsocketAPI)(nil)
 
+// @Summary WebSocket connection
+// @Description Upgrades the HTTP connection to a WebSocket for real-time communication
+// @Tags rooms
+// @Param roomID path string true "Room ID"
+// @Success 101 {string} string "WebSocket upgrade successful"
+// @Router /planning/{roomID}/ws [get]
 func NewWebsocketAPI(usecases usecase.UseCasesFacade, websocketBusFactory *bus.WebSocketBusFactory) *WebsocketAPI {
 	return &WebsocketAPI{
 		upgrader: websocket.Upgrader{

@@ -39,6 +39,13 @@ const (
 
 var _ API = (*HealthcheckAPI)(nil)
 
+// @Summary Health check
+// @Description Returns the health status of the API and its dependencies
+// @Tags system
+// @Produce json
+// @Success 200 {object} HealthcheckResponse
+// @Failure 503 {object} ErrorResponse
+// @Router /health [get]
 func NewHealthcheckAPI(checkers ...HealthChecker) HealthcheckAPI {
 	return HealthcheckAPI{
 		checkers: checkers,

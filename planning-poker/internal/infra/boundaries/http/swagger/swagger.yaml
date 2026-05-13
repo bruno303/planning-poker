@@ -1,0 +1,258 @@
+basePath: /
+definitions:
+  http.CreateRoomRequest:
+    properties:
+      createdBy:
+        type: string
+    type: object
+  http.CreateRoomResponse:
+    properties:
+      roomId:
+        type: string
+    type: object
+  http.ErrorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  http.GetAllRoomsStateClient:
+    properties:
+      id:
+        type: string
+      is_owner:
+        type: boolean
+      is_spectator:
+        type: boolean
+      name:
+        type: string
+    type: object
+  http.GetAllRoomsStateResponse:
+    properties:
+      clients:
+        items:
+          $ref: '#/definitions/http.GetAllRoomsStateClient'
+        type: array
+      id:
+        type: string
+    type: object
+  http.GetRoomResponse:
+    properties:
+      roomId:
+        type: string
+    type: object
+  http.HealthStatus:
+    properties:
+      details:
+        additionalProperties: {}
+        type: object
+      message:
+        type: string
+      status:
+        type: string
+    type: object
+  http.HealthcheckResponse:
+    properties:
+      checks:
+        additionalProperties:
+          $ref: '#/definitions/http.HealthStatus'
+        type: object
+      status:
+        type: string
+      summary:
+        additionalProperties:
+          type: integer
+        type: object
+      timestamp:
+        type: integer
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: API for the Planning Poker application. This API allows creating rooms,
+    managing clients, voting, and administration.
+  title: Planning Poker API
+  version: 1.0.0
+paths:
+  /admin/rooms:
+    get:
+      description: Returns the state of all rooms (admin only)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/http.GetAllRoomsStateResponse'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get all rooms state
+      tags:
+      - admin
+  /admin/rooms/{roomID}/client/{clientID}:
+    delete:
+      description: Disconnects a client from a room (admin only)
+      parameters:
+      - description: Room ID
+        in: path
+        name: roomID
+        required: true
+        type: string
+      - description: Client ID
+        in: path
+        name: clientID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Disconnect a client
+      tags:
+      - admin
+  /admin/rooms/{roomID}/client/{clientID}/kick:
+    post:
+      description: Kicks a client from a room (admin only)
+      parameters:
+      - description: Room ID
+        in: path
+        name: roomID
+        required: true
+        type: string
+      - description: Client ID
+        in: path
+        name: clientID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Kick a client
+      tags:
+      - admin
+  /health:
+    get:
+      description: Returns the health status of the API and its dependencies
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.HealthcheckResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Health check
+      tags:
+      - system
+  /planning/{roomID}/ws:
+    get:
+      description: Upgrades the HTTP connection to a WebSocket for real-time communication
+      parameters:
+      - description: Room ID
+        in: path
+        name: roomID
+        required: true
+        type: string
+      responses:
+        "101":
+          description: WebSocket upgrade successful
+          schema:
+            type: string
+      summary: WebSocket connection
+      tags:
+      - rooms
+  /planning/room:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new planning poker room
+      parameters:
+      - description: Create room request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/http.CreateRoomRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/http.CreateRoomResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Create a new room
+      tags:
+      - rooms
+  /planning/room/{roomID}:
+    get:
+      description: Returns information about a specific room
+      parameters:
+      - description: Room ID
+        in: path
+        name: roomID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.GetRoomResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Get room information
+      tags:
+      - rooms
+securityDefinitions:
+  ApiKeyAuth:
+    description: 'Bearer token format. Use: Bearer <api_key>'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

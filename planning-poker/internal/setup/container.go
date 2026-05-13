@@ -104,16 +104,21 @@ func newAPIContainer(cfg *config.Config, infra *InfraContainer, app *Application
 		"AdminKickClient",
 	)
 
+	apis := []http.API{
+		http.NewWebsocketAPI(app.Usecases, infra.WebsocketBusFactory),
+		http.NewGetRoomAPI(infra.Hub),
+		http.NewCreateRoomAPI(app.Usecases.CreateRoom),
+		http.NewHealthcheckAPI(healthCheckers...),
+		http.NewGetAllRoomsStateAPI(infra.AdminHub, adminAuthMiddleware),
+		http.NewDisconnectClientAPI(adminRemoveClientUseCase, adminAuthMiddleware),
+		http.NewKickClientAPI(adminKickClientUseCase, adminAuthMiddleware),
+	}
+	if cfg.Environment != "production" {
+		apis = append(apis, http.NewSwaggerAPI())
+	}
+
 	return &APIContainer{
-		APIs: []http.API{
-			http.NewWebsocketAPI(app.Usecases, infra.WebsocketBusFactory),
-			http.NewGetRoomAPI(infra.Hub),
-			http.NewCreateRoomAPI(app.Usecases.CreateRoom),
-			http.NewHealthcheckAPI(healthCheckers...),
-			http.NewGetAllRoomsStateAPI(infra.AdminHub, adminAuthMiddleware),
-			http.NewDisconnectClientAPI(adminRemoveClientUseCase, adminAuthMiddleware),
-			http.NewKickClientAPI(adminKickClientUseCase, adminAuthMiddleware),
-		},
+		APIs: apis,
 	}
 }
 

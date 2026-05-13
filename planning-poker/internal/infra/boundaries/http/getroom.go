@@ -21,6 +21,14 @@ type (
 
 var _ API = (*GetRoomAPI)(nil)
 
+// @Summary Get room information
+// @Description Returns information about a specific room
+// @Tags rooms
+// @Produce json
+// @Param roomID path string true "Room ID"
+// @Success 200 {object} GetRoomResponse
+// @Failure 404 {object} ErrorResponse
+// @Router /planning/room/{roomID} [get]
 func NewGetRoomAPI(hub domain.Hub) GetRoomAPI {
 	return GetRoomAPI{
 		hub:    hub,

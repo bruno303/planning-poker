@@ -11,14 +11,14 @@ import (
 
 type (
 	GetAllRoomsStateResponse struct {
-		ID      string
-		Clients []GetAllRoomsStateClient
+		ID      string                   `json:"id"`
+		Clients []GetAllRoomsStateClient `json:"clients"`
 	}
 	GetAllRoomsStateClient struct {
-		ID          string
-		Name        string
-		IsSpectator bool
-		IsOwner     bool
+		ID          string `json:"id"`
+		Name        string `json:"name"`
+		IsSpectator bool   `json:"is_spectator"`
+		IsOwner     bool   `json:"is_owner"`
 	}
 	GetAllRoomsStateAPI struct {
 		hub                 domain.AdminHub
@@ -29,6 +29,14 @@ type (
 
 var _ API = (*GetAllRoomsStateAPI)(nil)
 
+// @Summary Get all rooms state
+// @Description Returns the state of all rooms (admin only)
+// @Tags admin
+// @Produce json
+// @Success 200 {array} GetAllRoomsStateResponse
+// @Failure 401 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /admin/rooms [get]
 func NewGetAllRoomsStateAPI(hub domain.AdminHub, adminAuthMiddleware middleware.AdminMiddleware) GetAllRoomsStateAPI {
 	return GetAllRoomsStateAPI{
 		hub:                 hub,
