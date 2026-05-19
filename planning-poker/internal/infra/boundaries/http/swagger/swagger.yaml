@@ -16,18 +16,18 @@ definitions:
       name:
         type: string
     type: object
-  http.GetAllRoomsStateResponse:
+  http.GetRoomResponse:
+    properties:
+      roomId:
+        type: string
+    type: object
+  http.GetRoomStateResponse:
     properties:
       clients:
         items:
           $ref: '#/definitions/http.GetAllRoomsStateClient'
         type: array
       id:
-        type: string
-    type: object
-  http.GetRoomResponse:
-    properties:
-      roomId:
         type: string
     type: object
   http.HealthStatus:
@@ -73,7 +73,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/http.GetAllRoomsStateResponse'
+              $ref: '#/definitions/http.GetRoomStateResponse'
             type: array
         "401":
           description: Unauthorized
@@ -82,6 +82,43 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Get all rooms state
+      tags:
+      - admin
+  /admin/rooms/{roomID}:
+    get:
+      description: Returns the state of a specific room (admin only)
+      parameters:
+      - description: Room ID
+        in: path
+        name: roomID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.GetRoomStateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get room state
       tags:
       - admin
   /admin/rooms/{roomID}/client/{clientID}:

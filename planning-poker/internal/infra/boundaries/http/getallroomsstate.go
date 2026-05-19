@@ -10,7 +10,7 @@ import (
 )
 
 type (
-	GetAllRoomsStateResponse struct {
+	GetRoomStateResponse struct {
 		ID      string                   `json:"id"`
 		Clients []GetAllRoomsStateClient `json:"clients"`
 	}
@@ -33,7 +33,7 @@ var _ API = (*GetAllRoomsStateAPI)(nil)
 // @Description Returns the state of all rooms (admin only)
 // @Tags admin
 // @Produce json
-// @Success 200 {array} GetAllRoomsStateResponse
+// @Success 200 {array} GetRoomStateResponse
 // @Failure 401 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /admin/rooms [get]
@@ -66,10 +66,10 @@ func (api GetAllRoomsStateAPI) execute() http.Handler {
 	})
 }
 
-func mapRooms(rooms []*entity.Room) []GetAllRoomsStateResponse {
-	res := make([]GetAllRoomsStateResponse, len(rooms))
+func mapRooms(rooms []*entity.Room) []GetRoomStateResponse {
+	res := make([]GetRoomStateResponse, len(rooms))
 	for i, room := range rooms {
-		r := GetAllRoomsStateResponse{
+		r := GetRoomStateResponse{
 			ID:      room.ID,
 			Clients: mapClients(room.Clients),
 		}

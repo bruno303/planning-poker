@@ -30,12 +30,70 @@
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/http.GetAllRoomsStateResponse"
+                                "$ref": "#/definitions/http.GetRoomStateResponse"
                             }
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/rooms/{roomID}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the state of a specific room (admin only)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Get room state",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Room ID",
+                        "name": "roomID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/http.GetRoomStateResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/http.ErrorResponse"
                         }
@@ -269,7 +327,15 @@
                 }
             }
         },
-        "http.GetAllRoomsStateResponse": {
+        "http.GetRoomResponse": {
+            "type": "object",
+            "properties": {
+                "roomId": {
+                    "type": "string"
+                }
+            }
+        },
+        "http.GetRoomStateResponse": {
             "type": "object",
             "properties": {
                 "clients": {
@@ -279,14 +345,6 @@
                     }
                 },
                 "id": {
-                    "type": "string"
-                }
-            }
-        },
-        "http.GetRoomResponse": {
-            "type": "object",
-            "properties": {
-                "roomId": {
                     "type": "string"
                 }
             }

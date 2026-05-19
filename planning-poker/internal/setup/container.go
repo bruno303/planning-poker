@@ -109,6 +109,7 @@ func newAPIContainer(cfg *config.Config, infra *InfraContainer, app *Application
 		http.NewGetRoomAPI(infra.Hub),
 		http.NewHealthcheckAPI(healthCheckers...),
 		http.NewGetAllRoomsStateAPI(infra.AdminHub, adminAuthMiddleware),
+		http.NewGetRoomStateAPI(infra.Hub, adminAuthMiddleware),
 		http.NewDisconnectClientAPI(adminRemoveClientUseCase, adminAuthMiddleware),
 		http.NewKickClientAPI(adminKickClientUseCase, adminAuthMiddleware),
 	}

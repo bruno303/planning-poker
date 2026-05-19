@@ -88,7 +88,7 @@ func TestGetAllRoomsStateAPI_Handle_Success(t *testing.T) {
 		t.Errorf("status code = %v, want %v", rec.Code, http.StatusOK)
 	}
 
-	var response []GetAllRoomsStateResponse
+	var response []GetRoomStateResponse
 	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -148,7 +148,7 @@ func TestGetAllRoomsStateAPI_Handle_EmptyRooms(t *testing.T) {
 		t.Errorf("status code = %v, want %v", rec.Code, http.StatusOK)
 	}
 
-	var response []GetAllRoomsStateResponse
+	var response []GetRoomStateResponse
 	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
