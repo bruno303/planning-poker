@@ -107,7 +107,6 @@ func newAPIContainer(cfg *config.Config, infra *InfraContainer, app *Application
 	apis := []http.API{
 		http.NewWebsocketAPI(app.Usecases, infra.WebsocketBusFactory),
 		http.NewGetRoomAPI(infra.Hub),
-		http.NewCreateRoomAPI(app.Usecases.CreateRoom),
 		http.NewHealthcheckAPI(healthCheckers...),
 		http.NewGetAllRoomsStateAPI(infra.AdminHub, adminAuthMiddleware),
 		http.NewDisconnectClientAPI(adminRemoveClientUseCase, adminAuthMiddleware),
@@ -134,7 +133,6 @@ func newUsecases(hub domain.Hub, lockManager lock.LockManager, metric metric.Pla
 	voteAgainUseCase := usecase.NewVoteAgainUseCase(hub, lockManager)
 	leaveRoomUseCase := usecase.NewLeaveRoomUseCase(hub, lockManager, metric)
 	joinRoomUseCase := usecase.NewJoinRoomUseCase(hub, lockManager, metric)
-	createRoomUseCase := usecase.NewCreateRoomUseCase(hub, metric)
 	createClientUseCase := usecase.NewCreateClientUseCase(hub, metric)
 
 	return usecase.UseCasesFacade{
@@ -149,7 +147,6 @@ func newUsecases(hub domain.Hub, lockManager lock.LockManager, metric metric.Pla
 		VoteAgain:       usecasedecorators.NewTraceableUseCase(voteAgainUseCase, "VoteAgainUseCase", "VoteAgain"),
 		LeaveRoom:       usecasedecorators.NewTraceableUseCase(leaveRoomUseCase, "LeaveRoomUseCase", "LeaveRoom"),
 		JoinRoom:        usecasedecorators.NewTraceableUseCaseR(joinRoomUseCase, "JoinRoomUseCase", "JoinRoom"),
-		CreateRoom:      usecasedecorators.NewTraceableUseCaseR(createRoomUseCase, "CreateRoomUseCase", "CreateRoom"),
 		CreateClient:    usecasedecorators.NewTraceableUseCaseO(createClientUseCase, "CreateClientUseCase", "CreateClient"),
 	}
 }

@@ -1,10 +1,7 @@
 package http_test
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"planning-poker/internal/infra/bus"
 	"planning-poker/test/integration"
 	"strings"
@@ -719,34 +716,15 @@ func readMessages(t *testing.T, conns ...*websocket.Conn) []map[string]any {
 func createRoom(t *testing.T, ts *integration.TestServer) string {
 	t.Helper()
 
-	requestBody := map[string]string{}
-	jsonBody, err := json.Marshal(requestBody)
-	if err != nil {
-		t.Fatalf("failed to marshal request: %v", err)
-	}
+	roomID := fmt.Sprintf("test-room-%d", time.Now().UnixNano())
+	conn := connectWebSocket(t, ts, roomID)
 
-	resp, err := http.Post(
-		ts.Server.URL+"/planning/room",
-		"application/json",
-		bytes.NewBuffer(jsonBody),
-	)
-	if err != nil {
-		t.Fatalf("request failed: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
+	// Consume initial messages (update-client-id, room-state)
+	_ = getClientID(t, conn)
+	conn.Close()
+	time.Sleep(100 * time.Millisecond)
 
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("expected status 201, got %d", resp.StatusCode)
-	}
-
-	var response struct {
-		RoomID string `json:"roomId"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	return response.RoomID
+	return roomID
 }
 
 func connectWebSocket(t *testing.T, ts *integration.TestServer, roomID string) *websocket.Conn {

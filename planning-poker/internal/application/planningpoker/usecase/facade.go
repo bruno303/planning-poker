@@ -13,7 +13,6 @@ type (
 		VoteAgain       UseCase[VoteAgainCommand]
 		LeaveRoom       UseCase[LeaveRoomCommand]
 		JoinRoom        UseCaseR[JoinRoomCommand, *JoinRoomOutput]
-		CreateRoom      UseCaseR[CreateRoomCommand, CreateRoomOutput]
 		CreateClient    UseCaseO[CreateClientOutput]
 	}
 )

@@ -80,8 +80,8 @@ Important: the real Makefile target is `make tests`, not `make test`.
 
 ### Single test commands
 
-- Single Go unit test: `go test ./internal/... -run TestCreateRoomUseCase_Execute_Success`
-- Single Go integration test: `go test ./test/integration/... -run TestHealthcheck`
+- Single Go unit test: `go test ./internal/... -run <test-name>`
+- Single Go integration test: `go test ./test/integration/... -run <test-name>`
 - Verbose integration run: `go test -v ./test/integration/...`
 
 ### Infra

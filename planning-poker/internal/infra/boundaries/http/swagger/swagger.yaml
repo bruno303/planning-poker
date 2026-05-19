@@ -1,15 +1,5 @@
 basePath: /
 definitions:
-  http.CreateRoomRequest:
-    properties:
-      createdBy:
-        type: string
-    type: object
-  http.CreateRoomResponse:
-    properties:
-      roomId:
-        type: string
-    type: object
   http.ErrorResponse:
     properties:
       error:
@@ -198,32 +188,6 @@ paths:
           schema:
             type: string
       summary: WebSocket connection
-      tags:
-      - rooms
-  /planning/room:
-    post:
-      consumes:
-      - application/json
-      description: Creates a new planning poker room
-      parameters:
-      - description: Create room request
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/http.CreateRoomRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/http.CreateRoomResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/http.ErrorResponse'
-      summary: Create a new room
       tags:
       - rooms
   /planning/room/{roomID}:

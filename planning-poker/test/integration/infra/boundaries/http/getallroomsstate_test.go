@@ -1,11 +1,12 @@
 package http_test
 
 import (
-	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"planning-poker/test/integration"
 	"testing"
+	"time"
 )
 
 func TestGetAllRoomsState(t *testing.T) {
@@ -72,45 +73,18 @@ func TestGetAllRoomsState(t *testing.T) {
 	})
 
 	t.Run("GET /admin/rooms returns list of rooms after creating them", func(t *testing.T) {
-		// Create first room
-		room1Body := map[string]string{"createdBy": "user1"}
-		jsonBody1, _ := json.Marshal(room1Body)
-		resp1, err := http.Post(
-			ts.Server.URL+"/planning/room",
-			"application/json",
-			bytes.NewBuffer(jsonBody1),
-		)
-		if err != nil {
-			t.Fatalf("failed to create room 1: %v", err)
-		}
-		defer func() { _ = resp1.Body.Close() }()
-
-		var createResp1 struct {
-			RoomID string `json:"roomId"`
-		}
-		if err := json.NewDecoder(resp1.Body).Decode(&createResp1); err != nil {
-			t.Fatalf("failed to decode room 1 response: %v", err)
-		}
+		// Create first room via WebSocket and keep connection alive so the
+		// room isn't cleaned up by the hub.
+		roomID1 := fmt.Sprintf("test-room-%d", time.Now().UnixNano())
+		conn1 := connectWebSocket(t, ts, roomID1)
+		defer closeAndWait(conn1)
+		_ = getClientID(t, conn1)
 
 		// Create second room
-		room2Body := map[string]string{"createdBy": "user2"}
-		jsonBody2, _ := json.Marshal(room2Body)
-		resp2, err := http.Post(
-			ts.Server.URL+"/planning/room",
-			"application/json",
-			bytes.NewBuffer(jsonBody2),
-		)
-		if err != nil {
-			t.Fatalf("failed to create room 2: %v", err)
-		}
-		defer func() { _ = resp2.Body.Close() }()
-
-		var createResp2 struct {
-			RoomID string `json:"roomId"`
-		}
-		if err := json.NewDecoder(resp2.Body).Decode(&createResp2); err != nil {
-			t.Fatalf("failed to decode room 2 response: %v", err)
-		}
+		roomID2 := fmt.Sprintf("test-room-%d", time.Now().UnixNano())
+		conn2 := connectWebSocket(t, ts, roomID2)
+		defer closeAndWait(conn2)
+		_ = getClientID(t, conn2)
 
 		// Now get all rooms
 		req, err := http.NewRequest("GET", ts.Server.URL+"/admin/rooms", nil)
@@ -150,27 +124,21 @@ func TestGetAllRoomsState(t *testing.T) {
 			roomIDs[room.ID] = true
 		}
 
-		if !roomIDs[createResp1.RoomID] {
-			t.Errorf("room 1 ID %s not found in response", createResp1.RoomID)
+		if !roomIDs[roomID1] {
+			t.Errorf("room 1 ID %s not found in response", roomID1)
 		}
-		if !roomIDs[createResp2.RoomID] {
-			t.Errorf("room 2 ID %s not found in response", createResp2.RoomID)
+		if !roomIDs[roomID2] {
+			t.Errorf("room 2 ID %s not found in response", roomID2)
 		}
 	})
 
 	t.Run("GET /admin/rooms includes client information", func(t *testing.T) {
-		// Create a room
-		roomBody := map[string]string{"createdBy": "admin-user"}
-		jsonBody, _ := json.Marshal(roomBody)
-		respCreate, err := http.Post(
-			ts.Server.URL+"/planning/room",
-			"application/json",
-			bytes.NewBuffer(jsonBody),
-		)
-		if err != nil {
-			t.Fatalf("failed to create room: %v", err)
-		}
-		defer func() { _ = respCreate.Body.Close() }()
+		// Create a room via WebSocket and keep connection alive so the room
+		// persists for the admin query.
+		roomID := fmt.Sprintf("test-room-%d", time.Now().UnixNano())
+		conn := connectWebSocket(t, ts, roomID)
+		defer closeAndWait(conn)
+		_ = getClientID(t, conn)
 
 		// Get all rooms
 		req, err := http.NewRequest("GET", ts.Server.URL+"/admin/rooms", nil)

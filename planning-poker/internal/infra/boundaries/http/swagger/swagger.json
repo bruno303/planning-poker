@@ -181,46 +181,6 @@
                 }
             }
         },
-        "/planning/room": {
-            "post": {
-                "description": "Creates a new planning poker room",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "rooms"
-                ],
-                "summary": "Create a new room",
-                "parameters": [
-                    {
-                        "description": "Create room request",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/http.CreateRoomRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/http.CreateRoomResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/planning/room/{roomID}": {
             "get": {
                 "description": "Returns information about a specific room",
@@ -284,22 +244,6 @@
         }
     },
     "definitions": {
-        "http.CreateRoomRequest": {
-            "type": "object",
-            "properties": {
-                "createdBy": {
-                    "type": "string"
-                }
-            }
-        },
-        "http.CreateRoomResponse": {
-            "type": "object",
-            "properties": {
-                "roomId": {
-                    "type": "string"
-                }
-            }
-        },
         "http.ErrorResponse": {
             "type": "object",
             "properties": {

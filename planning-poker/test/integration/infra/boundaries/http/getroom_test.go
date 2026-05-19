@@ -1,11 +1,12 @@
 package http_test
 
 import (
-	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"planning-poker/test/integration"
 	"testing"
+	"time"
 )
 
 // TestGetRoom tests retrieving room state
@@ -13,34 +14,15 @@ func TestGetRoom(t *testing.T) {
 	ts := integration.NewTestServer(t)
 	defer ts.Close()
 
-	// First create a room
-	requestBody := map[string]string{
-		"createdBy": "test-user",
-	}
-	jsonBody, err := json.Marshal(requestBody)
-	if err != nil {
-		t.Fatalf("failed to marshal request: %v", err)
-	}
-
-	createResp, err := http.Post(
-		ts.Server.URL+"/planning/room",
-		"application/json",
-		bytes.NewBuffer(jsonBody),
-	)
-	if err != nil {
-		t.Fatalf("create room failed: %v", err)
-	}
-	defer func() { _ = createResp.Body.Close() }()
-
-	var createResponse struct {
-		RoomID string `json:"roomId"`
-	}
-	if err := json.NewDecoder(createResp.Body).Decode(&createResponse); err != nil {
-		t.Fatalf("failed to decode create response: %v", err)
-	}
+	// First create a room via WebSocket auto-creation and keep the
+	// connection alive so the room isn't cleaned up by the hub.
+	roomID := fmt.Sprintf("test-room-%d", time.Now().UnixNano())
+	conn := connectWebSocket(t, ts, roomID)
+	defer closeAndWait(conn)
+	_ = getClientID(t, conn)
 
 	t.Run("GET /planning/room/{id} returns room state", func(t *testing.T) {
-		resp, err := http.Get(ts.Server.URL + "/planning/room/" + createResponse.RoomID)
+		resp, err := http.Get(ts.Server.URL + "/planning/room/" + roomID)
 		if err != nil {
 			t.Fatalf("request failed: %v", err)
 		}
@@ -56,8 +38,8 @@ func TestGetRoom(t *testing.T) {
 		}
 
 		// Verify room ID is returned
-		if roomState.RoomID != createResponse.RoomID {
-			t.Errorf("expected roomId %s, got %s", createResponse.RoomID, roomState.RoomID)
+		if roomState.RoomID != roomID {
+			t.Errorf("expected roomId %s, got %s", roomID, roomState.RoomID)
 		}
 	})
 
