@@ -56,7 +56,7 @@ func (s SwaggerAPI) Handle() http.Handler {
 	})
 }
 
-func serveSwaggerUI(w http.ResponseWriter, r *http.Request) {
+func serveSwaggerUI(w http.ResponseWriter, _ *http.Request) {
 	html := `<!DOCTYPE html>
 <html lang="en">
 <head>

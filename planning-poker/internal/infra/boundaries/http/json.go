@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 type ErrorResponse struct {
@@ -30,4 +33,10 @@ func SendJsonError(w http.ResponseWriter, statusCode int, err error) {
 
 func SendJsonErrorMsg(w http.ResponseWriter, statusCode int, msg string) {
 	SendJsonError(w, statusCode, errors.New(msg))
+}
+
+func SendErrorWebsocket(ws *websocket.Conn, msg string) {
+	closeMsg := websocket.FormatCloseMessage(websocket.CloseInternalServerErr, msg)
+	_ = ws.WriteControl(websocket.CloseMessage, closeMsg, time.Now().Add(time.Second))
+	_ = ws.Close()
 }

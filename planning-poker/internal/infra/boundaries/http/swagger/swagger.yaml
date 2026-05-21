@@ -1,5 +1,10 @@
 basePath: /
 definitions:
+  http.CreateRoomResponse:
+    properties:
+      roomId:
+        type: string
+    type: object
   http.ErrorResponse:
     properties:
       error:
@@ -248,6 +253,25 @@ paths:
           schema:
             $ref: '#/definitions/http.ErrorResponse'
       summary: Get room information
+      tags:
+      - rooms
+  /planning/rooms:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new planning poker room and returns its ID
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.CreateRoomResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Create a new room
       tags:
       - rooms
 securityDefinitions:

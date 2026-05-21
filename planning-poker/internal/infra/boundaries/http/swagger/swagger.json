@@ -274,6 +274,35 @@
                 }
             }
         },
+        "/planning/rooms": {
+            "post": {
+                "description": "Creates a new planning poker room and returns its ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "rooms"
+                ],
+                "summary": "Create a new room",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/http.CreateRoomResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/planning/{roomID}/ws": {
             "get": {
                 "description": "Upgrades the HTTP connection to a WebSocket for real-time communication",
@@ -302,6 +331,14 @@
         }
     },
     "definitions": {
+        "http.CreateRoomResponse": {
+            "type": "object",
+            "properties": {
+                "roomId": {
+                    "type": "string"
+                }
+            }
+        },
         "http.ErrorResponse": {
             "type": "object",
             "properties": {

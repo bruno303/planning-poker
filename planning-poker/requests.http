@@ -1,0 +1,12 @@
+@token=my-secret-key
+@url=http://localhost:8080
+@roomID=123
+@clientID=123
+
+### Disconnect
+DELETE {{url}}/admin/rooms/{{roomID}}/client/{{clientID}} HTTP/1.1
+Authorization: Bearer {{token}}
+
+### Get Room Info
+GET {{url}}/admin/rooms/{{roomID}} HTTP/1.1
+Authorization: Bearer {{token}}

@@ -106,6 +106,7 @@ func newAPIContainer(cfg *config.Config, infra *InfraContainer, app *Application
 
 	apis := []http.API{
 		http.NewWebsocketAPI(app.Usecases, infra.WebsocketBusFactory),
+		http.NewCreateRoomAPI(app.Usecases.CreateRoom),
 		http.NewGetRoomAPI(infra.Hub),
 		http.NewHealthcheckAPI(healthCheckers...),
 		http.NewGetAllRoomsStateAPI(infra.AdminHub, adminAuthMiddleware),
@@ -135,6 +136,7 @@ func newUsecases(hub domain.Hub, lockManager lock.LockManager, metric metric.Pla
 	leaveRoomUseCase := usecase.NewLeaveRoomUseCase(hub, lockManager, metric)
 	joinRoomUseCase := usecase.NewJoinRoomUseCase(hub, lockManager, metric)
 	createClientUseCase := usecase.NewCreateClientUseCase(hub, metric)
+	createRoomUseCase := usecase.NewCreateRoomUseCase(hub, metric)
 
 	return usecase.UseCasesFacade{
 		UpdateName:      usecasedecorators.NewTraceableUseCase(updateNameUseCase, "UpdateNameUseCase", "UpdateName"),
@@ -149,6 +151,7 @@ func newUsecases(hub domain.Hub, lockManager lock.LockManager, metric metric.Pla
 		LeaveRoom:       usecasedecorators.NewTraceableUseCase(leaveRoomUseCase, "LeaveRoomUseCase", "LeaveRoom"),
 		JoinRoom:        usecasedecorators.NewTraceableUseCaseR(joinRoomUseCase, "JoinRoomUseCase", "JoinRoom"),
 		CreateClient:    usecasedecorators.NewTraceableUseCaseO(createClientUseCase, "CreateClientUseCase", "CreateClient"),
+		CreateRoom:      usecasedecorators.NewTraceableUseCaseO(createRoomUseCase, "CreateRoomUseCase", "CreateRoom"),
 	}
 }
 

@@ -163,9 +163,9 @@ func TestJoinRoomUseCase_Execute_AutoCreatesMissingRoom(t *testing.T) {
 
 	calls := metricMeter.getCalls()
 	assertMetricCallSequence(t, calls,
-		expectedMetricCall{name: metric.PlanningPokerActiveRoomsMetric, value: 1},
 		expectedMetricCall{name: metric.PlanningPokerUsersTotalMetric, value: 1},
 		expectedMetricCall{name: metric.PlanningPokerActiveUsersMetric, value: 1},
+		expectedMetricCall{name: metric.PlanningPokerActiveRoomsMetric, value: 1},
 	)
 }
 
@@ -743,6 +743,245 @@ func TestJoinRoomUseCase_Execute_BroadcastFailsFromCanceledContext_UsesActiveRol
 	calls := metricMeter.getCalls()
 	if len(calls) != 0 {
 		t.Fatalf("expected no metric changes when broadcast fails after send, got %d calls", len(calls))
+	}
+}
+
+func TestJoinRoomUseCase_Execute_ReconnectClientExists(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	mockHub := domain.NewMockHub(ctrl)
+	mockLockManager := lock.NewMockLockManager(ctrl)
+	testMetric, metricMeter := newTestPlanningPokerMetric(ctrl)
+	mockNewBus := domain.NewMockBus(ctrl)
+	mockOldBus := domain.NewMockBus(ctrl)
+
+	roomID := "room123"
+	clientID := "existing-client"
+	room := &entity.Room{
+		ID:      roomID,
+		Clients: clientcollection.New(),
+	}
+	room.NewClient(clientID)
+
+	mockLockManager.EXPECT().
+		WithLock(gomock.Any(), roomID, gomock.Any()).
+		DoAndReturn(func(ctx context.Context, key string, fn func(context.Context) (any, error)) (any, error) {
+			return fn(ctx)
+		})
+
+	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
+	mockHub.EXPECT().GetBus(clientID).Return(mockOldBus, true)
+	mockOldBus.EXPECT().Detach()
+	mockOldBus.EXPECT().Close().Return(nil)
+	mockHub.EXPECT().AddBus(gomock.Any(), clientID, mockNewBus)
+
+	mockNewBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(nil)
+	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(nil)
+
+	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric)
+	cmd := JoinRoomCommand{
+		RoomID:   roomID,
+		SenderID: clientID,
+		Bus:      mockNewBus,
+	}
+
+	output, err := uc.Execute(ctx, cmd)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if output == nil {
+		t.Fatal("expected output to be non-nil")
+	}
+	if output.Client == nil {
+		t.Fatal("expected client to be non-nil")
+	}
+	if output.Client.ID != clientID {
+		t.Fatalf("expected client ID %s, got %s", clientID, output.Client.ID)
+	}
+	if output.Room != room {
+		t.Errorf("expected room %v, got %v", room, output.Room)
+	}
+
+	calls := metricMeter.getCalls()
+	if len(calls) != 0 {
+		t.Fatalf("expected no metric changes on reconnect, got %d calls", len(calls))
+	}
+}
+
+func TestJoinRoomUseCase_Execute_ReconnectNoOldBus(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	mockHub := domain.NewMockHub(ctrl)
+	mockLockManager := lock.NewMockLockManager(ctrl)
+	testMetric, metricMeter := newTestPlanningPokerMetric(ctrl)
+	mockNewBus := domain.NewMockBus(ctrl)
+
+	roomID := "room123"
+	clientID := "existing-client"
+	room := &entity.Room{
+		ID:      roomID,
+		Clients: clientcollection.New(),
+	}
+	room.NewClient(clientID)
+
+	mockLockManager.EXPECT().
+		WithLock(gomock.Any(), roomID, gomock.Any()).
+		DoAndReturn(func(ctx context.Context, key string, fn func(context.Context) (any, error)) (any, error) {
+			return fn(ctx)
+		})
+
+	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
+	mockHub.EXPECT().GetBus(clientID).Return(nil, false)
+	mockHub.EXPECT().AddBus(gomock.Any(), clientID, mockNewBus)
+
+	mockNewBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(nil)
+	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(nil)
+
+	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric)
+	cmd := JoinRoomCommand{
+		RoomID:   roomID,
+		SenderID: clientID,
+		Bus:      mockNewBus,
+	}
+
+	output, err := uc.Execute(ctx, cmd)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if output == nil {
+		t.Fatal("expected output to be non-nil")
+	}
+	if output.Client == nil {
+		t.Fatal("expected client to be non-nil")
+	}
+	if output.Client.ID != clientID {
+		t.Fatalf("expected client ID %s, got %s", clientID, output.Client.ID)
+	}
+
+	calls := metricMeter.getCalls()
+	if len(calls) != 0 {
+		t.Fatalf("expected no metric changes on reconnect, got %d calls", len(calls))
+	}
+}
+
+func TestJoinRoomUseCase_Execute_ReconnectSendErrorRollback(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	mockHub := domain.NewMockHub(ctrl)
+	mockLockManager := lock.NewMockLockManager(ctrl)
+	testMetric, metricMeter := newTestPlanningPokerMetric(ctrl)
+	mockNewBus := domain.NewMockBus(ctrl)
+
+	roomID := "room123"
+	clientID := "existing-client"
+	room := &entity.Room{
+		ID:      roomID,
+		Clients: clientcollection.New(),
+	}
+	room.NewClient(clientID)
+	sendErr := errors.New("send failed")
+
+	mockLockManager.EXPECT().
+		WithLock(gomock.Any(), roomID, gomock.Any()).
+		DoAndReturn(func(ctx context.Context, key string, fn func(context.Context) (any, error)) (any, error) {
+			return fn(ctx)
+		})
+
+	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
+	mockHub.EXPECT().GetBus(clientID).Return(nil, false)
+	mockHub.EXPECT().AddBus(gomock.Any(), clientID, mockNewBus)
+
+	mockNewBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(sendErr)
+	mockHub.EXPECT().RemoveBus(gomock.Any(), clientID)
+
+	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric)
+	cmd := JoinRoomCommand{
+		RoomID:   roomID,
+		SenderID: clientID,
+		Bus:      mockNewBus,
+	}
+
+	output, err := uc.Execute(ctx, cmd)
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if output != nil {
+		t.Fatal("expected nil output when send fails on reconnect")
+	}
+	if !errors.Is(err, sendErr) {
+		t.Fatalf("expected error to wrap %v, got %v", sendErr, err)
+	}
+
+	calls := metricMeter.getCalls()
+	if len(calls) != 0 {
+		t.Fatalf("expected no metric changes on reconnect rollback, got %d calls", len(calls))
+	}
+}
+
+func TestJoinRoomUseCase_Execute_ReconnectBroadcastErrorRollback(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	mockHub := domain.NewMockHub(ctrl)
+	mockLockManager := lock.NewMockLockManager(ctrl)
+	testMetric, metricMeter := newTestPlanningPokerMetric(ctrl)
+	mockNewBus := domain.NewMockBus(ctrl)
+
+	roomID := "room123"
+	clientID := "existing-client"
+	room := &entity.Room{
+		ID:      roomID,
+		Clients: clientcollection.New(),
+	}
+	room.NewClient(clientID)
+	broadcastErr := errors.New("broadcast failed")
+
+	mockLockManager.EXPECT().
+		WithLock(gomock.Any(), roomID, gomock.Any()).
+		DoAndReturn(func(ctx context.Context, key string, fn func(context.Context) (any, error)) (any, error) {
+			return fn(ctx)
+		})
+
+	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
+	mockHub.EXPECT().GetBus(clientID).Return(nil, false)
+	mockHub.EXPECT().AddBus(gomock.Any(), clientID, mockNewBus)
+
+	mockNewBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(nil)
+	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(broadcastErr)
+	mockHub.EXPECT().RemoveBus(gomock.Any(), clientID)
+
+	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric)
+	cmd := JoinRoomCommand{
+		RoomID:   roomID,
+		SenderID: clientID,
+		Bus:      mockNewBus,
+	}
+
+	output, err := uc.Execute(ctx, cmd)
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if output != nil {
+		t.Fatal("expected nil output when broadcast fails on reconnect")
+	}
+	if !errors.Is(err, broadcastErr) {
+		t.Fatalf("expected error to wrap %v, got %v", broadcastErr, err)
+	}
+
+	calls := metricMeter.getCalls()
+	if len(calls) != 0 {
+		t.Fatalf("expected no metric changes on reconnect broadcast rollback, got %d calls", len(calls))
 	}
 }
 

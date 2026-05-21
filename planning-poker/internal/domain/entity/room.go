@@ -73,7 +73,7 @@ func (r *Room) RemoveClient(ctx context.Context, clientID string) error {
 }
 
 func (r *Room) NewVoting(ctx context.Context, clientID string) error {
-	client, ok := r.getClient(clientID)
+	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
 	}
@@ -91,7 +91,7 @@ func (r *Room) NewVoting(ctx context.Context, clientID string) error {
 }
 
 func (r *Room) ResetVoting(ctx context.Context, clientID string) error {
-	client, ok := r.getClient(clientID)
+	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
 	}
@@ -127,7 +127,7 @@ func (r *Room) CountOwners() int {
 }
 
 func (r *Room) ToggleSpectator(ctx context.Context, clientID string, targetClientID string) error {
-	client, ok := r.getClient(clientID)
+	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
 	}
@@ -135,7 +135,7 @@ func (r *Room) ToggleSpectator(ctx context.Context, clientID string, targetClien
 		return fmt.Errorf("only the room owner can toggle ownership")
 	}
 
-	if targetClient, ok := r.getClient(targetClientID); ok {
+	if targetClient, ok := r.FindClient(targetClientID); ok {
 		targetClient.IsSpectator = !targetClient.IsSpectator
 		targetClient.Vote(ctx, nil)
 		r.checkReveal()
@@ -147,7 +147,7 @@ func (r *Room) ToggleSpectator(ctx context.Context, clientID string, targetClien
 }
 
 func (r *Room) ToggleOwner(ctx context.Context, clientID string, targetClientID string) error {
-	client, ok := r.getClient(clientID)
+	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
 	}
@@ -168,7 +168,7 @@ func (r *Room) ToggleOwner(ctx context.Context, clientID string, targetClientID 
 		}
 	}
 
-	if targetClient, ok := r.getClient(targetClientID); ok {
+	if targetClient, ok := r.FindClient(targetClientID); ok {
 		targetClient.IsOwner = !targetClient.IsOwner
 	} else {
 		return fmt.Errorf("target client %s not found in room %s", targetClientID, r.ID)
@@ -178,7 +178,7 @@ func (r *Room) ToggleOwner(ctx context.Context, clientID string, targetClientID 
 }
 
 func (r *Room) SetCurrentStory(ctx context.Context, clientID string, story string) error {
-	client, ok := r.getClient(clientID)
+	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
 	}
@@ -191,7 +191,7 @@ func (r *Room) SetCurrentStory(ctx context.Context, clientID string, story strin
 }
 
 func (r *Room) ToggleReveal(ctx context.Context, clientID string) error {
-	client, ok := r.getClient(clientID)
+	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
 	}
@@ -258,14 +258,14 @@ func (r *Room) IsEmpty() bool {
 	return r.Clients.Count() == 0
 }
 
-func (r *Room) getClient(clientID string) (*Client, bool) {
+func (r *Room) FindClient(clientID string) (*Client, bool) {
 	return r.Clients.Filter(func(client *Client) bool {
 		return client.ID == clientID
 	}).First()
 }
 
 func (r *Room) Vote(ctx context.Context, clientID string, vote *string) error {
-	client, ok := r.getClient(clientID)
+	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
 	}
@@ -277,7 +277,7 @@ func (r *Room) Vote(ctx context.Context, clientID string, vote *string) error {
 }
 
 func (r *Room) UpdateClientName(ctx context.Context, clientID string, name string) error {
-	client, ok := r.getClient(clientID)
+	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
 	}

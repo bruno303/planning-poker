@@ -618,6 +618,42 @@ func (c *MockBusCloseCall) DoAndReturn(f func() error) *MockBusCloseCall {
 	return c
 }
 
+// Detach mocks base method.
+func (m *MockBus) Detach() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Detach")
+}
+
+// Detach indicates an expected call of Detach.
+func (mr *MockBusMockRecorder) Detach() *MockBusDetachCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Detach", reflect.TypeOf((*MockBus)(nil).Detach))
+	return &MockBusDetachCall{Call: call}
+}
+
+// MockBusDetachCall wrap *gomock.Call
+type MockBusDetachCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockBusDetachCall) Return() *MockBusDetachCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockBusDetachCall) Do(f func()) *MockBusDetachCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockBusDetachCall) DoAndReturn(f func()) *MockBusDetachCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Listen mocks base method.
 func (m *MockBus) Listen(ctx context.Context) {
 	m.ctrl.T.Helper()

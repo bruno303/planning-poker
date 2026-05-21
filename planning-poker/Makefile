@@ -61,10 +61,12 @@ test-integration: lint fmt
 
 .PHONY: test-coverage
 test-coverage:
-	go test -count=1 -coverprofile=coverage.out -coverpkg=./internal/... ./...
-	go tool cover -html=coverage.out -o coverage.html
+	$(DOCKER_COMPOSE) --profile $(COMPOSE_LOCAL_PROFILE) up -d --wait
+	set -e; \
+	go test -count=1 -coverprofile=coverage.out -coverpkg=./internal/... ./internal/... ./test/integration/...; \
+	$(DOCKER_COMPOSE) --profile $(COMPOSE_LOCAL_PROFILE) down; \
+	go tool cover -html=coverage.out -o coverage.html; \
 	echo "Generated coverage report at coverage.html"
-	echo "If using WSL, run 'explorer.exe coverage.html' to view the report."
 
 .PHONY: fmt
 fmt:

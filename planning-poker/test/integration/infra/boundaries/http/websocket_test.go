@@ -620,6 +620,87 @@ func TestWebSocketMultipleClients(t *testing.T) {
 	})
 }
 
+func TestWebSocketReconnectionWithClientId(t *testing.T) {
+	ts := integration.NewTestServer(t)
+	defer ts.Close()
+
+	roomID := createRoom(t, ts)
+
+	// Connect first client and save its clientId
+	conn1 := connectWebSocket(t, ts, roomID)
+	clientID1 := getClientID(t, conn1)
+
+	// Connect second client so room stays alive when first disconnects
+	conn2 := connectWebSocket(t, ts, roomID)
+	clientID2 := getClientID(t, conn2)
+
+	// Client1 receives broadcast when client2 joins
+	consumeMessages(t, conn1)
+
+	// Disconnect first client
+	conn1.Close()
+	time.Sleep(100 * time.Millisecond)
+
+	// Reconnect with saved clientId
+	wsURL := strings.Replace(ts.Server.URL, "http://", "ws://", 1)
+	wsURL = fmt.Sprintf("%s/planning/%s/ws?clientId=%s", wsURL, roomID, clientID1)
+
+	dialer := websocket.Dialer{HandshakeTimeout: 5 * time.Second}
+	connRe, _, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to reconnect with clientId: %v", err)
+	}
+	defer closeAndWait(connRe)
+
+	// Should receive update-client-id with the same clientId
+	msg1 := receiveMessage(t, connRe, 2*time.Second)
+	if msg1["type"] != "update-client-id" {
+		t.Fatalf("expected first message type 'update-client-id', got '%v'", msg1["type"])
+	}
+	reconnectedID, ok := msg1["clientId"].(string)
+	if !ok || reconnectedID == "" {
+		t.Fatal("clientId not found in update-client-id message")
+	}
+	if reconnectedID != clientID1 {
+		t.Errorf("expected reconnected clientId '%s', got '%s'", clientID1, reconnectedID)
+	}
+
+	// Should receive room-state
+	msg2 := receiveMessage(t, connRe, 2*time.Second)
+	if msg2["type"] != "room-state" {
+		t.Fatalf("expected second message type 'room-state', got '%v'", msg2["type"])
+	}
+
+	participants, ok := msg2["participants"].([]any)
+	if !ok {
+		t.Fatal("expected participants array")
+	}
+
+	if len(participants) != 2 {
+		t.Fatalf("expected 2 participants after reconnect, got %d", len(participants))
+	}
+
+	foundReconnected := false
+	foundClient2 := false
+	for _, p := range participants {
+		participant := p.(map[string]any)
+		switch participant["id"] {
+		case clientID1:
+			foundReconnected = true
+		case clientID2:
+			foundClient2 = true
+		}
+	}
+	if !foundReconnected {
+		t.Error("expected reconnected client to be present in participants")
+	}
+	if !foundClient2 {
+		t.Error("expected second client to still be present in participants")
+	}
+
+	defer closeAndWait(conn2)
+}
+
 func TestWebSocketDisconnection(t *testing.T) {
 	ts := integration.NewTestServer(t)
 	defer ts.Close()

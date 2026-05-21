@@ -70,21 +70,15 @@ func (uc JoinRoomUseCase) Execute(ctx context.Context, cmd JoinRoomCommand) (*Jo
 			uc.logger.Info(ctx, "Room auto-created with ID: %s during join by: %s", room.ID, cmd.SenderID)
 		}
 
-		uc.logger.Debug(ctx, "creating client for room %s", room.ID)
-		client := room.NewClient(cmd.SenderID)
-		uc.hub.AddClient(client)
-
-		uc.logger.Debug(ctx, "creating bus for client %s on room %s", client.ID, room.ID)
-		uc.hub.AddBus(ctx, client.ID, cmd.Bus)
+		client, isReconnect, rollbackFunc := uc.joinClient(ctx, room, cmd)
 
 		output := &JoinRoomOutput{Client: client, Room: room}
 		rollbackJoin := func(cause error) error {
 			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), rollbackJoinCleanupTimeout)
 			defer cancel()
 
-			cleanupErr := uc.hub.RemoveClient(cleanupCtx, client.ID, room.ID)
-			if cleanupErr != nil {
-				return fmt.Errorf("%w: rollback join initialization: %w", cause, cleanupErr)
+			if err := rollbackFunc(cleanupCtx); err != nil {
+				return fmt.Errorf("%w: rollback join initialization: %w", cause, err)
 			}
 
 			return cause
@@ -100,11 +94,14 @@ func (uc JoinRoomUseCase) Execute(ctx context.Context, cmd JoinRoomCommand) (*Jo
 			return output, rollbackJoin(fmt.Errorf("failed to broadcast room state: %w", err))
 		}
 
+		if !isReconnect {
+			uc.metric.IncrementUsersTotal(ctx)
+			uc.metric.IncrementActiveUsers(ctx)
+		}
+
 		if autoCreated {
 			uc.metric.IncrementActiveRoomsCounter(ctx)
 		}
-		uc.metric.IncrementUsersTotal(ctx)
-		uc.metric.IncrementActiveUsers(ctx)
 
 		return output, nil
 	})
@@ -114,4 +111,47 @@ func (uc JoinRoomUseCase) Execute(ctx context.Context, cmd JoinRoomCommand) (*Jo
 	}
 
 	return output.(*JoinRoomOutput), nil
+}
+
+func (uc JoinRoomUseCase) joinClient(ctx context.Context, room *entity.Room, cmd JoinRoomCommand) (client *entity.Client, isReconnect bool, rollbackFunc func(context.Context) error) {
+	if existingClient, ok := room.FindClient(cmd.SenderID); ok {
+		isReconnect = true
+		client = existingClient
+		rollbackFunc = uc.reconnectClient(ctx, cmd)
+	} else {
+		client = room.NewClient(cmd.SenderID)
+		rollbackFunc = uc.createNewClient(ctx, cmd, client)
+	}
+
+	return
+}
+
+func (uc JoinRoomUseCase) reconnectClient(ctx context.Context, cmd JoinRoomCommand) func(context.Context) error {
+	uc.logger.Info(ctx, "Client %s reconnecting to room %s", cmd.SenderID, cmd.RoomID)
+
+	if oldBus, ok := uc.hub.GetBus(cmd.SenderID); ok {
+		oldBus.Detach()
+		if err := oldBus.Close(); err != nil {
+			uc.logger.Debug(ctx, "closing old bus for client %s: %v", cmd.SenderID, err)
+		}
+	}
+
+	uc.hub.AddBus(ctx, cmd.SenderID, cmd.Bus)
+
+	return func(cleanupCtx context.Context) error {
+		uc.hub.RemoveBus(cleanupCtx, cmd.SenderID)
+		return nil
+	}
+}
+
+func (uc JoinRoomUseCase) createNewClient(ctx context.Context, cmd JoinRoomCommand, client *entity.Client) func(context.Context) error {
+	uc.logger.Debug(ctx, "creating client for room %s", cmd.RoomID)
+	uc.hub.AddClient(client)
+
+	uc.logger.Debug(ctx, "creating bus for client %s on room %s", client.ID, cmd.RoomID)
+	uc.hub.AddBus(ctx, client.ID, cmd.Bus)
+
+	return func(cleanupCtx context.Context) error {
+		return uc.hub.RemoveClient(cleanupCtx, client.ID, cmd.RoomID)
+	}
 }

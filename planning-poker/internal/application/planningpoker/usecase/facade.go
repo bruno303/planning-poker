@@ -14,5 +14,6 @@ type (
 		LeaveRoom       UseCase[LeaveRoomCommand]
 		JoinRoom        UseCaseR[JoinRoomCommand, *JoinRoomOutput]
 		CreateClient    UseCaseO[CreateClientOutput]
+		CreateRoom      UseCaseO[CreateRoomOutput]
 	}
 )

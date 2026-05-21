@@ -199,7 +199,11 @@ export default function PlanningPoker() {
 
   const connectWebSocket = (roomCode: string, userName: string) => {
     deliberateDisconnect.current = false;
-    const ws = new WebSocket(`${process.env.NEXT_PUBLIC_WEBSOCKET_URL}/planning/${roomCode}/ws`);
+    const savedClientId = sessionStorage.getItem('clientId');
+    const wsUrl = savedClientId
+      ? `${process.env.NEXT_PUBLIC_WEBSOCKET_URL}/planning/${roomCode}/ws?clientId=${encodeURIComponent(savedClientId)}`
+      : `${process.env.NEXT_PUBLIC_WEBSOCKET_URL}/planning/${roomCode}/ws`;
+    const ws = new WebSocket(wsUrl);
     socket.current = ws;
     if (process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_EXPOSE_WS_GLOBAL === 'true') {
       (window as any).__ws = ws;
@@ -221,12 +225,14 @@ export default function PlanningPoker() {
 
         } else if (data.type === 'update-client-id') {
           setClientId(data.clientId);
+          sessionStorage.setItem('clientId', data.clientId);
           const payload: UpdateNamePayload = { username: userName };
           sendMessage<UpdateNamePayload>({ type: 'update-name', payload });
 
         } else if (data.type === 'kicked') {
           deliberateDisconnect.current = true;
           cancelReconnect();
+          sessionStorage.removeItem('clientId');
           pushError('You have been kicked from the room');
           router.push('/');
 
@@ -285,6 +291,7 @@ export default function PlanningPoker() {
 
   const handleBackToHome = () => {
     cleanupSocket();
+    sessionStorage.removeItem('clientId');
     router.push('/');
   };
 

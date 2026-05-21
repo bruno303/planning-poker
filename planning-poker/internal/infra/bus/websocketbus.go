@@ -51,18 +51,19 @@ type (
 	useCaseCall func(context.Context, WebSocketMessage) error
 
 	WebsocketBus struct {
-		ID        string
-		conn      *websocket.Conn
-		hub       domain.Hub
-		logger    log.Logger
-		cfg       WebSocketConfig
-		calls     map[string]useCaseCall
-		usecases  usecase.UseCasesFacade
-		roomID    string
-		closed    atomic.Bool
-		closeOnce sync.Once
-		writeMu   sync.Mutex // Protects writes to conn (required by gorilla/websocket)
-		done      chan struct{}
+		ID          string
+		conn        *websocket.Conn
+		hub         domain.Hub
+		logger      log.Logger
+		cfg         WebSocketConfig
+		calls       map[string]useCaseCall
+		usecases    usecase.UseCasesFacade
+		roomID      string
+		closed      atomic.Bool
+		closeOnce   sync.Once
+		writeMu     sync.Mutex // Protects writes to conn (required by gorilla/websocket)
+		done        chan struct{}
+		skipCleanup atomic.Bool
 	}
 
 	WebSocketConfig struct {
@@ -118,14 +119,20 @@ func (c *WebsocketBus) RoomID() string {
 	return c.roomID
 }
 
+func (c *WebsocketBus) Detach() {
+	c.skipCleanup.Store(true)
+}
+
 func (c *WebsocketBus) Close() error {
 	var err error
 	c.closeOnce.Do(func() {
 		c.closed.Store(true)
 		close(c.done)
-		err1 := c.leaveRoom(context.Background())
+		if !c.skipCleanup.Load() {
+			err = c.leaveRoom(context.Background())
+		}
 		err2 := c.conn.Close()
-		err = errors.Join(err1, err2)
+		err = errors.Join(err, err2)
 	})
 	return err
 }

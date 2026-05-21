@@ -34,9 +34,13 @@ export default function PlanningPokerHome() {
 
     try {
       setIsCreating(true);
-      const newRoomId = crypto.randomUUID();
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/planning/rooms`, { method: 'POST' });
+      if (!res.ok) {
+        throw new Error('Failed to create room on server');
+      }
+      const data = await res.json();
       sessionStorage.setItem('userName', userName.trim());
-      router.push(getRoomRoute(newRoomId));
+      router.push(getRoomRoute(data.roomId));
     } catch (err: any) {
       const message = err?.message || 'Failed to create room. Please try again.';
       pushError(message);

@@ -373,6 +373,7 @@ func (m *mockBus) RoomID() string                          { return m.roomID }
 func (m *mockBus) Send(ctx context.Context, msg any) error { return nil }
 func (m *mockBus) Close() error                            { return nil }
 func (m *mockBus) Listen(ctx context.Context)              {}
+func (m *mockBus) Detach()                                 {}
 
 // mockBusWithReceive implements domain.Bus and captures received messages
 type mockBusWithReceive struct {
@@ -387,3 +388,4 @@ func (m *mockBusWithReceive) Send(ctx context.Context, msg any) error {
 }
 func (m *mockBusWithReceive) Close() error               { return nil }
 func (m *mockBusWithReceive) Listen(ctx context.Context) {}
+func (m *mockBusWithReceive) Detach()                    {}
