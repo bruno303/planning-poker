@@ -16,6 +16,7 @@ import { Eye, EyeOff, Repeat, RotateCcw, Shield, Users, X } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import Header from './page.header';
+import LoadingSpinner from '@/components/loadingSpinner/loadingSpinner';
 import gridStyles from './page.module.css';
 import { styles } from './page.styles';
 
@@ -57,6 +58,7 @@ export default function PlanningPoker() {
   const [mostAppearingVotes, setMostAppearingVotes] = useState<number[]>([]);
   const [isEditingStory, setIsEditingStory] = useState(false);
   const [isConnected, setIsConnected] = useState(true);
+  const [isAuthorized, setIsAuthorized] = useState(false);
   const deliberateDisconnect = useRef(false);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptsRef = useRef(0);
@@ -86,6 +88,7 @@ export default function PlanningPoker() {
       return;
     }
     setUserName(storedUserName);
+    setIsAuthorized(true);
 
     const hasSameRoomConnection =
       connected.current &&
@@ -100,6 +103,7 @@ export default function PlanningPoker() {
     connectWebSocket(roomId, storedUserName);
 
     return () => {
+      setIsAuthorized(false);
       cancelReconnect();
       if (connectedRoomIdRef.current === roomId) {
         cleanupSocket();
@@ -297,6 +301,10 @@ export default function PlanningPoker() {
 
   const votedCount = participants.filter(p => !p.isSpectator && p.hasVoted).length;
   const totalVoters = participants.filter(p => !p.isSpectator).length;
+
+  if (!isAuthorized) {
+    return <LoadingSpinner />;
+  }
 
   return (
 
