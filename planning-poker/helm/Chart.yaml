@@ -1,0 +1,11 @@
+apiVersion: v2
+name: planning-poker
+description: Helm chart for Planning Poker - a real-time agile estimation tool
+type: application
+version: 0.1.0
+appVersion: "latest"
+icon: https://raw.githubusercontent.com/bruno303/study-topics/main/planning-poker/frontend/planning-poker-front/src/app/favicon.ico
+home: https://github.com/bruno303/study-topics/tree/main/planning-poker/helm
+maintainers:
+  - name: Bruno
+    email: bruno@example.com
