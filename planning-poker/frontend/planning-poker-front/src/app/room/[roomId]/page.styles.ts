@@ -197,7 +197,10 @@ export const styles = {
   },
   participantName: {
     fontWeight: '500',
-    color: '#1f2937'
+    color: '#1f2937',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.375rem'
   },
   participantStatus: {
     fontSize: '0.875rem',
