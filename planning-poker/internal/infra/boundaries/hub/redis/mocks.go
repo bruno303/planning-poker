@@ -123,6 +123,44 @@ func (c *MockRedisClientGetCall) DoAndReturn(f func(context.Context, string) *re
 	return c
 }
 
+// Keys mocks base method.
+func (m *MockRedisClient) Keys(ctx context.Context, pattern string) *redis.StringSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Keys", ctx, pattern)
+	ret0, _ := ret[0].(*redis.StringSliceCmd)
+	return ret0
+}
+
+// Keys indicates an expected call of Keys.
+func (mr *MockRedisClientMockRecorder) Keys(ctx, pattern any) *MockRedisClientKeysCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Keys", reflect.TypeOf((*MockRedisClient)(nil).Keys), ctx, pattern)
+	return &MockRedisClientKeysCall{Call: call}
+}
+
+// MockRedisClientKeysCall wrap *gomock.Call
+type MockRedisClientKeysCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockRedisClientKeysCall) Return(arg0 *redis.StringSliceCmd) *MockRedisClientKeysCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockRedisClientKeysCall) Do(f func(context.Context, string) *redis.StringSliceCmd) *MockRedisClientKeysCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockRedisClientKeysCall) DoAndReturn(f func(context.Context, string) *redis.StringSliceCmd) *MockRedisClientKeysCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Publish mocks base method.
 func (m *MockRedisClient) Publish(ctx context.Context, channel string, message any) *redis.IntCmd {
 	m.ctrl.T.Helper()

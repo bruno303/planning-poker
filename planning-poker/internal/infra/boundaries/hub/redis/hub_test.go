@@ -355,15 +355,15 @@ func TestRedisHub_GetRooms(t *testing.T) {
 	validRoom.ID = "room-valid"
 	validRoomBytes, _ := SerializeRoom(validRoom)
 
-	scanCmd := redis.NewScanCmd(context.Background(), nil)
-	scanCmd.SetVal([]string{"planning-poker:room:room-broken", "planning-poker:room:room-valid"}, 0)
+	keysCmd := redis.NewStringSliceCmd(context.Background())
+	keysCmd.SetVal([]string{"planning-poker:room:room-broken", "planning-poker:room:room-valid"})
 
 	brokenRoomCmd := redis.NewStringCmd(context.Background())
 	brokenRoomCmd.SetErr(errors.New("redis unavailable"))
 	validRoomCmd := redis.NewStringCmd(context.Background())
 	validRoomCmd.SetVal(string(validRoomBytes))
 
-	mockRedis.EXPECT().Scan(gomock.Any(), uint64(100), "planning-poker:room:*", int64(0)).Return(scanCmd)
+	mockRedis.EXPECT().Keys(gomock.Any(), "planning-poker:room:*").Return(keysCmd)
 	mockRedis.EXPECT().Get(gomock.Any(), "planning-poker:room:room-broken").Return(brokenRoomCmd)
 	mockRedis.EXPECT().Get(gomock.Any(), "planning-poker:room:room-valid").Return(validRoomCmd)
 

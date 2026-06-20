@@ -23,14 +23,15 @@ type RedisClient interface {
 	Publish(ctx context.Context, channel string, message any) *redis.IntCmd
 	Subscribe(ctx context.Context, channels ...string) *redis.PubSub
 	Scan(ctx context.Context, count uint64, match string, cursor int64) *redis.ScanCmd
+	Keys(ctx context.Context, pattern string) *redis.StringSliceCmd
 }
 
 const (
-	roomKeyPrefix    = "planning-poker:room:"
-	clientKeyPrefix  = "planning-poker:client:"
-	pubsubChannel    = "planning-poker:updates:"
-	twentyFourHours  = 24 * time.Hour
-	cursorSize       = 100
+	roomKeyPrefix   = "planning-poker:room:"
+	clientKeyPrefix = "planning-poker:client:"
+	pubsubChannel   = "planning-poker:updates:"
+	twentyFourHours = 24 * time.Hour
+
 	subscribeTimeout = 2 * time.Second
 )
 
@@ -355,20 +356,20 @@ func (h *RedisHub) GetRooms() []*entity.Room {
 	ctx := context.Background()
 	pattern := roomKeyPrefix + "*"
 
+	keys, err := h.client.Keys(ctx, pattern).Result()
+	if err != nil {
+		h.logger.Error(ctx, "Failed to get room keys from Redis", err)
+		return nil
+	}
+
 	var rooms []*entity.Room
-	iter := h.client.Scan(ctx, cursorSize, pattern, 0).Iterator()
-	for iter.Next(ctx) {
-		roomKey := iter.Val()
+	for _, roomKey := range keys {
 		roomID := roomKey[len(roomKeyPrefix):]
 
 		room, err := h.LoadRoom(ctx, roomID)
 		if err == nil {
 			rooms = append(rooms, room)
 		}
-	}
-
-	if err := iter.Err(); err != nil {
-		h.logger.Error(ctx, "Failed to scan rooms from Redis", err)
 	}
 
 	return rooms

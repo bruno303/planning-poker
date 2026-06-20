@@ -2,12 +2,8 @@ package domain
 
 import (
 	"context"
-	"errors"
 	"planning-poker/internal/domain/entity"
 )
-
-var ErrRoomNotFound = errors.New("room not found")
-var ErrClientNotFound = errors.New("client not found")
 
 type (
 	Hub interface {

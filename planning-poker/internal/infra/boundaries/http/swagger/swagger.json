@@ -213,6 +213,68 @@
                 }
             }
         },
+        "/admin/rooms/{roomID}/client/{clientID}/owner": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Toggles the owner status for a client in a room (admin only)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Toggle owner status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Room ID",
+                        "name": "roomID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Client ID",
+                        "name": "clientID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/health": {
             "get": {
                 "description": "Returns the health status of the API and its dependencies",

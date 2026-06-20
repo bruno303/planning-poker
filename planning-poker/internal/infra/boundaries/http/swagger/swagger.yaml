@@ -198,6 +198,46 @@ paths:
       summary: Kick a client
       tags:
       - admin
+  /admin/rooms/{roomID}/client/{clientID}/owner:
+    post:
+      description: Toggles the owner status for a client in a room (admin only)
+      parameters:
+      - description: Room ID
+        in: path
+        name: roomID
+        required: true
+        type: string
+      - description: Client ID
+        in: path
+        name: clientID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Toggle owner status
+      tags:
+      - admin
   /health:
     get:
       description: Returns the health status of the API and its dependencies

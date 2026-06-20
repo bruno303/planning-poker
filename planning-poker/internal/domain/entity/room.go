@@ -9,6 +9,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+
+	"planning-poker/internal/domain/domainerror"
 )
 
 type (
@@ -172,6 +174,31 @@ func (r *Room) ToggleOwner(ctx context.Context, clientID string, targetClientID 
 		targetClient.IsOwner = !targetClient.IsOwner
 	} else {
 		return fmt.Errorf("target client %s not found in room %s", targetClientID, r.ID)
+	}
+
+	return nil
+}
+
+// AdminToggleOwner toggles a client's owner status without checking
+// that the caller is an owner
+func (r *Room) AdminToggleOwner(ctx context.Context, targetClientID string) error {
+	owners := r.Clients.Filter(func(client *Client) bool {
+		return client.IsOwner
+	})
+
+	ownerCount := owners.Count()
+
+	// Prevent removing the last owner
+	if ownerCount == 1 {
+		if first, ok := owners.First(); ok && first.ID == targetClientID && first.IsOwner {
+			return domainerror.ErrLastOwner
+		}
+	}
+
+	if targetClient, ok := r.FindClient(targetClientID); ok {
+		targetClient.IsOwner = !targetClient.IsOwner
+	} else {
+		return fmt.Errorf("target client %s not found in room %s: %w", targetClientID, r.ID, domainerror.ErrClientNotFound)
 	}
 
 	return nil

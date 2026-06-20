@@ -103,6 +103,11 @@ func newAPIContainer(cfg *config.Config, infra *InfraContainer, app *Application
 		"AdminKickClientUseCase",
 		"AdminKickClient",
 	)
+	adminToggleOwnerUseCase := usecasedecorators.NewTraceableUseCase(
+		usecase.NewAdminToggleOwnerUseCase(infra.Hub, infra.LockManager),
+		"AdminToggleOwnerUseCase",
+		"AdminToggleOwner",
+	)
 
 	apis := []http.API{
 		http.NewWebsocketAPI(app.Usecases, infra.WebsocketBusFactory),
@@ -113,6 +118,7 @@ func newAPIContainer(cfg *config.Config, infra *InfraContainer, app *Application
 		http.NewGetRoomStateAPI(infra.Hub, adminAuthMiddleware),
 		http.NewDisconnectClientAPI(adminRemoveClientUseCase, adminAuthMiddleware),
 		http.NewKickClientAPI(adminKickClientUseCase, adminAuthMiddleware),
+		http.NewToggleOwnerAPI(adminToggleOwnerUseCase, adminAuthMiddleware),
 	}
 	if cfg.Environment != "production" {
 		apis = append(apis, http.NewSwaggerAPI())
