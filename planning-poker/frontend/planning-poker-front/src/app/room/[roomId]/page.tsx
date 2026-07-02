@@ -2,7 +2,11 @@
 
 
 import FocusableComponent from '@/components/focusableInput/focusableInput';
+import LoadingSpinner from '@/components/loadingSpinner/loadingSpinner';
 import {
+  AddStoryPayload,
+  RemoveStoryPayload,
+  Story,
   ToggleOwnerPayload,
   ToggleSpectatorPayload,
   UpdateNamePayload,
@@ -10,14 +14,13 @@ import {
   VotePayload,
   WebSocketMessage
 } from '@/components/messages/websocket';
+import ParticipantIdBadge from '@/components/participantIdBadge/participantIdBadge';
 import { useRoom } from '@/context/room/roomContext';
 import { useToast } from '@/context/toast/toastContext';
-import { Eye, EyeOff, Repeat, RotateCcw, Shield, Users, X } from 'lucide-react';
+import { Eye, EyeOff, List, Plus, Repeat, RotateCcw, Shield, Trash2, Users, X } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import Header from './page.header';
-import LoadingSpinner from '@/components/loadingSpinner/loadingSpinner';
-import ParticipantIdBadge from '@/components/participantIdBadge/participantIdBadge';
 import gridStyles from './page.module.css';
 import { styles } from './page.styles';
 
@@ -60,6 +63,11 @@ export default function PlanningPoker() {
   const [isEditingStory, setIsEditingStory] = useState(false);
   const [isConnected, setIsConnected] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [backlogMode, setBacklogMode] = useState(false);
+  const [stories, setStories] = useState<Story[]>([]);
+  const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
+  const [newStoryInput, setNewStoryInput] = useState('');
+  const [showDisableBacklogConfirm, setShowDisableBacklogConfirm] = useState(false);
   const deliberateDisconnect = useRef(false);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptsRef = useRef(0);
@@ -168,6 +176,33 @@ export default function PlanningPoker() {
     sendMessage<any>({ type: 'vote-again', payload });
   }
 
+  const handleToggleBacklogMode = () => {
+    const payload: any = null;
+    sendMessage<any>({ type: 'toggle-backlog-mode', payload });
+  };
+
+  const handleAddStory = () => {
+    if (!newStoryInput.trim()) return;
+    const payload: AddStoryPayload = { story: newStoryInput.trim() };
+    sendMessage<AddStoryPayload>({ type: 'add-story', payload });
+    setNewStoryInput('');
+  };
+
+  const handleRemoveStory = (index: number) => {
+    const payload: RemoveStoryPayload = { storyIndex: index };
+    sendMessage<RemoveStoryPayload>({ type: 'remove-story', payload });
+  };
+
+  const handleAdvanceStory = () => {
+    const payload: any = null;
+    sendMessage<any>({ type: 'advance-story', payload });
+  };
+
+  const handlePrevStory = () => {
+    const payload: any = null;
+    sendMessage<any>({ type: 'prev-story', payload });
+  };
+
   const cancelReconnect = () => {
     if (reconnectTimeoutRef.current !== null) {
       clearTimeout(reconnectTimeoutRef.current);
@@ -227,6 +262,9 @@ export default function PlanningPoker() {
           setSelectedCard(getCurrentUser()?.vote ?? null);
           setResult(data.result ?? null);
           setMostAppearingVotes(data.mostAppearingVotes ?? []);
+          setBacklogMode(data.backlogMode ?? false);
+          setStories(data.stories ?? []);
+          setCurrentStoryIndex(data.currentStoryIndex ?? 0);
 
         } else if (data.type === 'update-client-id') {
           setClientId(data.clientId);
@@ -356,13 +394,22 @@ export default function PlanningPoker() {
                     </>
                   ) : (
                     <>
-                      <label style={{ ...styles.label, margin: 0, flex: 1 }}>{currentStory}</label>
-                      <button
-                        style={{ ...styles.button, ...styles.primaryButton, padding: '0.5rem 1rem', fontSize: '0.875rem' }}
-                        onClick={() => setIsEditingStory(!isEditingStory)}
-                      >
-                        Edit
-                      </button>
+                      <label style={{ ...styles.label, margin: 0, flex: 1 }}>
+                        {currentStory}
+                        {backlogMode && stories.length > 0 && (
+                          <span style={styles.backlogStoryPosition}>
+                            (Story {currentStoryIndex + 1} of {stories.length})
+                          </span>
+                        )}
+                      </label>
+                      {((backlogMode && currentStory) || !backlogMode) && (
+                        <button
+                          style={{ ...styles.button, ...styles.primaryButton, padding: '0.5rem 1rem', fontSize: '0.875rem' }}
+                          onClick={() => setIsEditingStory(!isEditingStory)}
+                        >
+                          Edit
+                        </button>
+                      )}
                     </>
                   )}
                 </div>
@@ -435,6 +482,39 @@ export default function PlanningPoker() {
               {/* Action Buttons */}
               {amIAdmin && (
                 <div style={styles.buttonsContainer}>
+                  {!backlogMode && (
+                    <button
+                      onClick={handleToggleBacklogMode}
+                      style={{ ...styles.button, ...styles.primaryButton }}
+                      onMouseEnter={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#2563eb'}
+                      onMouseLeave={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#3b82f6'}
+                    >
+                      <List size={20} />
+                      Enable Backlog
+                    </button>
+                  )}
+                  {backlogMode && currentStoryIndex > 0 && (
+                    <button
+                      onClick={handlePrevStory}
+                      style={{ ...styles.button, ...styles.primaryButton }}
+                      onMouseEnter={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#2563eb'}
+                      onMouseLeave={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#3b82f6'}
+                    >
+                      <List size={20} />
+                      Previous Story
+                    </button>
+                  )}
+                  {backlogMode && stories.length > 0 && currentStoryIndex < stories.length - 1 && (
+                    <button
+                      onClick={handleAdvanceStory}
+                      style={{ ...styles.button, ...styles.primaryButton }}
+                      onMouseEnter={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#2563eb'}
+                      onMouseLeave={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#3b82f6'}
+                    >
+                      <List size={20} />
+                      Next Story
+                    </button>
+                  )}
                   <button
                     onClick={handleRevealVotes}
                     style={{ ...styles.button, ...styles.primaryButton }}
@@ -562,6 +642,141 @@ export default function PlanningPoker() {
               )}
             </div>
           </div>
+
+          {/* Backlog Panel - shown when backlog mode is on */}
+          {backlogMode && (
+            <div style={styles.backlogPanel}>
+              <div style={styles.backlogHeader}>
+                <h2 style={styles.sectionTitle}>Story Backlog</h2>
+                {amIAdmin && (
+                  <button
+                    style={{ ...styles.button, ...styles.dangerButton, padding: '0.5rem 1rem', fontSize: '0.875rem' }}
+                    onClick={() => setShowDisableBacklogConfirm(true)}
+                  >
+                    Disable Backlog
+                  </button>
+                )}
+              </div>
+
+              {/* Story list */}
+              {stories.length > 0 && (
+                <div style={styles.backlogList}>
+                  {stories.map((story, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        ...styles.backlogStory,
+                        ...(index === currentStoryIndex ? styles.backlogStoryCurrent : {}),
+                        ...(story.voted ? styles.backlogStoryVoted : index < currentStoryIndex ? styles.backlogStoryVoted : styles.backlogStoryPending),
+                      }}
+                    >
+                      <div style={styles.backlogStoryLeft}>
+                        <span style={styles.backlogStoryIndex}>{index + 1}.</span>
+                        <span style={{
+                          ...styles.backlogStoryName,
+                          ...(story.voted ? { textDecoration: 'line-through', opacity: 0.7 } : {}),
+                        }}>
+                          {story.name}
+                        </span>
+                        {/* Status indicator */}
+                        {index === currentStoryIndex && !story.voted && (
+                          <span style={styles.backlogStoryTag}>Current</span>
+                        )}
+                        {story.voted && story.result != null && (
+                          <span style={styles.backlogStoryTagVoted}>
+                            Avg: {story.result.toFixed(1)}
+                          </span>
+                        )}
+                      </div>
+                      <div style={styles.backlogStoryRight}>
+                        {/* Remove button - only for pending stories */}
+                        {amIAdmin && !story.voted && index !== currentStoryIndex && (
+                          <button
+                            style={{ ...styles.button, ...styles.dangerSmallButton }}
+                            onClick={() => handleRemoveStory(index)}
+                            title="Remove story"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add story input - admin only */}
+              {amIAdmin && (
+                <div style={styles.backlogAddForm}>
+                  <input
+                    type="text"
+                    value={newStoryInput}
+                    onChange={e => setNewStoryInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleAddStory();
+                    }}
+                    placeholder="Enter story name..."
+                    style={styles.backlogInput}
+                  />
+                  <button
+                    style={{ ...styles.button, ...styles.primaryButton, padding: '0.5rem 1rem', fontSize: '0.875rem' }}
+                    onClick={handleAddStory}
+                  >
+                    <Plus size={16} />
+                    Add
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Disable Backlog Confirmation Dialog */}
+          {showDisableBacklogConfirm && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              width: '100vw',
+              height: '100vh',
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+            }}>
+              <div style={{
+                backgroundColor: 'white',
+                borderRadius: '0.5rem',
+                padding: '2rem',
+                maxWidth: '400px',
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+              }}>
+                <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.75rem', color: '#1f2937' }}>
+                  Disable Backlog Mode
+                </h3>
+                <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '1.5rem' }}>
+                  This will remove the story backlog and keep only the current story. Are you sure?
+                </p>
+                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                  <button
+                    style={{ ...styles.button, background: '#e5e7eb', color: '#374151' }}
+                    onClick={() => setShowDisableBacklogConfirm(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    style={{ ...styles.button, ...styles.dangerButton }}
+                    onClick={() => {
+                      setShowDisableBacklogConfirm(false);
+                      handleToggleBacklogMode();
+                    }}
+                  >
+                    Disable
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </Header>

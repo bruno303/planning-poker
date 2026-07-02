@@ -441,6 +441,12 @@ func TestWebSocketNewVoting(t *testing.T) {
 		})
 		consumeMessages(t, conn) // consume room-state
 
+		// Disable backlog mode so NewVoting clears the story
+		send(t, conn, bus.WebSocketMessage{
+			Type: "toggle-backlog-mode",
+		})
+		consumeMessages(t, conn)
+
 		// Set story
 		send(t, conn, bus.WebSocketMessage{
 			Type: "update-story",

@@ -8,6 +8,12 @@ import (
 )
 
 type (
+	SerializedStory struct {
+		Name               string   `json:"name"`
+		Result             *float32 `json:"result,omitempty"`
+		MostAppearingVotes []int    `json:"mostAppearingVotes"`
+		Voted              bool     `json:"voted"`
+	}
 	SerializedRoom struct {
 		ID                 string             `json:"id"`
 		Clients            []SerializedClient `json:"clients"`
@@ -15,6 +21,9 @@ type (
 		Reveal             bool               `json:"reveal"`
 		Result             *float32           `json:"result,omitempty"`
 		MostAppearingVotes []int              `json:"mostAppearingVotes"`
+		BacklogMode        bool               `json:"backlogMode"`
+		Stories            []SerializedStory  `json:"stories,omitempty"`
+		CurrentStoryIndex  int                `json:"currentStoryIndex"`
 	}
 	SerializedClient struct {
 		ID          string  `json:"id"`
@@ -61,9 +70,25 @@ func SerializeRoom(room *entity.Room) ([]byte, error) {
 		Reveal:             room.Reveal,
 		Result:             room.Result,
 		MostAppearingVotes: room.MostAppearingVotes,
+		BacklogMode:        room.BacklogMode,
+		Stories:            serializeStories(room.Stories),
+		CurrentStoryIndex:  room.CurrentStoryIndex,
 	}
 
 	return json.Marshal(serialized)
+}
+
+func serializeStories(stories []entity.Story) []SerializedStory {
+	result := make([]SerializedStory, len(stories))
+	for i, s := range stories {
+		result[i] = SerializedStory{
+			Name:               s.Name,
+			Result:             s.Result,
+			MostAppearingVotes: s.MostAppearingVotes,
+			Voted:              s.Voted,
+		}
+	}
+	return result
 }
 
 func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*entity.Room, error) {
@@ -79,6 +104,9 @@ func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 		Reveal:             serialized.Reveal,
 		Result:             serialized.Result,
 		MostAppearingVotes: serialized.MostAppearingVotes,
+		BacklogMode:        serialized.BacklogMode,
+		Stories:            deserializeStories(serialized.Stories),
+		CurrentStoryIndex:  serialized.CurrentStoryIndex,
 	}
 
 	for _, sc := range serialized.Clients {
@@ -87,4 +115,17 @@ func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 	}
 
 	return room, nil
+}
+
+func deserializeStories(stories []SerializedStory) []entity.Story {
+	result := make([]entity.Story, len(stories))
+	for i, s := range stories {
+		result[i] = entity.Story{
+			Name:               s.Name,
+			Result:             s.Result,
+			MostAppearingVotes: s.MostAppearingVotes,
+			Voted:              s.Voted,
+		}
+	}
+	return result
 }

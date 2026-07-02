@@ -68,7 +68,6 @@ const joinRoom = async (page: Page, roomId: string, userName: string) => {
 };
 
 const expectAdminControlsVisible = async (page: Page) => {
-  await expect(page.getByRole('button', { name: 'Edit' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Reveal Votes' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'New Voting' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Vote Again' })).toBeVisible();
@@ -100,6 +99,10 @@ test('keeps room interactive for remaining client after peer page closes', async
 
     await expect(guestParticipants.getByText(ownerName, { exact: true })).toBeVisible();
     await expect(guestParticipants.getByText(guestName, { exact: true })).toBeVisible();
+
+    // Add a story so admin controls work properly
+    await ownerPage.getByPlaceholder('Enter story name...').fill('Test Story');
+    await ownerPage.getByRole('button', { name: 'Add' }).click();
 
     await ownerPage.close();
 

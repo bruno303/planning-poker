@@ -72,6 +72,14 @@ test('allows two users to join, vote, and sync story updates', async ({ browser,
     await expect(guestParticipantsPanel.getByText(userA, { exact: true })).toBeVisible();
     await expect(guestParticipantsPanel.getByText(userB, { exact: true })).toBeVisible();
 
+    // Add a story to the backlog so the Edit button becomes available
+    const storyName = `Story: estimate websocket sync ${Date.now()}`;
+    await ownerPage.getByPlaceholder('Enter story name...').fill(storyName);
+    await ownerPage.getByRole('button', { name: 'Add' }).click();
+    // Verify story appears (use .first() since it shows in both Current Story card and backlog list)
+    await expect(ownerPage.getByText(storyName, { exact: true }).first()).toBeVisible();
+    await expect(guestPage.getByText(storyName, { exact: true }).first()).toBeVisible();
+
     await ownerPage.getByRole('button', { name: '5', exact: true }).click();
     await guestPage.getByRole('button', { name: '8', exact: true }).click();
 
@@ -83,7 +91,7 @@ test('allows two users to join, vote, and sync story updates', async ({ browser,
     await expect(ownerPage.getByText('Average: 6.5')).toBeVisible();
     await expect(guestPage.getByText('Average: 6.5')).toBeVisible();
 
-    const updatedStory = `Story: estimate websocket sync ${Date.now()}`;
+    const updatedStory = `${storyName} - updated`;
 
     const ownerEditStoryButton = ownerPage.getByRole('button', { name: 'Edit' });
     const guestEditStoryButton = guestPage.getByRole('button', { name: 'Edit' });
@@ -95,11 +103,13 @@ test('allows two users to join, vote, and sync story updates', async ({ browser,
     const adminPage = (await ownerEditStoryButton.count()) === 1 ? ownerPage : guestPage;
 
     await adminPage.getByRole('button', { name: 'Edit' }).click();
-    await adminPage.getByRole('textbox').fill(updatedStory);
+    // Scope to the story card to avoid matching the backlog add input
+    const storyCard = adminPage.getByText('Current Story').locator('xpath=ancestor::div[1]');
+    await storyCard.getByRole('textbox').fill(updatedStory);
     await adminPage.getByRole('button', { name: 'Save' }).click();
 
-    await expect(ownerPage.getByText(updatedStory, { exact: true })).toBeVisible();
-    await expect(guestPage.getByText(updatedStory, { exact: true })).toBeVisible();
+    await expect(ownerPage.getByText(updatedStory, { exact: true }).first()).toBeVisible();
+    await expect(guestPage.getByText(updatedStory, { exact: true }).first()).toBeVisible();
   } finally {
     await Promise.allSettled([ownerContext.close(), guestContext.close()]);
   }

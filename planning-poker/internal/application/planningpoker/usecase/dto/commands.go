@@ -9,6 +9,13 @@ import (
 )
 
 type (
+	Story struct {
+		Name               string   `json:"name"`
+		Result             *float32 `json:"result,omitempty"`
+		MostAppearingVotes []int    `json:"mostAppearingVotes"`
+		Voted              bool     `json:"voted"`
+	}
+
 	RoomState struct {
 		Type               string        `json:"type"`
 		CurrentStory       string        `json:"currentStory"`
@@ -16,6 +23,9 @@ type (
 		Result             *float32      `json:"result,omitempty"`
 		MostAppearingVotes []int         `json:"mostAppearingVotes"`
 		Participants       []Participant `json:"participants"`
+		BacklogMode        bool          `json:"backlogMode"`
+		Stories            []Story       `json:"stories"`
+		CurrentStoryIndex  int           `json:"currentStoryIndex"`
 	}
 	Participant struct {
 		ID          string  `json:"id"`
@@ -39,11 +49,14 @@ type (
 func NewRoomStateCommand(room *entity.Room) RoomState {
 	return RoomState{
 		Type:               "room-state",
-		CurrentStory:       room.CurrentStory,
+		CurrentStory:       room.EffectiveCurrentStory(),
 		Reveal:             room.Reveal,
 		Participants:       MapToParticipants(room.Clients.Values()),
 		Result:             room.Result,
 		MostAppearingVotes: room.MostAppearingVotes,
+		BacklogMode:        room.BacklogMode,
+		Stories:            mapStories(room.Stories),
+		CurrentStoryIndex:  room.CurrentStoryIndex,
 	}
 }
 
@@ -58,6 +71,17 @@ func NewKickNotification() KickNotification {
 	return KickNotification{
 		Type: "kicked",
 	}
+}
+
+func mapStories(stories []entity.Story) []Story {
+	return lo.Map(stories, func(s entity.Story, _ int) Story {
+		return Story{
+			Name:               s.Name,
+			Result:             s.Result,
+			MostAppearingVotes: s.MostAppearingVotes,
+			Voted:              s.Voted,
+		}
+	})
 }
 
 func MapToParticipants(clients []*entity.Client) []Participant {

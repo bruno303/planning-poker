@@ -143,21 +143,31 @@ func newUsecases(hub domain.Hub, lockManager lock.LockManager, metric metric.Pla
 	joinRoomUseCase := usecase.NewJoinRoomUseCase(hub, lockManager, metric)
 	createClientUseCase := usecase.NewCreateClientUseCase(hub, metric)
 	createRoomUseCase := usecase.NewCreateRoomUseCase(hub, metric)
+	toggleBacklogModeUseCase := usecase.NewToggleBacklogModeUseCase(hub, lockManager)
+	addStoryUseCase := usecase.NewAddStoryUseCase(hub, lockManager)
+	removeStoryUseCase := usecase.NewRemoveStoryUseCase(hub, lockManager)
+	advanceStoryUseCase := usecase.NewAdvanceStoryUseCase(hub, lockManager)
+	prevStoryUseCase := usecase.NewPrevStoryUseCase(hub, lockManager)
 
 	return usecase.UseCasesFacade{
-		UpdateName:      usecasedecorators.NewTraceableUseCase(updateNameUseCase, "UpdateNameUseCase", "UpdateName"),
-		Vote:            usecasedecorators.NewTraceableUseCase(voteUseCase, "VoteUseCase", "Vote"),
-		Reveal:          usecasedecorators.NewTraceableUseCase(revealUseCase, "RevealUseCase", "Reveal"),
-		Reset:           usecasedecorators.NewTraceableUseCase(resetUseCase, "ResetUseCase", "Reset"),
-		ToggleSpectator: usecasedecorators.NewTraceableUseCase(toggleSpectatorUseCase, "ToggleSpectatorUseCase", "ToggleSpectator"),
-		ToggleOwner:     usecasedecorators.NewTraceableUseCase(toggleOwnerUseCase, "ToggleOwnerUseCase", "ToggleOwner"),
-		UpdateStory:     usecasedecorators.NewTraceableUseCase(updateStoryUseCase, "UpdateStoryUseCase", "UpdateStory"),
-		NewVoting:       usecasedecorators.NewTraceableUseCase(newVotingUseCase, "NewVotingUseCase", "NewVoting"),
-		VoteAgain:       usecasedecorators.NewTraceableUseCase(voteAgainUseCase, "VoteAgainUseCase", "VoteAgain"),
-		LeaveRoom:       usecasedecorators.NewTraceableUseCase(leaveRoomUseCase, "LeaveRoomUseCase", "LeaveRoom"),
-		JoinRoom:        usecasedecorators.NewTraceableUseCaseR(joinRoomUseCase, "JoinRoomUseCase", "JoinRoom"),
-		CreateClient:    usecasedecorators.NewTraceableUseCaseO(createClientUseCase, "CreateClientUseCase", "CreateClient"),
-		CreateRoom:      usecasedecorators.NewTraceableUseCaseO(createRoomUseCase, "CreateRoomUseCase", "CreateRoom"),
+		UpdateName:        usecasedecorators.NewTraceableUseCase(updateNameUseCase, "UpdateNameUseCase", "UpdateName"),
+		Vote:              usecasedecorators.NewTraceableUseCase(voteUseCase, "VoteUseCase", "Vote"),
+		Reveal:            usecasedecorators.NewTraceableUseCase(revealUseCase, "RevealUseCase", "Reveal"),
+		Reset:             usecasedecorators.NewTraceableUseCase(resetUseCase, "ResetUseCase", "Reset"),
+		ToggleSpectator:   usecasedecorators.NewTraceableUseCase(toggleSpectatorUseCase, "ToggleSpectatorUseCase", "ToggleSpectator"),
+		ToggleOwner:       usecasedecorators.NewTraceableUseCase(toggleOwnerUseCase, "ToggleOwnerUseCase", "ToggleOwner"),
+		UpdateStory:       usecasedecorators.NewTraceableUseCase(updateStoryUseCase, "UpdateStoryUseCase", "UpdateStory"),
+		NewVoting:         usecasedecorators.NewTraceableUseCase(newVotingUseCase, "NewVotingUseCase", "NewVoting"),
+		VoteAgain:         usecasedecorators.NewTraceableUseCase(voteAgainUseCase, "VoteAgainUseCase", "VoteAgain"),
+		LeaveRoom:         usecasedecorators.NewTraceableUseCase(leaveRoomUseCase, "LeaveRoomUseCase", "LeaveRoom"),
+		JoinRoom:          usecasedecorators.NewTraceableUseCaseR(joinRoomUseCase, "JoinRoomUseCase", "JoinRoom"),
+		CreateClient:      usecasedecorators.NewTraceableUseCaseO(createClientUseCase, "CreateClientUseCase", "CreateClient"),
+		CreateRoom:        usecasedecorators.NewTraceableUseCaseO(createRoomUseCase, "CreateRoomUseCase", "CreateRoom"),
+		ToggleBacklogMode: usecasedecorators.NewTraceableUseCase(toggleBacklogModeUseCase, "ToggleBacklogModeUseCase", "ToggleBacklogMode"),
+		AddStory:          usecasedecorators.NewTraceableUseCase(addStoryUseCase, "AddStoryUseCase", "AddStory"),
+		RemoveStory:       usecasedecorators.NewTraceableUseCase(removeStoryUseCase, "RemoveStoryUseCase", "RemoveStory"),
+		AdvanceStory:      usecasedecorators.NewTraceableUseCase(advanceStoryUseCase, "AdvanceStoryUseCase", "AdvanceStory"),
+		PrevStory:         usecasedecorators.NewTraceableUseCase(prevStoryUseCase, "PrevStoryUseCase", "PrevStory"),
 	}
 }
 

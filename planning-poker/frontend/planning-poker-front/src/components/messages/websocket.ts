@@ -9,7 +9,12 @@ export type WebSocketMessageType =
   | 'vote-again'
   | 'update-name'
   | 'update-story'
-  | 'kicked';
+  | 'kicked'
+  | 'toggle-backlog-mode'
+  | 'add-story'
+  | 'remove-story'
+  | 'advance-story'
+  | 'prev-story';
 
 export interface WebSocketMessage<T = any> {
   type: WebSocketMessageType;
@@ -34,4 +39,19 @@ export interface UpdateNamePayload {
 
 export interface UpdateStoryPayload {
   story: string;
+}
+
+export interface AddStoryPayload {
+  story: string;
+}
+
+export interface RemoveStoryPayload {
+  storyIndex: number;
+}
+
+export interface Story {
+  name: string;
+  result?: number;
+  mostAppearingVotes: number[];
+  voted: boolean;
 }

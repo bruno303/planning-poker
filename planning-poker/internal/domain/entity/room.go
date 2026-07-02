@@ -31,6 +31,9 @@ type (
 		Reveal             bool
 		Result             *float32
 		MostAppearingVotes []int
+		BacklogMode        bool
+		Stories            []Story
+		CurrentStoryIndex  int
 	}
 )
 
@@ -45,6 +48,7 @@ func NewRoomWithID(id string, clients ClientCollection) *Room {
 		CurrentStory: "",
 		Reveal:       false,
 		Result:       nil,
+		BacklogMode:  true,
 	}
 }
 
@@ -83,13 +87,151 @@ func (r *Room) NewVoting(ctx context.Context, clientID string) error {
 		return fmt.Errorf("only the room owner can start a new voting")
 	}
 
-	r.CurrentStory = ""
+	if !r.BacklogMode {
+		r.CurrentStory = ""
+	}
 	r.reveal(false)
 	r.Clients.ForEach(func(c *Client) {
 		c.Vote(ctx, nil)
 	})
 
 	return nil
+}
+
+func (r *Room) ToggleBacklogMode(ctx context.Context, clientID string) error {
+	client, ok := r.FindClient(clientID)
+	if !ok {
+		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+	}
+	if !client.IsOwner {
+		return fmt.Errorf("only the room owner can toggle backlog mode")
+	}
+
+	if !r.BacklogMode {
+		r.BacklogMode = true
+		if r.CurrentStory != "" {
+			r.Stories = []Story{{Name: r.CurrentStory}}
+			r.CurrentStoryIndex = 0
+		}
+	} else {
+		r.BacklogMode = false
+		if name := r.getCurrentStoryName(); name != "" {
+			r.CurrentStory = name
+		}
+		r.Stories = nil
+		r.CurrentStoryIndex = 0
+	}
+
+	return nil
+}
+
+func (r *Room) AddStory(ctx context.Context, clientID string, name string) error {
+	client, ok := r.FindClient(clientID)
+	if !ok {
+		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+	}
+	if !client.IsOwner {
+		return fmt.Errorf("only the room owner can add a story")
+	}
+
+	if !r.BacklogMode {
+		r.BacklogMode = true
+	}
+
+	r.Stories = append(r.Stories, Story{Name: name})
+	if len(r.Stories) == 1 {
+		r.CurrentStoryIndex = 0
+	}
+
+	return nil
+}
+
+func (r *Room) RemoveStory(ctx context.Context, clientID string, index int) error {
+	client, ok := r.FindClient(clientID)
+	if !ok {
+		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+	}
+	if !client.IsOwner {
+		return fmt.Errorf("only the room owner can remove a story")
+	}
+
+	if index < 0 || index >= len(r.Stories) {
+		return fmt.Errorf("story index %d out of range", index)
+	}
+
+	if index == r.CurrentStoryIndex {
+		if len(r.Stories) == 1 {
+			r.CurrentStoryIndex = 0
+			r.Stories = nil
+			return nil
+		} else if index == len(r.Stories)-1 {
+			r.CurrentStoryIndex--
+		}
+		r.reveal(false)
+		r.Clients.ForEach(func(c *Client) {
+			c.Vote(ctx, nil)
+		})
+	} else if index < r.CurrentStoryIndex {
+		r.CurrentStoryIndex--
+	}
+
+	r.Stories = append(r.Stories[:index], r.Stories[index+1:]...)
+
+	return nil
+}
+
+func (r *Room) AdvanceToNextStory(ctx context.Context, clientID string) error {
+	client, ok := r.FindClient(clientID)
+	if !ok {
+		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+	}
+	if !client.IsOwner {
+		return fmt.Errorf("only the room owner can advance to the next story")
+	}
+
+	if r.CurrentStoryIndex < len(r.Stories)-1 {
+		r.CurrentStoryIndex++
+		r.reveal(false)
+		r.Clients.ForEach(func(c *Client) {
+			c.Vote(ctx, nil)
+		})
+	}
+
+	return nil
+}
+
+func (r *Room) PrevStory(ctx context.Context, clientID string) error {
+	client, ok := r.FindClient(clientID)
+	if !ok {
+		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+	}
+	if !client.IsOwner {
+		return fmt.Errorf("only the room owner can go to the previous story")
+	}
+
+	if r.CurrentStoryIndex > 0 {
+		r.CurrentStoryIndex--
+		r.reveal(false)
+		r.Clients.ForEach(func(c *Client) {
+			c.Vote(ctx, nil)
+		})
+	}
+
+	return nil
+}
+
+func (r *Room) EffectiveCurrentStory() string {
+	if r.BacklogMode && len(r.Stories) > 0 && r.CurrentStoryIndex < len(r.Stories) {
+		return r.Stories[r.CurrentStoryIndex].Name
+	}
+	return r.CurrentStory
+}
+
+func (r *Room) getCurrentStoryName() string {
+	if len(r.Stories) > 0 && r.CurrentStoryIndex < len(r.Stories) {
+		return r.Stories[r.CurrentStoryIndex].Name
+	}
+	return ""
 }
 
 func (r *Room) ResetVoting(ctx context.Context, clientID string) error {
@@ -213,7 +355,11 @@ func (r *Room) SetCurrentStory(ctx context.Context, clientID string, story strin
 		return fmt.Errorf("only the room owner can set the current story")
 	}
 
-	r.CurrentStory = story
+	if r.BacklogMode && r.CurrentStoryIndex >= 0 && r.CurrentStoryIndex < len(r.Stories) {
+		r.Stories[r.CurrentStoryIndex].Name = story
+	} else {
+		r.CurrentStory = story
+	}
 	return nil
 }
 
@@ -227,6 +373,13 @@ func (r *Room) ToggleReveal(ctx context.Context, clientID string) error {
 	}
 
 	r.reveal(!r.Reveal)
+
+	if r.Reveal && r.BacklogMode && r.CurrentStoryIndex >= 0 && r.CurrentStoryIndex < len(r.Stories) {
+		r.Stories[r.CurrentStoryIndex].Result = r.Result
+		r.Stories[r.CurrentStoryIndex].MostAppearingVotes = r.MostAppearingVotes
+		r.Stories[r.CurrentStoryIndex].Voted = true
+	}
+
 	return nil
 }
 

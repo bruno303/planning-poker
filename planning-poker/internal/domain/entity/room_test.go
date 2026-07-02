@@ -213,6 +213,10 @@ func TestNewRoom(t *testing.T) {
 	if room.Result != nil {
 		t.Errorf("NewRoom() Result = %v, want nil", room.Result)
 	}
+
+	if !room.BacklogMode {
+		t.Error("NewRoom() BacklogMode = false, want true")
+	}
 }
 
 func TestNewRoomWithID(t *testing.T) {
@@ -233,6 +237,10 @@ func TestNewRoomWithID(t *testing.T) {
 	}
 	if room.Clients != mockCC {
 		t.Fatal("NewRoomWithID() Clients not set correctly")
+	}
+
+	if !room.BacklogMode {
+		t.Error("NewRoomWithID() BacklogMode = false, want true")
 	}
 
 	client := room.NewClient("client1")
@@ -358,6 +366,7 @@ func TestRoom_NewVoting(t *testing.T) {
 		mockCC.EXPECT().Values().Return([]*Client{}).AnyTimes()
 
 		room := NewRoom(mockCC)
+		room.BacklogMode = false
 		room.Reveal = true
 		room.CurrentStory = "Old story"
 		client.room = room
@@ -940,6 +949,522 @@ func TestRoom_MostAppearingVotes(t *testing.T) {
 		// Both votes appear once, so both should be in the list
 		if len(room.MostAppearingVotes) != 2 {
 			t.Errorf("Expected 2 most appearing votes, got %v", len(room.MostAppearingVotes))
+		}
+	})
+}
+
+func TestRoom_ToggleBacklogMode(t *testing.T) {
+	ctx := context.Background()
+
+	makeOwnerRoom := func(ctrl *gomock.Controller) (*Room, *Client) {
+		client := &Client{ID: "client1", IsOwner: true, IsSpectator: false}
+		mockCC := NewMockClientCollection(ctrl)
+		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC).AnyTimes()
+		mockCC.EXPECT().First().Return(client, true).AnyTimes()
+		mockCC.EXPECT().ForEach(gomock.Any()).AnyTimes()
+		mockCC.EXPECT().Values().Return([]*Client{}).AnyTimes()
+		room := NewRoom(mockCC)
+		client.room = room
+		return room, client
+	}
+
+	t.Run("should enable backlog mode and migrate current story", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		room, _ := makeOwnerRoom(ctrl)
+		room.BacklogMode = false
+		room.CurrentStory = "Story 1"
+
+		err := room.ToggleBacklogMode(ctx, "client1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !room.BacklogMode {
+			t.Error("BacklogMode should be true")
+		}
+		if len(room.Stories) != 1 {
+			t.Fatalf("expected 1 story, got %d", len(room.Stories))
+		}
+		if room.Stories[0].Name != "Story 1" {
+			t.Errorf("expected story name 'Story 1', got '%s'", room.Stories[0].Name)
+		}
+		if room.CurrentStoryIndex != 0 {
+			t.Errorf("expected CurrentStoryIndex 0, got %d", room.CurrentStoryIndex)
+		}
+	})
+
+	t.Run("should disable backlog mode and restore current story", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		room, _ := makeOwnerRoom(ctrl)
+		room.BacklogMode = true
+		room.Stories = []Story{{Name: "Story A"}, {Name: "Story B"}}
+		room.CurrentStoryIndex = 1
+
+		err := room.ToggleBacklogMode(ctx, "client1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if room.BacklogMode {
+			t.Error("BacklogMode should be false")
+		}
+		if room.CurrentStory != "Story B" {
+			t.Errorf("expected CurrentStory 'Story B', got '%s'", room.CurrentStory)
+		}
+		if len(room.Stories) != 0 {
+			t.Errorf("expected empty Stories, got %d", len(room.Stories))
+		}
+	})
+
+	t.Run("should fail when client is not owner", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		nonOwner := &Client{ID: "client2", IsOwner: false, IsSpectator: false}
+		mockCC := NewMockClientCollection(ctrl)
+		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
+		mockCC.EXPECT().First().Return(nonOwner, true)
+		room := &Room{
+			ID:           "room1",
+			Clients:      mockCC,
+			CurrentStory: "",
+		}
+
+		err := room.ToggleBacklogMode(ctx, "client2")
+		if err == nil {
+			t.Error("expected error, got nil")
+		}
+	})
+
+	t.Run("should fail when client not found", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		mockCC := NewMockClientCollection(ctrl)
+		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
+		mockCC.EXPECT().First().Return(nil, false)
+		room := &Room{
+			ID:      "room1",
+			Clients: mockCC,
+		}
+
+		err := room.ToggleBacklogMode(ctx, "nonexistent")
+		if err == nil {
+			t.Error("expected error, got nil")
+		}
+	})
+}
+
+func TestRoom_AddStory(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("should add story and enable backlog mode", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		owner := &Client{ID: "client1", IsOwner: true, IsSpectator: false}
+		mockCC := NewMockClientCollection(ctrl)
+		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
+		mockCC.EXPECT().First().Return(owner, true)
+		mockCC.EXPECT().Values().Return([]*Client{}).AnyTimes()
+		room := &Room{
+			ID:           "room1",
+			Clients:      mockCC,
+			CurrentStory: "",
+		}
+
+		err := room.AddStory(ctx, "client1", "Story 1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !room.BacklogMode {
+			t.Error("BacklogMode should be true")
+		}
+		if len(room.Stories) != 1 {
+			t.Fatalf("expected 1 story, got %d", len(room.Stories))
+		}
+		if room.Stories[0].Name != "Story 1" {
+			t.Errorf("expected 'Story 1', got '%s'", room.Stories[0].Name)
+		}
+		if room.CurrentStoryIndex != 0 {
+			t.Errorf("expected CurrentStoryIndex 0, got %d", room.CurrentStoryIndex)
+		}
+	})
+
+	t.Run("should keep CurrentStoryIndex on subsequent adds", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		owner := &Client{ID: "client1", IsOwner: true, IsSpectator: false}
+		mockCC := NewMockClientCollection(ctrl)
+		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
+		mockCC.EXPECT().First().Return(owner, true)
+		mockCC.EXPECT().Values().Return([]*Client{}).AnyTimes()
+		room := &Room{
+			ID:                "room1",
+			Clients:           mockCC,
+			BacklogMode:       true,
+			Stories:           []Story{{Name: "Story 1"}},
+			CurrentStoryIndex: 0,
+		}
+
+		err := room.AddStory(ctx, "client1", "Story 2")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(room.Stories) != 2 {
+			t.Fatalf("expected 2 stories, got %d", len(room.Stories))
+		}
+		if room.CurrentStoryIndex != 0 {
+			t.Errorf("expected CurrentStoryIndex 0, got %d", room.CurrentStoryIndex)
+		}
+	})
+
+	t.Run("should fail when not owner", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		nonOwner := &Client{ID: "client2", IsOwner: false, IsSpectator: false}
+		mockCC := NewMockClientCollection(ctrl)
+		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
+		mockCC.EXPECT().First().Return(nonOwner, true)
+		room := &Room{
+			ID:      "room1",
+			Clients: mockCC,
+		}
+
+		err := room.AddStory(ctx, "client2", "Story 1")
+		if err == nil {
+			t.Error("expected error, got nil")
+		}
+	})
+}
+
+func TestRoom_RemoveStory(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("should remove story at index", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		owner := &Client{ID: "client1", IsOwner: true, IsSpectator: false}
+		mockCC := NewMockClientCollection(ctrl)
+		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
+		mockCC.EXPECT().First().Return(owner, true)
+		room := NewRoom(mockCC)
+		owner.room = room
+		room.BacklogMode = true
+		room.Stories = []Story{{Name: "A"}, {Name: "B"}, {Name: "C"}}
+		room.CurrentStoryIndex = 0
+
+		err := room.RemoveStory(ctx, "client1", 2)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(room.Stories) != 2 {
+			t.Errorf("expected 2 stories, got %d", len(room.Stories))
+		}
+	})
+
+	t.Run("should adjust CurrentStoryIndex when removing story before current", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		owner := &Client{ID: "client1", IsOwner: true, IsSpectator: false}
+		mockCC := NewMockClientCollection(ctrl)
+		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
+		mockCC.EXPECT().First().Return(owner, true)
+		room := NewRoom(mockCC)
+		owner.room = room
+		room.BacklogMode = true
+		room.Stories = []Story{{Name: "A"}, {Name: "B"}, {Name: "C"}}
+		room.CurrentStoryIndex = 1
+
+		err := room.RemoveStory(ctx, "client1", 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if room.CurrentStoryIndex != 0 {
+			t.Errorf("expected CurrentStoryIndex 0, got %d", room.CurrentStoryIndex)
+		}
+	})
+
+	t.Run("should reset votes when removing current story", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		owner := &Client{ID: "client1", IsOwner: true, IsSpectator: false}
+		owner.CurrentVote = lo.ToPtr("5")
+		owner.HasVoted = true
+		mockCC := NewMockClientCollection(ctrl)
+		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
+		mockCC.EXPECT().First().Return(owner, true)
+		mockCC.EXPECT().ForEach(gomock.Any()).Do(func(f func(*Client)) { f(owner) })
+		mockCC.EXPECT().Values().Return([]*Client{}).AnyTimes()
+		room := NewRoom(mockCC)
+		owner.room = room
+		room.BacklogMode = true
+		room.Reveal = true
+		room.Stories = []Story{{Name: "A"}, {Name: "B"}}
+		room.CurrentStoryIndex = 0
+
+		err := room.RemoveStory(ctx, "client1", 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if room.Reveal {
+			t.Error("Reveal should be false after removing current story")
+		}
+		if owner.HasVoted {
+			t.Error("owner votes should be reset")
+		}
+	})
+
+	t.Run("should handle removing last story", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		owner := &Client{ID: "client1", IsOwner: true, IsSpectator: false}
+		mockCC := NewMockClientCollection(ctrl)
+		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
+		mockCC.EXPECT().First().Return(owner, true)
+		room := NewRoom(mockCC)
+		owner.room = room
+		room.BacklogMode = true
+		room.Stories = []Story{{Name: "Only"}}
+		room.CurrentStoryIndex = 0
+
+		err := room.RemoveStory(ctx, "client1", 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(room.Stories) != 0 {
+			t.Errorf("expected 0 stories, got %d", len(room.Stories))
+		}
+	})
+
+	t.Run("should fail with invalid index", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		owner := &Client{ID: "client1", IsOwner: true, IsSpectator: false}
+		mockCC := NewMockClientCollection(ctrl)
+		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
+		mockCC.EXPECT().First().Return(owner, true)
+		room := NewRoom(mockCC)
+		owner.room = room
+		room.BacklogMode = true
+		room.Stories = []Story{{Name: "A"}}
+
+		err := room.RemoveStory(ctx, "client1", 5)
+		if err == nil {
+			t.Error("expected error, got nil")
+		}
+	})
+
+	t.Run("should fail when not owner", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		nonOwner := &Client{ID: "client2", IsOwner: false, IsSpectator: false}
+		mockCC := NewMockClientCollection(ctrl)
+		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
+		mockCC.EXPECT().First().Return(nonOwner, true)
+		room := NewRoom(mockCC)
+		nonOwner.room = room
+		room.BacklogMode = true
+		room.Stories = []Story{{Name: "A"}}
+
+		err := room.RemoveStory(ctx, "client2", 0)
+		if err == nil {
+			t.Error("expected error, got nil")
+		}
+	})
+}
+
+func TestRoom_AdvanceToNextStory(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("should advance to next story and reset votes", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		owner := &Client{ID: "client1", IsOwner: true, IsSpectator: false}
+		owner.CurrentVote = lo.ToPtr("5")
+		owner.HasVoted = true
+		mockCC := NewMockClientCollection(ctrl)
+		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
+		mockCC.EXPECT().First().Return(owner, true)
+		mockCC.EXPECT().ForEach(gomock.Any()).Do(func(f func(*Client)) { f(owner) })
+		mockCC.EXPECT().Values().Return([]*Client{}).AnyTimes()
+		room := NewRoom(mockCC)
+		owner.room = room
+		room.BacklogMode = true
+		room.Reveal = true
+		room.Stories = []Story{{Name: "A"}, {Name: "B"}, {Name: "C"}}
+		room.CurrentStoryIndex = 0
+
+		err := room.AdvanceToNextStory(ctx, "client1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if room.CurrentStoryIndex != 1 {
+			t.Errorf("expected CurrentStoryIndex 1, got %d", room.CurrentStoryIndex)
+		}
+		if room.Reveal {
+			t.Error("Reveal should be false")
+		}
+		if owner.HasVoted {
+			t.Error("votes should be reset")
+		}
+	})
+
+	t.Run("should no-op when at last story", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		owner := &Client{ID: "client1", IsOwner: true, IsSpectator: false}
+		mockCC := NewMockClientCollection(ctrl)
+		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
+		mockCC.EXPECT().First().Return(owner, true)
+		room := NewRoom(mockCC)
+		owner.room = room
+		room.BacklogMode = true
+		room.Stories = []Story{{Name: "A"}, {Name: "B"}}
+		room.CurrentStoryIndex = 1
+
+		err := room.AdvanceToNextStory(ctx, "client1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if room.CurrentStoryIndex != 1 {
+			t.Errorf("expected CurrentStoryIndex 1, got %d", room.CurrentStoryIndex)
+		}
+	})
+
+	t.Run("should fail when not owner", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		nonOwner := &Client{ID: "client2", IsOwner: false, IsSpectator: false}
+		mockCC := NewMockClientCollection(ctrl)
+		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
+		mockCC.EXPECT().First().Return(nonOwner, true)
+		room := NewRoom(mockCC)
+		nonOwner.room = room
+		room.BacklogMode = true
+		room.Stories = []Story{{Name: "A"}, {Name: "B"}}
+
+		err := room.AdvanceToNextStory(ctx, "client2")
+		if err == nil {
+			t.Error("expected error, got nil")
+		}
+	})
+}
+
+func TestRoom_PrevStory(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("should move to previous story and reset votes", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		owner := &Client{ID: "client1", IsOwner: true, IsSpectator: false}
+		owner.CurrentVote = lo.ToPtr("5")
+		owner.HasVoted = true
+		mockCC := NewMockClientCollection(ctrl)
+		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
+		mockCC.EXPECT().First().Return(owner, true)
+		mockCC.EXPECT().ForEach(gomock.Any()).Do(func(f func(*Client)) { f(owner) })
+		mockCC.EXPECT().Values().Return([]*Client{}).AnyTimes()
+		room := NewRoom(mockCC)
+		owner.room = room
+		room.BacklogMode = true
+		room.Reveal = true
+		room.Stories = []Story{{Name: "A"}, {Name: "B"}, {Name: "C"}}
+		room.CurrentStoryIndex = 2
+
+		err := room.PrevStory(ctx, "client1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if room.CurrentStoryIndex != 1 {
+			t.Errorf("expected CurrentStoryIndex 1, got %d", room.CurrentStoryIndex)
+		}
+		if room.Reveal {
+			t.Error("Reveal should be false")
+		}
+		if owner.HasVoted {
+			t.Error("votes should be reset")
+		}
+	})
+
+	t.Run("should no-op when at first story", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		owner := &Client{ID: "client1", IsOwner: true, IsSpectator: false}
+		mockCC := NewMockClientCollection(ctrl)
+		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
+		mockCC.EXPECT().First().Return(owner, true)
+		room := NewRoom(mockCC)
+		owner.room = room
+		room.BacklogMode = true
+		room.Stories = []Story{{Name: "A"}, {Name: "B"}}
+		room.CurrentStoryIndex = 0
+
+		err := room.PrevStory(ctx, "client1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if room.CurrentStoryIndex != 0 {
+			t.Errorf("expected CurrentStoryIndex 0, got %d", room.CurrentStoryIndex)
+		}
+	})
+
+	t.Run("should fail when not owner", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		nonOwner := &Client{ID: "client2", IsOwner: false, IsSpectator: false}
+		mockCC := NewMockClientCollection(ctrl)
+		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
+		mockCC.EXPECT().First().Return(nonOwner, true)
+		room := NewRoom(mockCC)
+		nonOwner.room = room
+		room.BacklogMode = true
+		room.Stories = []Story{{Name: "A"}, {Name: "B"}}
+
+		err := room.PrevStory(ctx, "client2")
+		if err == nil {
+			t.Error("expected error, got nil")
+		}
+	})
+}
+
+func TestRoom_EffectiveCurrentStory(t *testing.T) {
+	t.Run("should return story from backlog when backlog mode is on", func(t *testing.T) {
+		room := &Room{
+			BacklogMode:       true,
+			CurrentStory:      "old",
+			Stories:           []Story{{Name: "Story 1"}, {Name: "Story 2"}},
+			CurrentStoryIndex: 1,
+		}
+
+		result := room.EffectiveCurrentStory()
+		if result != "Story 2" {
+			t.Errorf("expected 'Story 2', got '%s'", result)
+		}
+	})
+
+	t.Run("should return CurrentStory when backlog mode is off", func(t *testing.T) {
+		room := &Room{
+			BacklogMode:       false,
+			CurrentStory:      "Standalone Story",
+			Stories:           []Story{{Name: "Story 1"}},
+			CurrentStoryIndex: 0,
+		}
+
+		result := room.EffectiveCurrentStory()
+		if result != "Standalone Story" {
+			t.Errorf("expected 'Standalone Story', got '%s'", result)
+		}
+	})
+
+	t.Run("should return empty string when no stories and no current story", func(t *testing.T) {
+		room := &Room{
+			BacklogMode:       true,
+			CurrentStory:      "",
+			Stories:           []Story{},
+			CurrentStoryIndex: 0,
+		}
+
+		result := room.EffectiveCurrentStory()
+		if result != "" {
+			t.Errorf("expected empty string, got '%s'", result)
 		}
 	})
 }

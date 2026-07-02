@@ -48,6 +48,12 @@ type (
 	VotePayload struct {
 		Vote string `json:"vote"`
 	}
+	AddStoryPayload struct {
+		Story string `json:"story"`
+	}
+	RemoveStoryPayload struct {
+		StoryIndex int `json:"storyIndex"`
+	}
 	useCaseCall func(context.Context, WebSocketMessage) error
 
 	WebsocketBus struct {
@@ -352,6 +358,46 @@ func mapUsecases(usecases usecase.UseCasesFacade, clientID, roomID string) map[s
 		},
 		"vote-again": func(ctx context.Context, msg WebSocketMessage) error {
 			return usecases.VoteAgain.Execute(ctx, usecase.VoteAgainCommand{
+				RoomID:   roomID,
+				SenderID: clientID,
+			})
+		},
+		"toggle-backlog-mode": func(ctx context.Context, msg WebSocketMessage) error {
+			return usecases.ToggleBacklogMode.Execute(ctx, usecase.ToggleBacklogModeCommand{
+				RoomID:   roomID,
+				SenderID: clientID,
+			})
+		},
+		"add-story": func(ctx context.Context, msg WebSocketMessage) error {
+			var payload AddStoryPayload
+			if err := decode(msg.Payload, &payload); err != nil {
+				return errors.New("invalid payload")
+			}
+			return usecases.AddStory.Execute(ctx, usecase.AddStoryCommand{
+				RoomID:    roomID,
+				SenderID:  clientID,
+				StoryName: payload.Story,
+			})
+		},
+		"remove-story": func(ctx context.Context, msg WebSocketMessage) error {
+			var payload RemoveStoryPayload
+			if err := decode(msg.Payload, &payload); err != nil {
+				return errors.New("invalid payload")
+			}
+			return usecases.RemoveStory.Execute(ctx, usecase.RemoveStoryCommand{
+				RoomID:     roomID,
+				SenderID:   clientID,
+				StoryIndex: payload.StoryIndex,
+			})
+		},
+		"advance-story": func(ctx context.Context, msg WebSocketMessage) error {
+			return usecases.AdvanceStory.Execute(ctx, usecase.AdvanceStoryCommand{
+				RoomID:   roomID,
+				SenderID: clientID,
+			})
+		},
+		"prev-story": func(ctx context.Context, msg WebSocketMessage) error {
+			return usecases.PrevStory.Execute(ctx, usecase.PrevStoryCommand{
 				RoomID:   roomID,
 				SenderID: clientID,
 			})
