@@ -99,6 +99,7 @@ export default function PlanningPokerHome() {
             <input
               ref={nameInputRef}
               type="text"
+              autoComplete="name"
               value={userName}
               onChange={(e) => setUserName(e.target.value)}
               placeholder="Enter your name"
