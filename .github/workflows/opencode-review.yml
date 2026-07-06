@@ -13,6 +13,13 @@ jobs:
       startsWith(github.event.comment.body, '/review-oc') ||
       contains(github.event.comment.body, ' /review-opencode') ||
       startsWith(github.event.comment.body, '/review-opencode')
+
+    permissions:
+      id-token: write
+      contents: write
+      pull-requests: write
+      issues: write
+
     uses: bruno303/github-actions/.github/workflows/opencode-review.yml@v0.0.2
     with:
       repository: ${{ github.repository }}
