@@ -1,0 +1,75 @@
+name: Planning Poker Helm Chart CI
+
+on:
+  pull_request:
+    paths:
+      - 'helm/**'
+  push:
+    tags:
+      - 'planning-poker-chart/*'
+
+env:
+  CHART_DIR: helm
+  GHCR_REPO: oci://ghcr.io/bruno303
+
+jobs:
+  lint:
+    name: Lint Helm Chart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: latest
+      - name: Lint chart
+        working-directory: ${{ env.CHART_DIR }}
+        run: helm lint .
+
+  publish:
+    name: Package and Push to GHCR
+    runs-on: ubuntu-latest
+    needs: lint
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/planning-poker-chart/')
+    permissions:
+      contents: read
+      packages: write
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: latest
+
+      - name: Check chart version matches tag
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#planning-poker-chart/}"
+          CHART_VERSION=$(grep '^version:' ${{ env.CHART_DIR }}/Chart.yaml | awk '{print $2}' | tr -d '"' | tr -d "'")
+          if [ -z "$CHART_VERSION" ]; then
+            echo "❌ Could not extract version from ${{ env.CHART_DIR }}/Chart.yaml"
+            exit 1
+          fi
+          if [ "$TAG_VERSION" != "$CHART_VERSION" ]; then
+            echo "❌ Tag version ($TAG_VERSION) != Chart.yaml version ($CHART_VERSION)"
+            exit 1
+          fi
+          echo "✅ Versions match: $TAG_VERSION"
+
+      - name: Package chart
+        id: package
+        run: |
+          helm package ${{ env.CHART_DIR }} -d /tmp/chart
+          echo "chart_package=$(ls /tmp/chart/*.tgz)" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        run: echo "${{ github.token }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Push chart to GHCR
+        run: helm push "${{ steps.package.outputs.chart_package }}" ${{ env.GHCR_REPO }}
+
+      - name: Summary
+        run: |
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Helm Chart Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "* **Package:** \`${{ env.GHCR_REPO }}/planning-poker-chart\`" >> $GITHUB_STEP_SUMMARY
+          echo "* **Version:** \`${GITHUB_REF_NAME#planning-poker-chart/}\`" >> $GITHUB_STEP_SUMMARY
