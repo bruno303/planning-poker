@@ -124,7 +124,7 @@ jobs:
       - name: Dispatch to k8s
         uses: peter-evans/repository-dispatch@v3
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PLANNING_POKER_PAT }}
           repository: bruno303/study-topics
           event-type: planning-poker-tag-push
           client-payload: |
