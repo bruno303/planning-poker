@@ -7,6 +7,15 @@ on:
     paths:
       - '**'
       - '!frontend/**'
+      - '!.github/**'
+      - '!.gitignore'
+      - '!.vscode.example/**'
+      - '!AGENTS.md'
+      - '!README.MD'
+      - '!example.env'
+      - '!requests.http'
+      - '!helm/**'
+      - '!docker-compose.yml'
   pull_request:
     types: [opened, synchronize, reopened]
     branches: 
@@ -14,6 +23,15 @@ on:
     paths:
       - '**'
       - '!frontend/**'
+      - '!.github/**'
+      - '!.gitignore'
+      - '!.vscode.example/**'
+      - '!AGENTS.md'
+      - '!README.MD'
+      - '!example.env'
+      - '!requests.http'
+      - '!helm/**'
+      - '!docker-compose.yml'
 
 env:
   DOCKER_REPO: ${{ secrets.DOCKERHUB_USERNAME }}/planning-poker-backend
