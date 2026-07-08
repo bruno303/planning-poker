@@ -115,6 +115,24 @@ jobs:
           tags: |
             ${{ env.DOCKER_REPO }}:${{ steps.versioning.outputs.NEW_VERSION }}-stg
 
+      - name: Get latest versions
+        id: versions
+        run: |
+          echo "BE_VERSION=$(git tag --list 'planning-poker-backend/*' --sort=-v:refname | head -1 | sed 's/planning-poker-backend\///')" >> $GITHUB_OUTPUT
+          echo "FE_VERSION=$(git tag --list 'planning-poker-frontend/*' --sort=-v:refname | head -1 | sed 's/planning-poker-frontend\///')" >> $GITHUB_OUTPUT
+
+      - name: Dispatch to k8s
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: bruno303/study-topics
+          event-type: planning-poker-tag-push
+          client-payload: |
+            {
+              "backend_version": "${{ steps.versions.outputs.BE_VERSION }}",
+              "frontend_version": "${{ steps.versions.outputs.FE_VERSION }}"
+            }
+
       - name: Summary
         run: |
           echo "---" >> $GITHUB_STEP_SUMMARY
