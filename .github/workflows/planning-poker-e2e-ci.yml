@@ -12,18 +12,6 @@ on:
       - main
     paths:
       - '**'
-      - '!.github/**'
-      - '!.gitignore'
-      - '!.golangci.yaml'
-      - '!.vscode/**'
-      - '!.vscode.example/**'
-      - '!AGENTS.md'
-      - '!README.MD'
-      - '!example.env'
-      - '!requests.http'
-      - '!sonar-project.properties'
-      - '!helm/**'
-      - '!docker-compose.yml'
 
 jobs:
   e2e:

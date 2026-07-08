@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-    paths:
+    paths: &exclude_paths
       - '**'
       - '!frontend/**'
       - '!.github/**'
@@ -20,18 +20,7 @@ on:
     types: [opened, synchronize, reopened]
     branches: 
       - main
-    paths:
-      - '**'
-      - '!frontend/**'
-      - '!.github/**'
-      - '!.gitignore'
-      - '!.vscode.example/**'
-      - '!AGENTS.md'
-      - '!README.MD'
-      - '!example.env'
-      - '!requests.http'
-      - '!helm/**'
-      - '!docker-compose.yml'
+    paths: *exclude_paths
 
 env:
   DOCKER_REPO: ${{ secrets.DOCKERHUB_USERNAME }}/planning-poker-backend
