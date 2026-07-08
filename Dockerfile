@@ -24,7 +24,7 @@ WORKDIR /app
 # Copy the built binary from builder
 COPY --from=builder /app/app .
 
-# Expose port
+# Expose port 8080
 EXPOSE 8080
 
 # Run the binary
