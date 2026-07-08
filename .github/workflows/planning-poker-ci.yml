@@ -140,7 +140,10 @@ jobs:
           echo "NEW_VERSION=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Create and Push Git Tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.PLANNING_POKER_PAT }}
         run: |
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
           git tag "planning-poker-backend/${{ steps.versioning.outputs.NEW_VERSION }}"
           git push origin tag "planning-poker-backend/${{ steps.versioning.outputs.NEW_VERSION }}"
 
