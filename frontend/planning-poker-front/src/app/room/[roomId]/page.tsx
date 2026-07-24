@@ -87,7 +87,7 @@ export default function PlanningPoker() {
     logger.info('Invalid room ID', { roomId: routeRoomId });
     pushError('Invalid room code. Redirecting to join page.');
     router.replace('/join');
-  }, [routeRoomId, router, pushError]);
+  }, [routeRoomId, router, pushError, logger]);
 
   useEffect(() => {
     if (!roomId) {
