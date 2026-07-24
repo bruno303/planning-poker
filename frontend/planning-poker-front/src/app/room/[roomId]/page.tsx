@@ -15,6 +15,7 @@ import {
   WebSocketMessage
 } from '@/components/messages/websocket';
 import ParticipantIdBadge from '@/components/participantIdBadge/participantIdBadge';
+import { useLogger } from '@/context/logger/loggerContext';
 import { useRoom } from '@/context/room/roomContext';
 import { useToast } from '@/context/toast/toastContext';
 import { Eye, EyeOff, List, Plus, Repeat, RotateCcw, Shield, Trash2, Users, X } from 'lucide-react';
@@ -44,6 +45,7 @@ type Participant = {
 }
 
 export default function PlanningPoker() {
+  const logger = useLogger('room-page');
   const params = useParams();
   const router = useRouter();
   const { socket, connected } = useRoom();
@@ -82,6 +84,7 @@ export default function PlanningPoker() {
     }
 
     setRoomId('');
+    logger.info('Invalid room ID', { roomId: routeRoomId });
     pushError('Invalid room code. Redirecting to join page.');
     router.replace('/join');
   }, [routeRoomId, router, pushError]);
@@ -216,6 +219,7 @@ export default function PlanningPoker() {
       RECONNECT_MAX_DELAY
     );
     reconnectAttemptsRef.current++;
+    logger.warn('Reconnection attempt', { attempt: reconnectAttemptsRef.current });
     reconnectTimeoutRef.current = setTimeout(() => {
       connectWebSocket(roomCode, storedUserName);
     }, delay);
@@ -276,6 +280,7 @@ export default function PlanningPoker() {
           deliberateDisconnect.current = true;
           cancelReconnect();
           sessionStorage.removeItem('clientId');
+          logger.info('Kicked from room');
           pushError('You have been kicked from the room');
           router.push('/');
 
@@ -283,18 +288,21 @@ export default function PlanningPoker() {
           throw new Error('Invalid message from websocket');
         }
       } catch (err: any) {
+        logger.error('Message handling failed', { error: err?.message });
         const message = err?.message ? `Error while handling websocket message: ${err.message}` : 'Error while handling websocket message';
         pushError(message);
       }
     };
 
     ws.onopen = () => {
+      logger.info('WebSocket connected');
       setIsConnected(true);
       reconnectAttemptsRef.current = 0;
       pushSuccess('Connected');
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
+      logger.warn('WebSocket closed', { code: event.code, reason: event.reason });
       setIsConnected(false);
       if (socket.current === ws) {
         socket.current = null;
@@ -306,7 +314,8 @@ export default function PlanningPoker() {
       }
     };
 
-    ws.onerror = () => {
+    ws.onerror = (event) => {
+      logger.error('WebSocket error', { error: event.type });
       pushError('Connection error');
       if (socket.current === ws) {
         connected.current = false;

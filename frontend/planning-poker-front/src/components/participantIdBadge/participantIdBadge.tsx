@@ -1,5 +1,6 @@
 'use client';
 
+import { useLogger } from '@/context/logger/loggerContext';
 import { Hash } from 'lucide-react';
 import { useState } from 'react';
 import styles from './participantIdBadge.module.css';
@@ -11,6 +12,7 @@ type ParticipantIdBadgeProps = {
 
 export default function ParticipantIdBadge({ participantId, onCopied }: ParticipantIdBadgeProps) {
   const [showTooltip, setShowTooltip] = useState(false);
+  const logger = useLogger('participant-badge');
 
   const handleClick = async () => {
     try {
@@ -18,7 +20,7 @@ export default function ParticipantIdBadge({ participantId, onCopied }: Particip
       onCopied();
     } catch (err) {
       // Clipboard API unavailable (non-HTTPS, Docker E2E, etc.) — fall back gracefully
-      console.debug('Clipboard API unavailable', err);
+      logger.debug('Clipboard API unavailable', { meta: { error: String(err) } });
     }
   };
 

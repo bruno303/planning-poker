@@ -3,6 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ParticipantIdBadge from './participantIdBadge';
 
+const mockDebug = vi.fn();
+
+vi.mock('@/context/logger/loggerContext', () => ({
+  useLogger: () => ({
+    debug: mockDebug,
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  }),
+}));
+
 describe('ParticipantIdBadge', () => {
   beforeEach(() => {
     Object.assign(navigator, {
@@ -10,7 +21,7 @@ describe('ParticipantIdBadge', () => {
         writeText: vi.fn(),
       },
     });
-    vi.spyOn(console, 'debug').mockImplementation(() => {});
+    mockDebug.mockClear();
   });
   afterEach(() => {
     cleanup();
@@ -47,9 +58,9 @@ describe('ParticipantIdBadge', () => {
     await waitFor(() => {
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith(TEST_UUID);
       expect(onCopied).not.toHaveBeenCalled();
-      expect(console.debug).toHaveBeenCalledWith(
+      expect(mockDebug).toHaveBeenCalledWith(
         'Clipboard API unavailable',
-        expect.any(Error),
+        { meta: { error: expect.stringContaining('Not allowed') } },
       );
     });
   });

@@ -1,0 +1,111 @@
+"use client";
+
+import { LogBus, type LogEntry, type LogLevel } from "@/lib/logger";
+import React, { createContext, useContext, useEffect, useMemo, useRef } from "react";
+
+type LoggerContextType = {
+  logger: LogBus;
+  sessionId: string;
+};
+
+const LoggerContext = createContext<LoggerContextType | null>(null);
+
+export function LoggerProvider({ children }: { children: React.ReactNode }) {
+  const loggerRef = useRef<LogBus | null>(null);
+  const sessionIdRef = useRef(crypto.randomUUID());
+
+  if (!loggerRef.current) {
+    loggerRef.current = new LogBus();
+  }
+
+  const logger = loggerRef.current;
+
+  useEffect(() => {
+    logger.start();
+
+    const onError = (event: ErrorEvent) => {
+      logger.addEntry({
+        timestamp: new Date().toISOString(),
+        level: "error",
+        message: event.message || "Uncaught error",
+        source: "uncaught",
+        sessionId: sessionIdRef.current,
+        meta: {
+          filename: event.filename,
+          lineno: event.lineno,
+          colno: event.colno,
+          stack: event.error?.stack,
+        },
+      });
+    };
+
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason;
+      logger.addEntry({
+        timestamp: new Date().toISOString(),
+        level: "error",
+        message: reason instanceof Error ? reason.message : String(reason),
+        source: "uncaught",
+        sessionId: sessionIdRef.current,
+        meta: {
+          stack: reason instanceof Error ? reason.stack : undefined,
+        },
+      });
+    };
+
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onUnhandledRejection);
+
+    return () => {
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onUnhandledRejection);
+      logger.stop();
+    };
+  }, [logger]);
+
+  const value = useMemo(() => ({ logger, sessionId: sessionIdRef.current }), [logger]);
+
+  return (
+    <LoggerContext.Provider value={value}>
+      {children}
+    </LoggerContext.Provider>
+  );
+}
+
+export function useLogger(source: string) {
+  const context = useContext(LoggerContext);
+  if (!context) {
+    throw new Error("useLogger must be used within LoggerProvider");
+  }
+
+  const { logger, sessionId } = context;
+
+  return useMemo(() => {
+    function log(
+      level: LogLevel,
+      message: string,
+      meta?: Record<string, unknown>,
+    ): void {
+      const entry: LogEntry = {
+        timestamp: new Date().toISOString(),
+        level,
+        message,
+        source,
+        sessionId,
+        meta,
+      };
+      logger.addEntry(entry);
+    }
+
+    return {
+      debug: (message: string, meta?: Record<string, unknown>) =>
+        log("debug", message, meta),
+      info: (message: string, meta?: Record<string, unknown>) =>
+        log("info", message, meta),
+      warn: (message: string, meta?: Record<string, unknown>) =>
+        log("warn", message, meta),
+      error: (message: string, meta?: Record<string, unknown>) =>
+        log("error", message, meta),
+    };
+  }, [logger, source, sessionId]);
+}
