@@ -74,8 +74,19 @@ export function LoggerProvider({ children }: { children: React.ReactNode }) {
 
 export function useLogger(source: string) {
   const context = useContext(LoggerContext);
+
+  const noop = useMemo(
+    () => ({
+      debug: (_message: string, _meta?: Record<string, unknown>) => {},
+      info: (_message: string, _meta?: Record<string, unknown>) => {},
+      warn: (_message: string, _meta?: Record<string, unknown>) => {},
+      error: (_message: string, _meta?: Record<string, unknown>) => {},
+    }),
+    [],
+  );
+
   if (!context) {
-    throw new Error("useLogger must be used within LoggerProvider");
+    return noop;
   }
 
   const { logger, sessionId } = context;

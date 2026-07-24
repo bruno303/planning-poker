@@ -130,15 +130,16 @@ describe("useLogger", () => {
     );
   });
 
-  it("throws if used outside provider", () => {
+  it("returns no-op logger if used outside provider", () => {
     function BadConsumer() {
-      useLogger("test");
-      return null;
+      const logger = useLogger("test");
+      // Should not throw — returns a no-op logger
+      logger.info("test");
+      return <div data-testid="ok">ok</div>;
     }
 
-    expect(() => render(<BadConsumer />)).toThrow(
-      "useLogger must be used within LoggerProvider",
-    );
+    const { getByTestId } = render(<BadConsumer />);
+    expect(getByTestId("ok")).toBeTruthy();
   });
 });
 
