@@ -76,14 +76,12 @@ describe("LogBus", () => {
     vi.resetModules();
     const { getLogBus } = await import("./logger");
 
-    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal("fetch", fetchSpy);
 
     const bus = getLogBus();
+    bus.enabled = true;
     bus.start();
-
-    // Wait for health check to complete and set up the interval
-    await vi.advanceTimersByTimeAsync(0);
 
     bus.addEntry({
       timestamp: new Date().toISOString(),
@@ -93,12 +91,10 @@ describe("LogBus", () => {
       sessionId: "abc",
     });
 
-    // Health check called fetch once; no flush yet
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(5000);
-    // Now fetch was called again for the flush
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
 
     bus.stop();
   });
@@ -208,17 +204,12 @@ describe("LogBus", () => {
     vi.resetModules();
     const { getLogBus } = await import("./logger");
 
-    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200 });
-    vi.stubGlobal("fetch", fetchSpy);
-
     const sendBeaconSpy = vi.fn();
     vi.stubGlobal("navigator", { sendBeacon: sendBeaconSpy });
 
     const bus = getLogBus();
+    bus.enabled = true;
     bus.start();
-
-    // Wait for health check to complete
-    await vi.advanceTimersByTimeAsync(0);
 
     bus.addEntry({
       timestamp: new Date().toISOString(),
