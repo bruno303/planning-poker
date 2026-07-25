@@ -51,6 +51,7 @@ export default function PlanningPoker() {
   const { socket, connected } = useRoom();
   const { pushError, pushSuccess } = useToast();
   const routeRoomId = typeof params?.roomId === 'string' ? params.roomId : '';
+  console.log(`[DEBUG] Room page mounted, routeRoomId=${routeRoomId}`);
   const [roomId, setRoomId] = useState('');
   const connectedRoomIdRef = useRef<string | null>(null);
 
@@ -79,11 +80,13 @@ export default function PlanningPoker() {
 
   useEffect(() => {
     if (isValidRoomId(routeRoomId)) {
+      console.log(`[DEBUG] Valid roomId: ${routeRoomId}, setting roomId`);
       setRoomId(routeRoomId);
       return;
     }
 
     setRoomId('');
+    console.log(`[DEBUG] Invalid roomId: ${routeRoomId}, redirecting to /join`);
     logger.info('Invalid room ID', { roomId: routeRoomId });
     pushError('Invalid room code. Redirecting to join page.');
     router.replace('/join');
@@ -96,6 +99,7 @@ export default function PlanningPoker() {
 
     const storedUserName = sessionStorage.getItem('userName');
     if (!storedUserName) {
+      console.log(`[DEBUG] Redirecting to /join/${roomId} (no userName in sessionStorage)`);
       router.push(`/join/${roomId}`);
       return;
     }
