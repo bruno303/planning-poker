@@ -10,9 +10,17 @@ type LoggerContextType = {
 
 const LoggerContext = createContext<LoggerContextType | null>(null);
 
+function generateSessionId(): string {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+  }
+}
+
 export function LoggerProvider({ children }: { children: React.ReactNode }) {
   const loggerRef = useRef<LogBus | null>(null);
-  const sessionIdRef = useRef(crypto.randomUUID());
+  const sessionIdRef = useRef(generateSessionId());
 
   if (!loggerRef.current) {
     loggerRef.current = new LogBus();

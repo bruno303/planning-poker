@@ -27,7 +27,14 @@ const BUFFER_MAX = 200;
 const FLUSH_INTERVAL_MS = 5000;
 const FLUSH_THRESHOLD = 10;
 
-const sessionId = crypto.randomUUID();
+function generateSessionId(): string {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+  }
+}
+const sessionId = generateSessionId();
 
 interface LokiStream {
   stream: Record<string, string>;
