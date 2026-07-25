@@ -137,10 +137,30 @@ export class LogBus {
   }
 
   start(): void {
-    this.intervalId = setInterval(() => this.flush(), FLUSH_INTERVAL_MS);
-    if (typeof document !== "undefined") {
-      document.addEventListener("visibilitychange", this.onVisibilityChange);
-    }
+    // Health check: verify the logging endpoint is available before enabling.
+    // If LOKI_URL is not configured, the API returns 503 and we stay disabled.
+    fetch("/api/logs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ logs: [] }),
+    })
+      .then((response) => {
+        if (response.status === 503) {
+          this._enabled = false;
+          return;
+        }
+        this._enabled = true;
+        this.intervalId = setInterval(() => this.flush(), FLUSH_INTERVAL_MS);
+        if (typeof document !== "undefined") {
+          document.addEventListener(
+            "visibilitychange",
+            this.onVisibilityChange,
+          );
+        }
+      })
+      .catch(() => {
+        this._enabled = false;
+      });
   }
 
   stop(): void {
