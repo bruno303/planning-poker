@@ -41,7 +41,7 @@ interface LokiPayload {
 export class LogBus {
   buffer: LogEntry[] = [];
   private inFlight = false;
-  private _enabled = process.env.NODE_ENV === "production";
+  private _enabled = false;
   private intervalId: ReturnType<typeof setInterval> | null = null;
   private warnOnce = false;
 
