@@ -21,7 +21,6 @@ services:
       args:
         - NEXT_PUBLIC_BACKEND_URL=http://localhost:8080
         - NEXT_PUBLIC_WEBSOCKET_URL=ws://localhost:8080
-        - NEXT_PUBLIC_LOG_ENABLED=true
     container_name: planning-poker-frontend
     ports:
       - "3000:3000"
@@ -40,7 +39,6 @@ services:
         - NEXT_PUBLIC_BACKEND_URL=http://backend:8080
         - NEXT_PUBLIC_WEBSOCKET_URL=ws://backend:8080
         - NEXT_PUBLIC_EXPOSE_WS_GLOBAL=true
-        - NEXT_PUBLIC_LOG_ENABLED=false
     container_name: planning-poker-frontend-e2e
     profiles:
       - e2e

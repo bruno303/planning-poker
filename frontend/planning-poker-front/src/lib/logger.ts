@@ -41,7 +41,7 @@ interface LokiPayload {
 export class LogBus {
   buffer: LogEntry[] = [];
   private inFlight = false;
-  private _enabled = process.env.NEXT_PUBLIC_LOG_ENABLED !== "false";
+  private _enabled = false;
   private intervalId: ReturnType<typeof setInterval> | null = null;
   private warnOnce = false;
 
@@ -137,10 +137,24 @@ export class LogBus {
   }
 
   start(): void {
-    this.intervalId = setInterval(() => this.flush(), FLUSH_INTERVAL_MS);
-    if (typeof document !== "undefined") {
-      document.addEventListener("visibilitychange", this.onVisibilityChange);
-    }
+    fetch("/api/logs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ logs: [] }),
+    })
+      .then((response) => {
+        if (response.ok) {
+          this._enabled = true;
+          this.intervalId = setInterval(() => this.flush(), FLUSH_INTERVAL_MS);
+          if (typeof document !== "undefined") {
+            document.addEventListener(
+              "visibilitychange",
+              this.onVisibilityChange,
+            );
+          }
+        }
+      })
+      .catch(() => {});
   }
 
   stop(): void {
