@@ -114,6 +114,14 @@ test('backlog: adding, navigating, and voting on multiple stories', async ({ bro
     // 4. Verify story position indicator
     await expect(ownerPage.getByText('(Story 1 of 3)')).toBeVisible();
 
+    // Previous Story should be disabled at first story but still visible
+    const prevStoryButton = ownerPage.getByRole('button', { name: 'Previous Story' });
+    const nextStoryButton = ownerPage.getByRole('button', { name: 'Next Story' });
+    await expect(prevStoryButton).toBeVisible();
+    await expect(prevStoryButton).toBeDisabled();
+    await expect(nextStoryButton).toBeVisible();
+    await expect(nextStoryButton).toBeEnabled();
+
     // 5. Vote on first story
     await ownerPage.getByRole('button', { name: '5', exact: true }).click();
     await guestPage.getByRole('button', { name: '8', exact: true }).click();
@@ -136,11 +144,28 @@ test('backlog: adding, navigating, and voting on multiple stories', async ({ bro
     await expect(ownerPage.getByText('Results Summary')).toBeVisible();
     await expect(ownerPage.getByText('Average: 3.0')).toBeVisible();
 
-    // 8. Go back to previous story
+    // 8. Advance to last story
+    await ownerPage.getByRole('button', { name: 'Next Story' }).click();
+
+    // Should now be on Story 3 of 3
+    await expect(ownerPage.getByText('(Story 3 of 3)')).toBeVisible();
+
+    // Next Story should be disabled at last story but still visible
+    await expect(ownerPage.getByRole('button', { name: 'Next Story' })).toBeVisible();
+    await expect(ownerPage.getByRole('button', { name: 'Next Story' })).toBeDisabled();
+    await expect(ownerPage.getByRole('button', { name: 'Previous Story' })).toBeEnabled();
+
+    // 9. Navigate back to first story
+    await ownerPage.getByRole('button', { name: 'Previous Story' }).click();
+    await expect(ownerPage.getByText('(Story 2 of 3)')).toBeVisible();
     await ownerPage.getByRole('button', { name: 'Previous Story' }).click();
 
     // Should be back on Story 1 of 3
     await expect(ownerPage.getByText('(Story 1 of 3)')).toBeVisible();
+
+    // Previous Story should be disabled at first story but still visible
+    await expect(ownerPage.getByRole('button', { name: 'Previous Story' })).toBeVisible();
+    await expect(ownerPage.getByRole('button', { name: 'Previous Story' })).toBeDisabled();
   } finally {
     await Promise.allSettled([ownerContext.close(), guestContext.close()]);
   }

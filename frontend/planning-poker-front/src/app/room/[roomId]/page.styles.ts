@@ -153,6 +153,11 @@ export const styles = {
     backgroundColor: '#3b82f6',
     color: 'white'
   },
+  buttonDisabled: {
+    opacity: 0.6,
+    cursor: 'not-allowed',
+    transform: 'none'
+  },
   successButton: {
     backgroundColor: '#10b981',
     color: 'white'

@@ -343,6 +343,9 @@ export default function PlanningPoker() {
 
   const amIAdmin = isAdmin();
 
+  const canGoPrev = currentStoryIndex > 0;
+  const canGoNext = stories.length > 0 && currentStoryIndex < stories.length - 1;
+
   if (!isAuthorized) {
     return <LoadingSpinner />;
   }
@@ -493,23 +496,49 @@ export default function PlanningPoker() {
                       Enable Backlog
                     </button>
                   )}
-                  {backlogMode && currentStoryIndex > 0 && (
+                  {backlogMode && (
                     <button
                       onClick={handlePrevStory}
-                      style={{ ...styles.button, ...styles.primaryButton }}
-                      onMouseEnter={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#2563eb'}
-                      onMouseLeave={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#3b82f6'}
+                      disabled={!canGoPrev}
+                      style={{
+                        ...styles.button,
+                        ...styles.primaryButton,
+                        ...(!canGoPrev ? styles.buttonDisabled : {})
+                      }}
+                      onMouseEnter={(e) => {
+                        if (canGoPrev) {
+                          (e.target as HTMLButtonElement).style.backgroundColor = '#2563eb';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (canGoPrev) {
+                          (e.target as HTMLButtonElement).style.backgroundColor = '#3b82f6';
+                        }
+                      }}
                     >
                       <List size={20} />
                       Previous Story
                     </button>
                   )}
-                  {backlogMode && stories.length > 0 && currentStoryIndex < stories.length - 1 && (
+                  {backlogMode && (
                     <button
                       onClick={handleAdvanceStory}
-                      style={{ ...styles.button, ...styles.primaryButton }}
-                      onMouseEnter={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#2563eb'}
-                      onMouseLeave={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#3b82f6'}
+                      disabled={!canGoNext}
+                      style={{
+                        ...styles.button,
+                        ...styles.primaryButton,
+                        ...(!canGoNext ? styles.buttonDisabled : {})
+                      }}
+                      onMouseEnter={(e) => {
+                        if (canGoNext) {
+                          (e.target as HTMLButtonElement).style.backgroundColor = '#2563eb';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (canGoNext) {
+                          (e.target as HTMLButtonElement).style.backgroundColor = '#3b82f6';
+                        }
+                      }}
                     >
                       <List size={20} />
                       Next Story
