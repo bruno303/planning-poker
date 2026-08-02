@@ -1,5 +1,6 @@
 'use client'
 
+import { useLogger } from '@/context/logger/loggerContext';
 import { useToast } from '@/context/toast/toastContext';
 import { Loader2, LogIn, Plus } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
@@ -16,6 +17,7 @@ export default function PlanningPokerHome() {
   const nameInputRef = React.useRef<HTMLInputElement | null>(null);
   const routeRoomId = typeof params?.roomId === 'string' ? params.roomId : '';
   const hasRoomParam = Boolean(routeRoomId);
+  const logger = useLogger('join-page');
   const { pushError } = useToast();
 
   const getRoomRoute = (value: string) => `/room/${encodeURIComponent(value.trim())}`;
@@ -28,6 +30,7 @@ export default function PlanningPokerHome() {
 
   const handleCreateRoom = async () => {
     if (!userName.trim()) {
+      logger.warn('Validation failed', { reason: 'Name not informed' });
       pushError('Name not informed');
       return;
     }
@@ -39,10 +42,12 @@ export default function PlanningPokerHome() {
         throw new Error('Failed to create room on server');
       }
       const data = await res.json();
+      logger.info('Room created', { roomId: data.roomId });
       sessionStorage.setItem('userName', userName.trim());
       router.push(getRoomRoute(data.roomId));
     } catch (err: any) {
       const message = err?.message || 'Failed to create room. Please try again.';
+      logger.error('Failed to create room', { error: message });
       pushError(message);
     } finally {
       setIsCreating(false);
@@ -51,11 +56,13 @@ export default function PlanningPokerHome() {
 
   const handleJoinRoom = async () => {
     if (!userName.trim()) {
+      logger.warn('Validation failed', { reason: 'Name not informed' });
       pushError('Name not informed');
       return;
     }
 
     if (!roomCode.trim()) {
+      logger.warn('Validation failed', { reason: 'Room code not informed' });
       pushError('Room code not informed');
       return;
     }
@@ -66,6 +73,7 @@ export default function PlanningPokerHome() {
       router.push(getRoomRoute(roomCode));
     } catch (err: any) {
       const message = err?.message || 'Failed to join room. Please try again.';
+      logger.error('Failed to join room', { error: message });
       pushError(message);
     } finally {
       setIsJoining(false);
