@@ -144,10 +144,7 @@ export async function POST(request: NextRequest) {
   // Sanitize payload
   const entries = sanitizeLogPayload(body);
   if (entries.length === 0) {
-    return NextResponse.json(
-      { error: "No valid log entries" },
-      { status: 400 },
-    );
+    return new NextResponse(null, { status: 204 });
   }
 
   // LOKI_URL check

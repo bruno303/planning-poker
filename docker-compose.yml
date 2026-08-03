@@ -15,6 +15,27 @@ services:
       timeout: 3s
       retries: 5
 
+  loki:
+    image: grafana/loki:3.4.2
+    container_name: planning-poker-loki
+    ports:
+      - "3100:3100"
+    networks:
+      - planning-poker
+    profiles:
+      - app
+      - local
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./infra/loki/local-config.yaml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3100/ready || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
   frontend:
     build:
       context: ./frontend/planning-poker-front
@@ -24,12 +45,17 @@ services:
     container_name: planning-poker-frontend
     ports:
       - "3000:3000"
+    environment:
+      - LOKI_URL=http://loki:3100
+      - LOG_ENV=docker
     profiles:
       - app
     networks:
       - planning-poker
     depends_on:
       backend:
+        condition: service_healthy
+      loki:
         condition: service_healthy
 
   frontend-e2e:
@@ -96,3 +122,4 @@ networks:
 
 volumes:
   playwright-node-modules:
+  loki-data:
