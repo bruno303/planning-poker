@@ -123,21 +123,21 @@ describe("POST /api/logs", () => {
       expect(response.status).toBe(400);
     });
 
-    it("returns 400 for empty logs", async () => {
+    it("returns 204 for empty logs", async () => {
       const request = makeRequest({ logs: [] }, {
         origin: "http://localhost:3000",
       });
       const response = await POST(request);
-      expect(response.status).toBe(400);
+      expect(response.status).toBe(204);
     });
 
-    it("returns 400 when all entries are invalid", async () => {
+    it("returns 204 when all entries are invalid", async () => {
       const request = makeRequest(
         { logs: [null, "bad", { invalid: true }] },
         { origin: "http://localhost:3000" },
       );
       const response = await POST(request);
-      expect(response.status).toBe(400);
+      expect(response.status).toBe(204);
     });
   });
 
