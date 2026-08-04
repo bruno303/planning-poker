@@ -28,11 +28,13 @@ function getOrigin(request: NextRequest): string | null {
   return null;
 }
 
-function getAllowedOrigin(): string | null {
+function getAllowedOrigins(): string[] {
+  const origins: string[] = [];
+
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
   if (backendUrl) {
     try {
-      return new URL(backendUrl).origin;
+      origins.push(new URL(backendUrl).origin);
     } catch {
       // fall through
     }
@@ -41,13 +43,13 @@ function getAllowedOrigin(): string | null {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   if (appUrl) {
     try {
-      return new URL(appUrl).origin;
+      origins.push(new URL(appUrl).origin);
     } catch {
       // fall through
     }
   }
 
-  return null;
+  return origins;
 }
 
 function getClientIp(request: NextRequest): string {
@@ -119,10 +121,10 @@ function buildLokiPayload(
 
 export async function POST(request: NextRequest) {
   // Origin check
-  const allowedOrigin = getAllowedOrigin();
-  if (allowedOrigin) {
+  const allowedOrigins = getAllowedOrigins();
+  if (allowedOrigins.length > 0) {
     const requestOrigin = getOrigin(request);
-    if (!requestOrigin || requestOrigin !== allowedOrigin) {
+    if (!requestOrigin || !allowedOrigins.includes(requestOrigin)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
   }
