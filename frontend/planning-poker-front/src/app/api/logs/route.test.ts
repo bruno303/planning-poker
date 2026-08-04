@@ -86,6 +86,36 @@ describe("POST /api/logs", () => {
       const response = await POST(request);
       expect(response.status).toBe(204);
     });
+
+    it("accepts app origin when both NEXT_PUBLIC_BACKEND_URL and NEXT_PUBLIC_APP_URL are set", async () => {
+      process.env.NEXT_PUBLIC_BACKEND_URL = "http://localhost:8080";
+      process.env.NEXT_PUBLIC_APP_URL = "http://localhost:3000";
+
+      vi.spyOn(global, "fetch").mockResolvedValue(
+        new Response(null, { status: 204 }),
+      );
+
+      const request = makeRequest(validPayload, {
+        origin: "http://localhost:3000",
+      });
+      const response = await POST(request);
+      expect(response.status).toBe(204);
+    });
+
+    it("accepts backend origin when both NEXT_PUBLIC_BACKEND_URL and NEXT_PUBLIC_APP_URL are set", async () => {
+      process.env.NEXT_PUBLIC_BACKEND_URL = "http://localhost:8080";
+      process.env.NEXT_PUBLIC_APP_URL = "http://localhost:3000";
+
+      vi.spyOn(global, "fetch").mockResolvedValue(
+        new Response(null, { status: 204 }),
+      );
+
+      const request = makeRequest(validPayload, {
+        origin: "http://localhost:8080",
+      });
+      const response = await POST(request);
+      expect(response.status).toBe(204);
+    });
   });
 
   describe("rate limiting", () => {
