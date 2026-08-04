@@ -234,8 +234,37 @@ describe("LogBus", () => {
   });
 });
 
-describe("Loki format", () => {
-  it("correct stream grouping", async () => {
+describe("flush payload format", () => {
+  it("sends raw log entries to /api/logs", async () => {
+    vi.resetModules();
+    const { getLogBus } = await import("./logger");
+
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const bus = getLogBus();
+    bus.enabled = true;
+
+    bus.addEntry({
+      timestamp: "2024-01-01T00:00:00.000Z",
+      level: "info",
+      message: "hello world",
+      source: "test",
+      sessionId: "abc",
+      meta: { key: "value" },
+    });
+
+    bus.flush();
+    await vi.advanceTimersByTimeAsync(0);
+
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    expect(body.logs).toHaveLength(1);
+    expect(body.logs[0].message).toBe("hello world");
+    expect(body.logs[0].sessionId).toBe("abc");
+    expect(body.logs[0].meta).toEqual({ key: "value" });
+  });
+
+  it("sends all entries as flat array", async () => {
     vi.resetModules();
     const { getLogBus } = await import("./logger");
 
@@ -254,111 +283,16 @@ describe("Loki format", () => {
     });
     bus.addEntry({
       timestamp: new Date().toISOString(),
-      level: "info",
+      level: "error",
       message: "msg 2",
-      source: "service-a",
-      sessionId: "abc",
-    });
-    bus.addEntry({
-      timestamp: new Date().toISOString(),
-      level: "info",
-      message: "msg 3",
       source: "service-b",
       sessionId: "abc",
     });
-    bus.addEntry({
-      timestamp: new Date().toISOString(),
-      level: "error",
-      message: "msg 4",
-      source: "service-a",
-      sessionId: "abc",
-    });
 
     bus.flush();
     await vi.advanceTimersByTimeAsync(0);
 
     const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
-    expect(body.streams).toHaveLength(3);
-
-    const streamAInfo = body.streams.find(
-      (s: { stream: Record<string, string> }) =>
-        s.stream.service === "service-a" && s.stream.level === "info",
-    );
-    expect(streamAInfo).toBeDefined();
-    expect(streamAInfo.values).toHaveLength(2);
-    expect(streamAInfo.stream.source).toBe("service-a");
-
-    const streamBInfo = body.streams.find(
-      (s: { stream: Record<string, string> }) =>
-        s.stream.service === "service-b" && s.stream.level === "info",
-    );
-    expect(streamBInfo).toBeDefined();
-    expect(streamBInfo.values).toHaveLength(1);
-
-    const streamAError = body.streams.find(
-      (s: { stream: Record<string, string> }) =>
-        s.stream.service === "service-a" && s.stream.level === "error",
-    );
-    expect(streamAError).toBeDefined();
-    expect(streamAError.values).toHaveLength(1);
-  });
-
-  it("nanosecond timestamps", async () => {
-    vi.resetModules();
-    const { getLogBus } = await import("./logger");
-
-    const fetchSpy = vi.fn().mockResolvedValue({ ok: true });
-    vi.stubGlobal("fetch", fetchSpy);
-
-    const bus = getLogBus();
-    bus.enabled = true;
-
-    bus.addEntry({
-      timestamp: "2024-01-01T00:00:00.000Z",
-      level: "info",
-      message: "test",
-      source: "test",
-      sessionId: "abc",
-    });
-
-    bus.flush();
-    await vi.advanceTimersByTimeAsync(0);
-
-    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
-    const nanoTs = body.streams[0].values[0][0];
-
-    expect(nanoTs).toBe("1704067200000000000");
-    expect(nanoTs.length).toBe(19);
-  });
-
-  it("JSON log lines", async () => {
-    vi.resetModules();
-    const { getLogBus } = await import("./logger");
-
-    const fetchSpy = vi.fn().mockResolvedValue({ ok: true });
-    vi.stubGlobal("fetch", fetchSpy);
-
-    const bus = getLogBus();
-    bus.enabled = true;
-
-    bus.addEntry({
-      timestamp: new Date().toISOString(),
-      level: "info",
-      message: "hello world",
-      source: "test",
-      sessionId: "abc",
-      meta: { key: "value" },
-    });
-
-    bus.flush();
-    await vi.advanceTimersByTimeAsync(0);
-
-    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
-    const logLine = body.streams[0].values[0][1];
-    const parsed = JSON.parse(logLine);
-
-    expect(parsed.message).toBe("hello world");
-    expect(parsed.sessionId).toBe("abc");
-    expect(parsed.meta).toEqual({ key: "value" });
+    expect(body.logs).toHaveLength(2);
   });
 });
