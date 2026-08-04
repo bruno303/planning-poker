@@ -36,15 +36,6 @@ function generateSessionId(): string {
 }
 const sessionId = generateSessionId();
 
-interface LokiStream {
-  stream: Record<string, string>;
-  values: Array<[string, string]>;
-}
-
-interface LokiPayload {
-  streams: LokiStream[];
-}
-
 export class LogBus {
   buffer: LogEntry[] = [];
   private inFlight = false;
@@ -75,12 +66,11 @@ export class LogBus {
     this.inFlight = true;
 
     const entries = this.buffer.splice(0);
-    const payload = this.buildPayload(entries);
 
     fetch("/api/logs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ logs: entries }),
     })
       .then((response) => {
         if (response.status === 503) {
@@ -99,42 +89,11 @@ export class LogBus {
       });
   }
 
-  buildPayload(entries: LogEntry[]): LokiPayload {
-    const env = process.env.NODE_ENV || "development";
-    const groups = new Map<string, LogEntry[]>();
-
-    for (const entry of entries) {
-      const key = `${entry.source}|${entry.level}|${env}`;
-      if (!groups.has(key)) {
-        groups.set(key, []);
-      }
-      groups.get(key)!.push(entry);
-    }
-
-    return {
-      streams: Array.from(groups.entries()).map(([key, groupEntries]) => {
-        const [source, level, groupEnv] = key.split("|");
-        return {
-          stream: { service: source, level, env: groupEnv, source },
-          values: groupEntries.map((e) => [
-            String(BigInt(new Date(e.timestamp).getTime()) * BigInt(1000000)),
-            JSON.stringify({
-              message: e.message,
-              meta: e.meta,
-              sessionId: e.sessionId,
-            }),
-          ]),
-        };
-      }),
-    };
-  }
-
   private flushWithBeacon(): void {
     if (!this._enabled || this.buffer.length === 0) return;
 
     const entries = this.buffer.splice(0);
-    const payload = this.buildPayload(entries);
-    const blob = new Blob([JSON.stringify(payload)], {
+    const blob = new Blob([JSON.stringify({ logs: entries })], {
       type: "application/json",
     });
 
