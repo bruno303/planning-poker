@@ -62,7 +62,8 @@ function getClientIp(request: NextRequest): string {
 }
 
 interface StreamGroup {
-  service: string;
+  app: string;
+  kind: string;
   level: string;
   env: string;
   source: string;
@@ -81,16 +82,19 @@ function buildLokiPayload(
 
   for (const entry of entries) {
     const key = JSON.stringify({
-      service: "planning-poker-frontend",
+      app: "planning-poker-frontend",
+      kind: "client",
       level: entry.level,
       env: logEnv,
       source: entry.source,
     });
 
     const line = JSON.stringify({
+      ...(entry.meta ?? {}),
       message: entry.message,
       sessionId: entry.sessionId,
-      ...(entry.meta ?? {}),
+      clientId: entry.clientId,
+      roomId: entry.roomId,
     });
 
     const dateMs = new Date(entry.timestamp).getTime();

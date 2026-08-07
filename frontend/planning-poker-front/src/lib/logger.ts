@@ -1,5 +1,10 @@
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
+export interface LogContext {
+  clientId?: string;
+  roomId?: string;
+}
+
 export interface LogEntry {
   timestamp: string;
   level: LogLevel;
@@ -7,6 +12,8 @@ export interface LogEntry {
   meta?: Record<string, unknown>;
   source: string;
   sessionId: string;
+  clientId?: string;
+  roomId?: string;
 }
 
 export interface Logger {
@@ -42,6 +49,7 @@ export class LogBus {
   private _enabled = false;
   private intervalId: ReturnType<typeof setInterval> | null = null;
   private warnOnce = false;
+  private _context: LogContext = {};
 
   get enabled(): boolean {
     return this._enabled;
@@ -51,11 +59,22 @@ export class LogBus {
     this._enabled = value;
   }
 
+  setContext(context: LogContext): void {
+    this._context = { ...this._context, ...context };
+  }
+
   addEntry(entry: LogEntry): void {
+    const merged: LogEntry = { ...entry };
+    if (this._context.clientId !== undefined) {
+      merged.clientId = this._context.clientId;
+    }
+    if (this._context.roomId !== undefined) {
+      merged.roomId = this._context.roomId;
+    }
     if (this.buffer.length >= BUFFER_MAX) {
       this.buffer.shift();
     }
-    this.buffer.push(entry);
+    this.buffer.push(merged);
     if (this.buffer.length >= FLUSH_THRESHOLD) {
       this.flush();
     }

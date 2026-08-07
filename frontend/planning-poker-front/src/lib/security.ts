@@ -56,7 +56,7 @@ export function sanitizeLogEntry(entry: unknown): LogEntry | null {
     return null;
   }
 
-  const { message, source, level, timestamp, sessionId, meta } = entry;
+  const { message, source, level, timestamp, sessionId, meta, clientId, roomId } = entry;
 
   if (typeof message !== "string") {
     return null;
@@ -85,6 +85,14 @@ export function sanitizeLogEntry(entry: unknown): LogEntry | null {
     timestamp: sanitizedTimestamp,
     sessionId,
   };
+
+  if (typeof clientId === "string") {
+    result.clientId = sanitizeString(clientId, 100);
+  }
+
+  if (typeof roomId === "string") {
+    result.roomId = sanitizeString(roomId, 100);
+  }
 
   if (meta !== undefined) {
     if (!isPlainObject(meta)) {

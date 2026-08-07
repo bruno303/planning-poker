@@ -43,6 +43,7 @@ export default function PlanningPokerHome() {
       }
       const data = await res.json();
       logger.info('Room created', { roomId: data.roomId });
+      logger.setContext({ roomId: data.roomId });
       sessionStorage.setItem('userName', userName.trim());
       router.push(getRoomRoute(data.roomId));
     } catch (err: any) {
@@ -70,6 +71,7 @@ export default function PlanningPokerHome() {
     try {
       setIsJoining(true);
       sessionStorage.setItem('userName', userName.trim());
+      logger.setContext({ roomId: roomCode.trim() });
       router.push(getRoomRoute(roomCode));
     } catch (err: any) {
       const message = err?.message || 'Failed to join room. Please try again.';
