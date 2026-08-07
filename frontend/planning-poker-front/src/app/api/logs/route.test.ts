@@ -264,7 +264,8 @@ describe("POST /api/logs", () => {
 
       const stream = sentBody.streams[0]!;
       expect(stream.stream).toEqual({
-        service: "planning-poker-frontend",
+        app: "planning-poker-frontend",
+        kind: "client",
         level: "info",
         env: "test",
         source: "web.client",
@@ -312,6 +313,54 @@ describe("POST /api/logs", () => {
 
       expect(infoStream.values).toHaveLength(2);
       expect(errorStream.values).toHaveLength(1);
+    });
+
+    it("includes clientId and roomId in log line", async () => {
+      const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+        new Response(null, { status: 204 }),
+      );
+
+      const payload = {
+        logs: [
+          {
+            message: "test",
+            source: "web",
+            sessionId: "a",
+            clientId: "client-123",
+            roomId: "room-456",
+          },
+        ],
+      };
+
+      const request = makeRequest(payload, {
+        origin: "http://localhost:3000",
+      });
+      await POST(request);
+
+      const sentBody = JSON.parse(
+        fetchSpy.mock.calls[0]![1]!.body as string,
+      );
+      const line = JSON.parse(sentBody.streams[0].values[0][1]);
+      expect(line.clientId).toBe("client-123");
+      expect(line.roomId).toBe("room-456");
+    });
+
+    it("omits clientId and roomId from log line when absent", async () => {
+      const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+        new Response(null, { status: 204 }),
+      );
+
+      const request = makeRequest(validPayload, {
+        origin: "http://localhost:3000",
+      });
+      await POST(request);
+
+      const sentBody = JSON.parse(
+        fetchSpy.mock.calls[0]![1]!.body as string,
+      );
+      const line = JSON.parse(sentBody.streams[0].values[0][1]);
+      expect(line).not.toHaveProperty("clientId");
+      expect(line).not.toHaveProperty("roomId");
     });
 
     it("includes meta fields in log line", async () => {

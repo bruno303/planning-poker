@@ -234,6 +234,67 @@ describe("LogBus", () => {
   });
 });
 
+describe("LogBus setContext", () => {
+  it("merges context into entries added after setContext", async () => {
+    vi.resetModules();
+    const { createLogger, getLogBus } = await import("./logger");
+
+    const bus = getLogBus();
+    bus.setContext({ clientId: "client-1", roomId: "room-1" });
+
+    const logger = createLogger("test");
+    logger.info("hello");
+
+    expect(bus.buffer[0].clientId).toBe("client-1");
+    expect(bus.buffer[0].roomId).toBe("room-1");
+  });
+
+  it("does not add context to entries added before setContext", async () => {
+    vi.resetModules();
+    const { createLogger, getLogBus } = await import("./logger");
+
+    const bus = getLogBus();
+    const logger = createLogger("test");
+    logger.info("before");
+
+    bus.setContext({ clientId: "client-1" });
+    logger.info("after");
+
+    expect(bus.buffer[0].clientId).toBeUndefined();
+    expect(bus.buffer[1].clientId).toBe("client-1");
+  });
+
+  it("keeps existing keys when partially updated", async () => {
+    vi.resetModules();
+    const { createLogger, getLogBus } = await import("./logger");
+
+    const bus = getLogBus();
+    bus.setContext({ roomId: "room-1" });
+    bus.setContext({ clientId: "client-1" });
+
+    const logger = createLogger("test");
+    logger.info("hello");
+
+    expect(bus.buffer[0].clientId).toBe("client-1");
+    expect(bus.buffer[0].roomId).toBe("room-1");
+  });
+
+  it("clears a key when set to undefined", async () => {
+    vi.resetModules();
+    const { createLogger, getLogBus } = await import("./logger");
+
+    const bus = getLogBus();
+    bus.setContext({ clientId: "client-1", roomId: "room-1" });
+    bus.setContext({ clientId: undefined });
+
+    const logger = createLogger("test");
+    logger.info("hello");
+
+    expect(bus.buffer[0].clientId).toBeUndefined();
+    expect(bus.buffer[0].roomId).toBe("room-1");
+  });
+});
+
 describe("flush payload format", () => {
   it("sends raw log entries to /api/logs", async () => {
     vi.resetModules();

@@ -80,6 +80,7 @@ export default function PlanningPoker() {
   useEffect(() => {
     if (isValidRoomId(routeRoomId)) {
       setRoomId(routeRoomId);
+      logger.setContext({ roomId: routeRoomId });
       return;
     }
 
@@ -102,6 +103,11 @@ export default function PlanningPoker() {
     setUserName(storedUserName);
     setIsAuthorized(true);
 
+    const storedClientId = sessionStorage.getItem('clientId');
+    if (storedClientId) {
+      logger.setContext({ clientId: storedClientId });
+    }
+
     const hasSameRoomConnection =
       connected.current &&
       connectedRoomIdRef.current === roomId &&
@@ -121,7 +127,7 @@ export default function PlanningPoker() {
         cleanupSocket();
       }
     };
-  }, [roomId, router]);
+  }, [roomId, router, logger]);
 
   useEffect(() => {
     if (clientId && participants.length > 0) {
@@ -273,6 +279,7 @@ export default function PlanningPoker() {
         } else if (data.type === 'update-client-id') {
           setClientId(data.clientId);
           sessionStorage.setItem('clientId', data.clientId);
+          logger.setContext({ clientId: data.clientId });
           const payload: UpdateNamePayload = { username: userName };
           sendMessage<UpdateNamePayload>({ type: 'update-name', payload });
 
@@ -280,6 +287,7 @@ export default function PlanningPoker() {
           deliberateDisconnect.current = true;
           cancelReconnect();
           sessionStorage.removeItem('clientId');
+          logger.setContext({ clientId: undefined });
           logger.info('Kicked from room');
           pushError('You have been kicked from the room');
           router.push('/');
@@ -344,6 +352,7 @@ export default function PlanningPoker() {
   const handleBackToHome = () => {
     cleanupSocket();
     sessionStorage.removeItem('clientId');
+    logger.setContext({ clientId: undefined });
     router.push('/');
   };
 

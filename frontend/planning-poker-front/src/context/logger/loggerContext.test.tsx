@@ -81,6 +81,27 @@ describe("useLogger", () => {
     expect(methods!.info).toBeInstanceOf(Function);
     expect(methods!.warn).toBeInstanceOf(Function);
     expect(methods!.error).toBeInstanceOf(Function);
+    expect(methods!.setContext).toBeInstanceOf(Function);
+  });
+
+  it("binds setContext to the provider bus", () => {
+    const setContextSpy = vi.spyOn(LogBus.prototype, "setContext");
+    let methods: ReturnType<typeof useLogger> | null = null;
+
+    render(
+      <LoggerProvider>
+        <TestConsumer onMethods={(m) => { methods = m; }} />
+      </LoggerProvider>,
+    );
+
+    act(() => {
+      methods!.setContext({ roomId: "room-1", clientId: "client-1" });
+    });
+
+    expect(setContextSpy).toHaveBeenCalledWith({
+      roomId: "room-1",
+      clientId: "client-1",
+    });
   });
 
   it("logs entries with the correct source", () => {
@@ -135,6 +156,7 @@ describe("useLogger", () => {
       const logger = useLogger("test");
       // Should not throw — returns a no-op logger
       logger.info("test");
+      logger.setContext({ roomId: "room-1" });
       return <div data-testid="ok">ok</div>;
     }
 

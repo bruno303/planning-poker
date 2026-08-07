@@ -1,6 +1,6 @@
 "use client";
 
-import { LogBus, type LogEntry, type LogLevel } from "@/lib/logger";
+import { LogBus, type LogContext, type LogEntry, type LogLevel } from "@/lib/logger";
 import React, { createContext, useContext, useEffect, useMemo, useRef } from "react";
 
 type LoggerContextType = {
@@ -89,6 +89,7 @@ export function useLogger(source: string) {
       info: (_message: string, _meta?: Record<string, unknown>) => {},
       warn: (_message: string, _meta?: Record<string, unknown>) => {},
       error: (_message: string, _meta?: Record<string, unknown>) => {},
+      setContext: (_context: LogContext) => {},
     }),
     [],
   );
@@ -125,6 +126,7 @@ export function useLogger(source: string) {
         log("warn", message, meta),
       error: (message: string, meta?: Record<string, unknown>) =>
         log("error", message, meta),
+      setContext: (context: LogContext) => logger.setContext(context),
     };
   }, [logger, source, sessionId]);
 }
