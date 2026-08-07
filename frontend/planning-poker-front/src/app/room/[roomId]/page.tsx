@@ -286,9 +286,9 @@ export default function PlanningPoker() {
         } else if (data.type === 'kicked') {
           deliberateDisconnect.current = true;
           cancelReconnect();
-          sessionStorage.removeItem('clientId');
-          logger.setContext({ clientId: undefined });
           logger.info('Kicked from room');
+          sessionStorage.removeItem('clientId');
+          logger.setContext({ clientId: undefined, roomId: undefined });
           pushError('You have been kicked from the room');
           router.push('/');
 
@@ -352,7 +352,7 @@ export default function PlanningPoker() {
   const handleBackToHome = () => {
     cleanupSocket();
     sessionStorage.removeItem('clientId');
-    logger.setContext({ clientId: undefined });
+    logger.setContext({ clientId: undefined, roomId: undefined });
     router.push('/');
   };
 

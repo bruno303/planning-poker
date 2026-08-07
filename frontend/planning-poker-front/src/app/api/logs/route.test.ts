@@ -363,6 +363,44 @@ describe("POST /api/logs", () => {
       expect(line).not.toHaveProperty("roomId");
     });
 
+    it("does not let meta override canonical line fields", async () => {
+      const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+        new Response(null, { status: 204 }),
+      );
+
+      const payload = {
+        logs: [
+          {
+            message: "real message",
+            source: "web",
+            sessionId: "real-session",
+            clientId: "real-client",
+            roomId: "real-room",
+            meta: {
+              message: "fake message",
+              sessionId: "fake-session",
+              clientId: "fake-client",
+              roomId: "fake-room",
+            },
+          },
+        ],
+      };
+
+      const request = makeRequest(payload, {
+        origin: "http://localhost:3000",
+      });
+      await POST(request);
+
+      const sentBody = JSON.parse(
+        fetchSpy.mock.calls[0]![1]!.body as string,
+      );
+      const line = JSON.parse(sentBody.streams[0].values[0][1]);
+      expect(line.message).toBe("real message");
+      expect(line.sessionId).toBe("real-session");
+      expect(line.clientId).toBe("real-client");
+      expect(line.roomId).toBe("real-room");
+    });
+
     it("includes meta fields in log line", async () => {
       const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
         new Response(null, { status: 204 }),

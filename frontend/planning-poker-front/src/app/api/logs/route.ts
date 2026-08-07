@@ -90,11 +90,11 @@ function buildLokiPayload(
     });
 
     const line = JSON.stringify({
+      ...(entry.meta ?? {}),
       message: entry.message,
       sessionId: entry.sessionId,
       clientId: entry.clientId,
       roomId: entry.roomId,
-      ...(entry.meta ?? {}),
     });
 
     const dateMs = new Date(entry.timestamp).getTime();
