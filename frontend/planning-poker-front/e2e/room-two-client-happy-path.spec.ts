@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, Page, test } from '@playwright/test';
 
 const roomUrlPattern = /\/room\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 const userA = 'User A';
@@ -74,11 +74,16 @@ test('allows two users to join, vote, and sync story updates', async ({ browser,
 
     // Add a story to the backlog so the Edit button becomes available
     const storyName = `Story: estimate websocket sync ${Date.now()}`;
+    await ownerPage.getByRole('button', { name: 'Open backlog' }).click();
     await ownerPage.getByPlaceholder('Enter story name...').fill(storyName);
     await ownerPage.getByRole('button', { name: 'Add' }).click();
-    // Verify story appears (use .first() since it shows in both Current Story card and backlog list)
-    await expect(ownerPage.getByText(storyName, { exact: true }).first()).toBeVisible();
-    await expect(guestPage.getByText(storyName, { exact: true }).first()).toBeVisible();
+    // Verify story appears in the backlog dialog
+    await expect(ownerPage.getByRole('dialog', { name: 'Story Backlog' }).getByText(storyName, { exact: true })).toBeVisible();
+    // Guest sees the same story
+    await guestPage.getByRole('button', { name: 'Open backlog' }).click();
+    await expect(guestPage.getByRole('dialog', { name: 'Story Backlog' }).getByText(storyName, { exact: true })).toBeVisible();
+    await guestPage.getByRole('button', { name: 'Close' }).click();
+    await ownerPage.getByRole('button', { name: 'Close' }).click();
 
     await ownerPage.getByRole('button', { name: '5', exact: true }).click();
     await guestPage.getByRole('button', { name: '8', exact: true }).click();
@@ -103,13 +108,13 @@ test('allows two users to join, vote, and sync story updates', async ({ browser,
     const adminPage = (await ownerEditStoryButton.count()) === 1 ? ownerPage : guestPage;
 
     await adminPage.getByRole('button', { name: 'Edit' }).click();
-    // Scope to the story card to avoid matching the backlog add input
-    const storyCard = adminPage.getByText('Current Story').locator('xpath=ancestor::div[1]');
-    await storyCard.getByRole('textbox').fill(updatedStory);
+    // Scope to the story card to find the story title textbox
+    const storyCard = (page: Page) => page.getByText('Current Story').locator('xpath=ancestor::div[1]');
+    await storyCard(adminPage).getByRole('textbox').fill(updatedStory);
     await adminPage.getByRole('button', { name: 'Save' }).click();
 
-    await expect(ownerPage.getByText(updatedStory, { exact: true }).first()).toBeVisible();
-    await expect(guestPage.getByText(updatedStory, { exact: true }).first()).toBeVisible();
+    await expect(storyCard(ownerPage).getByText(updatedStory)).toBeVisible();
+    await expect(storyCard(guestPage).getByText(updatedStory)).toBeVisible();
   } finally {
     await Promise.allSettled([ownerContext.close(), guestContext.close()]);
   }
