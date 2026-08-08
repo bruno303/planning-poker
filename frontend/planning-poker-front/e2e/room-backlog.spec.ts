@@ -62,14 +62,17 @@ const joinRoom = async (page: Page, roomId: string, userName: string) => {
 };
 
 const addStoryToBacklog = async (adminPage: Page, story: string) => {
+  await openBacklogModal(adminPage);
   await adminPage.getByPlaceholder('Enter story name...').fill(story);
   await adminPage.getByRole('button', { name: 'Add' }).click();
+  await adminPage.getByRole('button', { name: 'Close' }).click();
 };
 
-const backlogPanel = (page: Page) =>
-  page
-    .getByRole('heading', { name: 'Story Backlog' })
-    .locator('xpath=ancestor::div[2]');
+const openBacklogModal = async (page: Page) => {
+  await page.getByRole('button', { name: 'Open backlog' }).click();
+};
+
+const backlogDialog = (page: Page) => page.getByRole('dialog', { name: 'Story Backlog' });
 
 test('backlog: adding, navigating, and voting on multiple stories', async ({ browser, baseURL }) => {
   test.setTimeout(60_000);
@@ -93,23 +96,28 @@ test('backlog: adding, navigating, and voting on multiple stories', async ({ bro
     await expect(ownerPanel.getByText(ownerName, { exact: true })).toBeVisible();
     await expect(ownerPanel.getByText(guestName, { exact: true })).toBeVisible();
 
-    // 2. Backlog panel should be visible by default
-    await expect(ownerPage.getByText('Story Backlog')).toBeVisible();
+    // 2. Backlog button should be visible by default
+    await expect(ownerPage.getByRole('button', { name: 'Open backlog' })).toBeVisible();
 
     // 3. Add multiple stories to the backlog
     await addStoryToBacklog(ownerPage, 'Story Alpha');
     await addStoryToBacklog(ownerPage, 'Story Beta');
     await addStoryToBacklog(ownerPage, 'Story Gamma');
 
-    // Verify all stories are visible in the backlog panel (both pages)
-    const ownerBacklog = backlogPanel(ownerPage);
-    const guestBacklog = backlogPanel(guestPage);
+    // Verify all stories are visible in the backlog dialog (both pages)
+    await openBacklogModal(ownerPage);
+    const ownerBacklog = backlogDialog(ownerPage);
     await expect(ownerBacklog.getByText('Story Alpha', { exact: true })).toBeVisible();
     await expect(ownerBacklog.getByText('Story Beta', { exact: true })).toBeVisible();
     await expect(ownerBacklog.getByText('Story Gamma', { exact: true })).toBeVisible();
+    await ownerPage.getByRole('button', { name: 'Close' }).click();
+
+    await openBacklogModal(guestPage);
+    const guestBacklog = backlogDialog(guestPage);
     await expect(guestBacklog.getByText('Story Alpha', { exact: true })).toBeVisible();
     await expect(guestBacklog.getByText('Story Beta', { exact: true })).toBeVisible();
     await expect(guestBacklog.getByText('Story Gamma', { exact: true })).toBeVisible();
+    await guestPage.getByRole('button', { name: 'Close' }).click();
 
     // 4. Verify story position indicator
     await expect(ownerPage.getByText('(Story 1 of 3)')).toBeVisible();
@@ -183,10 +191,11 @@ test('backlog: disable and re-enable backlog mode', async ({ browser, baseURL })
   try {
     await createRoom(ownerPage, baseURL, ownerName);
 
-    // Backlog panel should be visible by default
-    await expect(ownerPage.getByText('Story Backlog')).toBeVisible();
+    // Backlog button should be visible by default
+    await expect(ownerPage.getByRole('button', { name: 'Open backlog' })).toBeVisible();
 
-    // Disable Backlog button should be present
+    // Open the backlog dialog - Disable Backlog button should be present
+    await openBacklogModal(ownerPage);
     const disableButton = ownerPage.getByRole('button', { name: 'Disable Backlog' });
     await expect(disableButton).toBeVisible();
 
@@ -198,14 +207,15 @@ test('backlog: disable and re-enable backlog mode', async ({ browser, baseURL })
 
     // Click Cancel - backlog should remain enabled
     await ownerPage.getByRole('button', { name: 'Cancel' }).click();
-    await expect(ownerPage.getByText('Story Backlog')).toBeVisible();
+    await expect(ownerPage.getByRole('dialog', { name: 'Story Backlog' })).toBeVisible();
 
     // Click Disable Backlog again and confirm
     await disableButton.click();
     await ownerPage.getByRole('button', { name: 'Disable', exact: true }).click();
 
-    // Backlog panel should be hidden
-    await expect(ownerPage.getByText('Story Backlog')).not.toBeVisible();
+    // Dialog should close and the backlog button should be hidden
+    await expect(ownerPage.getByRole('dialog', { name: 'Story Backlog' })).not.toBeVisible();
+    await expect(ownerPage.getByRole('button', { name: 'Open backlog' })).not.toBeVisible();
 
     // Enable Backlog button should appear
     await expect(ownerPage.getByRole('button', { name: 'Enable Backlog' })).toBeVisible();
