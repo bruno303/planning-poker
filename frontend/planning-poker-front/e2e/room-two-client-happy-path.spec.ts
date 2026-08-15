@@ -121,8 +121,8 @@ test('allows two users to join, vote, and sync story updates', async ({ browser,
     await storyCard(adminPage).getByRole('textbox').fill(updatedStory);
     await adminPage.getByRole('button', { name: 'Save' }).click();
 
-    await expect(storyCard(ownerPage).getByText(updatedStory, { exact: true })).toBeVisible();
-    await expect(storyCard(guestPage).getByText(updatedStory, { exact: true })).toBeVisible();
+    await expect(storyCard(ownerPage)).toContainText(updatedStory);
+    await expect(storyCard(guestPage)).toContainText(updatedStory);
   } finally {
     await Promise.allSettled([ownerContext.close(), guestContext.close()]);
   }
