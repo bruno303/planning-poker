@@ -19,7 +19,7 @@ import ParticipantIdBadge from '@/components/participantIdBadge/participantIdBad
 import { useLogger } from '@/context/logger/loggerContext';
 import { useRoom } from '@/context/room/roomContext';
 import { useToast } from '@/context/toast/toastContext';
-import { Eye, EyeOff, List, Repeat, RotateCcw, Shield, Users, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye, EyeOff, List, Repeat, RotateCcw, Shield, Users, X } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import Header from './page.header';
@@ -71,6 +71,7 @@ export default function PlanningPoker() {
   const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
   const [showBacklogModal, setShowBacklogModal] = useState(false);
   const deliberateDisconnect = useRef(false);
+  const editingStoryRef = useRef('');
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptsRef = useRef(0);
 
@@ -200,6 +201,33 @@ export default function PlanningPoker() {
   const handleRemoveStory = (index: number) => {
     const payload: RemoveStoryPayload = { storyIndex: index };
     sendMessage<RemoveStoryPayload>({ type: 'remove-story', payload });
+  };
+
+  const handleStartStoryEdit = () => {
+    editingStoryRef.current = currentStory;
+    setIsEditingStory(true);
+  };
+
+  const handleCancelStoryEdit = () => {
+    setCurrentStory(editingStoryRef.current);
+    setIsEditingStory(false);
+  };
+
+  const handleSaveStoryEdit = () => {
+    const trimmedStory = currentStory.trim();
+
+    if (!trimmedStory && backlogMode && stories.length > 0) {
+      const shouldRemoveStory = window.confirm('The task name is empty. Do you want to remove this task?');
+      if (!shouldRemoveStory) {
+        return;
+      }
+      handleRemoveStory(currentStoryIndex);
+    } else {
+      const payload: UpdateStoryPayload = { story: trimmedStory };
+      sendMessage<UpdateStoryPayload>({ type: 'update-story', payload });
+    }
+
+    setIsEditingStory(false);
   };
 
   const handleAdvanceStory = () => {
@@ -386,36 +414,42 @@ export default function PlanningPoker() {
             <h1 style={styles.title}>Planning Poker</h1>
 
             <div style={styles.storyCard}>
-              <h2 style={styles.storyTitle}>Current Story</h2>
-              {amIAdmin ? (
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.5rem' }}>
-                  {isEditingStory ? (
-                    <>
-                      <FocusableComponent
-                        currentStory={currentStory}
-                        onChange={e => setCurrentStory(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') {
-                            const payload: UpdateStoryPayload = { story: currentStory };
-                            sendMessage<UpdateStoryPayload>({ type: 'update-story', payload });
-                            setIsEditingStory(false);
-                          }
-                        }}
-                      />
-                      <button
-                        style={{ ...styles.button, ...styles.primaryButton, padding: '0.5rem 1rem', fontSize: '0.875rem' }}
-                        onClick={() => {
-                          const payload: UpdateStoryPayload = { story: currentStory };
-                          sendMessage<UpdateStoryPayload>({ type: 'update-story', payload });
-                          setIsEditingStory(false);
-                        }}
-                      >
-                        Save
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <label style={{ ...styles.label, margin: 0, flex: 1 }}>
+              <div style={styles.storyHeader}>
+                <h2 style={styles.storyTitle}>Current Story</h2>
+                {amIAdmin && !isEditingStory && ((backlogMode && currentStory) || !backlogMode) && (
+                  <button
+                    style={{ ...styles.button, ...styles.primaryButton, ...styles.storyEditButton }}
+                    onClick={handleStartStoryEdit}
+                  >
+                    Edit
+                  </button>
+                )}
+              </div>
+              <div style={styles.storyLine}>
+                {amIAdmin ? (
+                  <div style={styles.storyContent}>
+                    {isEditingStory ? (
+                      <>
+                        <FocusableComponent
+                          currentStory={currentStory}
+                          onChange={e => setCurrentStory(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              handleSaveStoryEdit();
+                            } else if (e.key === 'Escape') {
+                              handleCancelStoryEdit();
+                            }
+                          }}
+                        />
+                        <button
+                          style={{ ...styles.button, ...styles.primaryButton, padding: '0.5rem 1rem', fontSize: '0.875rem' }}
+                          onClick={handleSaveStoryEdit}
+                        >
+                          Save
+                        </button>
+                      </>
+                    ) : (
+                      <label style={{ ...styles.label, margin: 0, flex: 1, textAlign: 'center' }}>
                         {currentStory}
                         {backlogMode && stories.length > 0 && (
                           <span style={styles.backlogStoryPosition}>
@@ -423,20 +457,63 @@ export default function PlanningPoker() {
                           </span>
                         )}
                       </label>
-                      {((backlogMode && currentStory) || !backlogMode) && (
-                        <button
-                          style={{ ...styles.button, ...styles.primaryButton, padding: '0.5rem 1rem', fontSize: '0.875rem' }}
-                          onClick={() => setIsEditingStory(!isEditingStory)}
-                        >
-                          Edit
-                        </button>
-                      )}
-                    </>
+                    )}
+                  </div>
+                ) : (
+                  <p
+                    style={{
+                      ...styles.storyText,
+                      margin: 0,
+                      width: '100%',
+                      gridColumn: 2,
+                      textAlign: 'center'
+                    }}
+                  >
+                    {currentStory}
+                  </p>
+                )}
+
+                <div style={styles.storyControls}>
+                  {backlogMode && amIAdmin && (
+                    <div style={styles.storyNavigation}>
+                      <button
+                        onClick={handlePrevStory}
+                        disabled={!canGoPrev}
+                        aria-label="Previous Story"
+                        title="Previous Story"
+                        style={{
+                          ...styles.storyControlButton,
+                          ...(!canGoPrev ? styles.buttonDisabled : {})
+                        }}
+                      >
+                        <ChevronLeft size={20} aria-hidden="true" />
+                      </button>
+                      <button
+                        onClick={handleAdvanceStory}
+                        disabled={!canGoNext}
+                        aria-label="Next Story"
+                        title="Next Story"
+                        style={{
+                          ...styles.storyControlButton,
+                          ...(!canGoNext ? styles.buttonDisabled : {})
+                        }}
+                      >
+                        <ChevronRight size={20} aria-hidden="true" />
+                      </button>
+                    </div>
+                  )}
+                  {backlogMode && (
+                    <button
+                      style={{ ...styles.button, ...styles.primaryButton, ...styles.storyBacklogButton }}
+                      aria-label="Open backlog"
+                      onClick={() => setShowBacklogModal(true)}
+                    >
+                      <List size={18} aria-hidden="true" />
+                      Backlog
+                    </button>
                   )}
                 </div>
-              ) : (
-                <p style={styles.storyText}>{currentStory}</p>
-              )}
+              </div>
             </div>
           </div>
 
@@ -512,54 +589,6 @@ export default function PlanningPoker() {
                     >
                       <List size={20} />
                       Enable Backlog
-                    </button>
-                  )}
-                  {backlogMode && (
-                    <button
-                      onClick={handlePrevStory}
-                      disabled={!canGoPrev}
-                      style={{
-                        ...styles.button,
-                        ...styles.primaryButton,
-                        ...(!canGoPrev ? styles.buttonDisabled : {})
-                      }}
-                      onMouseEnter={(e) => {
-                        if (canGoPrev) {
-                          (e.target as HTMLButtonElement).style.backgroundColor = '#2563eb';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (canGoPrev) {
-                          (e.target as HTMLButtonElement).style.backgroundColor = '#3b82f6';
-                        }
-                      }}
-                    >
-                      <List size={20} />
-                      Previous Story
-                    </button>
-                  )}
-                  {backlogMode && (
-                    <button
-                      onClick={handleAdvanceStory}
-                      disabled={!canGoNext}
-                      style={{
-                        ...styles.button,
-                        ...styles.primaryButton,
-                        ...(!canGoNext ? styles.buttonDisabled : {})
-                      }}
-                      onMouseEnter={(e) => {
-                        if (canGoNext) {
-                          (e.target as HTMLButtonElement).style.backgroundColor = '#2563eb';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (canGoNext) {
-                          (e.target as HTMLButtonElement).style.backgroundColor = '#3b82f6';
-                        }
-                      }}
-                    >
-                      <List size={20} />
-                      Next Story
                     </button>
                   )}
                   <button
@@ -689,18 +718,6 @@ export default function PlanningPoker() {
               )}
             </div>
           </div>
-
-          {/* Floating Backlog Button - shown when backlog mode is on */}
-          {backlogMode && (
-            <button
-              style={styles.backlogFab}
-              aria-label="Open backlog"
-              onClick={() => setShowBacklogModal(true)}
-            >
-              <List size={20} />
-              Backlog
-            </button>
-          )}
 
           {/* Backlog Modal */}
           {showBacklogModal && (

@@ -30,11 +30,72 @@ export const styles = {
     fontSize: '1.25rem',
     fontWeight: '600',
     color: '#374151',
+    margin: 0
+  },
+  storyHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '0.75rem',
+    position: 'relative' as const,
     marginBottom: '0.5rem'
+  },
+  storyEditButton: {
+    padding: '0.5rem 1rem',
+    fontSize: '0.875rem',
+    position: 'absolute' as const,
+    right: 0
   },
   storyText: {
     color: '#6b7280',
     fontStyle: 'italic'
+  },
+  storyControls: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: '0.75rem',
+    flexWrap: 'wrap' as const,
+    gridColumn: 3,
+    justifySelf: 'end'
+  },
+  storyLine: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr)',
+    alignItems: 'center',
+    gap: '0.75rem',
+    minWidth: 0
+  },
+  storyContent: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '0.5rem',
+    gridColumn: 2,
+    width: '100%',
+    minWidth: 0
+  },
+  storyNavigation: {
+    display: 'flex',
+    gap: '0.375rem'
+  },
+  storyControlButton: {
+    width: '2.25rem',
+    height: '2.25rem',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 0,
+    borderRadius: '0.375rem',
+    backgroundColor: '#3b82f6',
+    color: 'white',
+    border: 'none',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s'
+  },
+  storyBacklogButton: {
+    padding: '0.5rem 0.875rem',
+    fontSize: '0.875rem'
   },
   card: {
     backgroundColor: 'white',
@@ -344,23 +405,4 @@ export const styles = {
     fontWeight: 400 as const
   },
 
-  // Floating Backlog Button
-  backlogFab: {
-    position: 'fixed' as const,
-    bottom: '1.5rem',
-    right: '1.5rem',
-    zIndex: 900,
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    padding: '0.75rem 1.5rem',
-    borderRadius: '0.5rem',
-    backgroundColor: '#3b82f6',
-    color: 'white',
-    fontWeight: '600',
-    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-    border: 'none',
-    cursor: 'pointer',
-    fontSize: '1rem'
-  },
 };
