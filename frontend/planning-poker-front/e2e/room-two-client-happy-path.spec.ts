@@ -1,4 +1,4 @@
-import { expect, Page, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 const roomUrlPattern = /\/room\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 const userA = 'User A';
@@ -79,10 +79,10 @@ test('allows two users to join, vote, and sync story updates', async ({ browser,
     // Add a story to the backlog so the Edit button becomes available
     const storyName = `Story: estimate websocket sync ${Date.now()}`;
     await ownerPage.getByRole('button', { name: 'Open backlog' }).click();
-    await ownerPage.getByPlaceholder('Enter story name...').fill(storyName);
-    await ownerPage.getByRole('button', { name: 'Add' }).click();
-    // Verify the story appears inside the backlog dialog (owner page)
     const ownerBacklogDialog = backlogDialog(ownerPage);
+    await ownerBacklogDialog.getByPlaceholder('Enter story name...').fill(storyName);
+    await ownerBacklogDialog.getByRole('button', { name: 'Add' }).click();
+    // Verify the server response appears inside the backlog dialog (owner page)
     await expect(ownerBacklogDialog.getByText(storyName, { exact: true })).toBeVisible();
 
     // Open the backlog dialog on the guest page and assert the same
@@ -91,8 +91,8 @@ test('allows two users to join, vote, and sync story updates', async ({ browser,
     await expect(guestBacklogDialog.getByText(storyName, { exact: true })).toBeVisible();
 
     // Close both dialogs
-    await ownerPage.getByRole('button', { name: 'Close' }).click();
-    await guestPage.getByRole('button', { name: 'Close' }).click();
+    await ownerBacklogDialog.getByRole('button', { name: 'Close' }).click();
+    await guestBacklogDialog.getByRole('button', { name: 'Close' }).click();
 
     await ownerPage.getByRole('button', { name: '5', exact: true }).click();
     await guestPage.getByRole('button', { name: '8', exact: true }).click();

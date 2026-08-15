@@ -1,4 +1,4 @@
-import { expect, Page, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 const roomUrlPattern = /\/room\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 
@@ -69,9 +69,12 @@ const backlogDialog = (page: Page) => page.getByRole('dialog', { name: 'Story Ba
 
 const addStoryToBacklog = async (adminPage: Page, story: string) => {
   await openBacklogModal(adminPage);
-  await adminPage.getByPlaceholder('Enter story name...').fill(story);
-  await adminPage.getByRole('button', { name: 'Add' }).click();
-  await adminPage.getByRole('button', { name: 'Close' }).click();
+  const dialog = backlogDialog(adminPage);
+  await dialog.getByPlaceholder('Enter story name...').fill(story);
+  await dialog.getByRole('button', { name: 'Add' }).click();
+  // Wait for the WebSocket response before closing or opening the modal again.
+  await expect(dialog.getByText(story, { exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Close' }).click();
 };
 
 test('backlog: adding, navigating, and voting on multiple stories', async ({ browser, baseURL }) => {
@@ -110,7 +113,7 @@ test('backlog: adding, navigating, and voting on multiple stories', async ({ bro
     await expect(ownerBacklog.getByText('Story Alpha', { exact: true })).toBeVisible();
     await expect(ownerBacklog.getByText('Story Beta', { exact: true })).toBeVisible();
     await expect(ownerBacklog.getByText('Story Gamma', { exact: true })).toBeVisible();
-    await ownerPage.getByRole('button', { name: 'Close' }).click();
+    await ownerBacklog.getByRole('button', { name: 'Close' }).click();
 
     // Verify all stories are visible in the backlog dialog (guest page)
     await openBacklogModal(guestPage);
@@ -118,7 +121,7 @@ test('backlog: adding, navigating, and voting on multiple stories', async ({ bro
     await expect(guestBacklog.getByText('Story Alpha', { exact: true })).toBeVisible();
     await expect(guestBacklog.getByText('Story Beta', { exact: true })).toBeVisible();
     await expect(guestBacklog.getByText('Story Gamma', { exact: true })).toBeVisible();
-    await guestPage.getByRole('button', { name: 'Close' }).click();
+    await guestBacklog.getByRole('button', { name: 'Close' }).click();
 
     // 4. Verify story position indicator
     await expect(ownerPage.getByText('(Story 1 of 3)')).toBeVisible();

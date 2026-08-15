@@ -102,9 +102,12 @@ test('keeps room interactive for remaining client after peer page closes', async
 
     // Add a story so admin controls work properly
     await ownerPage.getByRole('button', { name: 'Open backlog' }).click();
-    await ownerPage.getByPlaceholder('Enter story name...').fill('Test Story');
-    await ownerPage.getByRole('button', { name: 'Add' }).click();
-    await ownerPage.getByRole('button', { name: 'Close' }).click();
+    const backlogDialog = ownerPage.getByRole('dialog', { name: 'Story Backlog' });
+    await backlogDialog.getByPlaceholder('Enter story name...').fill('Test Story');
+    await backlogDialog.getByRole('button', { name: 'Add' }).click();
+    // Do not disconnect the owner until the server has acknowledged the story.
+    await expect(backlogDialog.getByText('Test Story', { exact: true })).toBeVisible();
+    await backlogDialog.getByRole('button', { name: 'Close' }).click();
 
     await ownerPage.close();
 
