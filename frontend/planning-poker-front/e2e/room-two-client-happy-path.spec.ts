@@ -25,7 +25,11 @@ const randomUUIDPolyfillScript = () => {
 
 const backlogDialog = (page: Page) => page.getByRole('dialog', { name: 'Story Backlog' });
 
-const storyCard = (page: Page) => page.getByText('Current Story').locator('xpath=ancestor::div[1]');
+const openBacklogModal = async (page: Page) => {
+  await page.getByRole('button', { name: 'Open backlog' }).click();
+};
+
+const storyCard = (page: Page) => page.getByText('Current Story').locator('xpath=ancestor::div[2]');
 
 test('allows two users to join, vote, and sync story updates', async ({ browser, baseURL }) => {
   test.setTimeout(60_000);
@@ -123,6 +127,44 @@ test('allows two users to join, vote, and sync story updates', async ({ browser,
 
     await expect(storyCard(ownerPage)).toContainText(updatedStory);
     await expect(storyCard(guestPage)).toContainText(updatedStory);
+
+    // Escape should cancel an edit and restore the previous story name.
+    await adminPage.getByRole('button', { name: 'Edit' }).click();
+    const storyInput = storyCard(adminPage).getByRole('textbox');
+    await storyInput.fill('Temporary story name');
+    await storyInput.press('Escape');
+    await expect(storyCard(adminPage)).toContainText(updatedStory);
+
+    // Enter with an empty name should remove the current story instead of saving an empty one.
+    await adminPage.getByRole('button', { name: 'Edit' }).click();
+    const emptyStoryInput = storyCard(adminPage).getByRole('textbox');
+    await emptyStoryInput.fill('');
+    let confirmationType = '';
+    const confirmationDialog = new Promise<void>((resolve) => {
+      adminPage.once('dialog', async (dialog) => {
+        confirmationType = dialog.type();
+        await dialog.dismiss();
+        resolve();
+      });
+    });
+    await emptyStoryInput.press('Enter');
+    await confirmationDialog;
+    expect(confirmationType).toBe('confirm');
+    await expect(storyCard(adminPage).getByRole('textbox')).toBeVisible();
+
+    const removeDialog = new Promise<void>((resolve) => {
+      adminPage.once('dialog', async (dialog) => {
+        await dialog.accept();
+        resolve();
+      });
+    });
+    await storyCard(adminPage).getByRole('textbox').press('Enter');
+    await removeDialog;
+    await expect(storyCard(adminPage).getByText(updatedStory, { exact: true })).not.toBeVisible();
+    await openBacklogModal(adminPage);
+    const adminBacklogDialog = backlogDialog(adminPage);
+    await expect(adminBacklogDialog.getByText(updatedStory, { exact: true })).not.toBeVisible();
+    await adminBacklogDialog.getByRole('button', { name: 'Close' }).click();
   } finally {
     await Promise.allSettled([ownerContext.close(), guestContext.close()]);
   }
