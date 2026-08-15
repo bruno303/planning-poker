@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 const roomUrlPattern = /\/room\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 const userA = 'User A';
@@ -22,6 +22,14 @@ const randomUUIDPolyfillScript = () => {
     });
   }
 };
+
+const backlogDialog = (page: Page) => page.getByRole('dialog', { name: 'Story Backlog' });
+
+const openBacklogModal = async (page: Page) => {
+  await page.getByRole('button', { name: 'Open backlog' }).click();
+};
+
+const storyCard = (page: Page) => page.getByText('Current Story').locator('xpath=ancestor::div[2]');
 
 test('allows two users to join, vote, and sync story updates', async ({ browser, baseURL }) => {
   test.setTimeout(60_000);
@@ -74,11 +82,21 @@ test('allows two users to join, vote, and sync story updates', async ({ browser,
 
     // Add a story to the backlog so the Edit button becomes available
     const storyName = `Story: estimate websocket sync ${Date.now()}`;
-    await ownerPage.getByPlaceholder('Enter story name...').fill(storyName);
-    await ownerPage.getByRole('button', { name: 'Add' }).click();
-    // Verify story appears (use .first() since it shows in both Current Story card and backlog list)
-    await expect(ownerPage.getByText(storyName, { exact: true }).first()).toBeVisible();
-    await expect(guestPage.getByText(storyName, { exact: true }).first()).toBeVisible();
+    await ownerPage.getByRole('button', { name: 'Open backlog' }).click();
+    const ownerBacklogDialog = backlogDialog(ownerPage);
+    await ownerBacklogDialog.getByPlaceholder('Enter story name...').fill(storyName);
+    await ownerBacklogDialog.getByRole('button', { name: 'Add' }).click();
+    // Verify the server response appears inside the backlog dialog (owner page)
+    await expect(ownerBacklogDialog.getByText(storyName, { exact: true })).toBeVisible();
+
+    // Open the backlog dialog on the guest page and assert the same
+    await guestPage.getByRole('button', { name: 'Open backlog' }).click();
+    const guestBacklogDialog = backlogDialog(guestPage);
+    await expect(guestBacklogDialog.getByText(storyName, { exact: true })).toBeVisible();
+
+    // Close both dialogs
+    await ownerBacklogDialog.getByRole('button', { name: 'Close' }).click();
+    await guestBacklogDialog.getByRole('button', { name: 'Close' }).click();
 
     await ownerPage.getByRole('button', { name: '5', exact: true }).click();
     await guestPage.getByRole('button', { name: '8', exact: true }).click();
@@ -104,12 +122,49 @@ test('allows two users to join, vote, and sync story updates', async ({ browser,
 
     await adminPage.getByRole('button', { name: 'Edit' }).click();
     // Scope to the story card to avoid matching the backlog add input
-    const storyCard = adminPage.getByText('Current Story').locator('xpath=ancestor::div[1]');
-    await storyCard.getByRole('textbox').fill(updatedStory);
+    await storyCard(adminPage).getByRole('textbox').fill(updatedStory);
     await adminPage.getByRole('button', { name: 'Save' }).click();
 
-    await expect(ownerPage.getByText(updatedStory, { exact: true }).first()).toBeVisible();
-    await expect(guestPage.getByText(updatedStory, { exact: true }).first()).toBeVisible();
+    await expect(storyCard(ownerPage)).toContainText(updatedStory);
+    await expect(storyCard(guestPage)).toContainText(updatedStory);
+
+    // Escape should cancel an edit and restore the previous story name.
+    await adminPage.getByRole('button', { name: 'Edit' }).click();
+    const storyInput = storyCard(adminPage).getByRole('textbox');
+    await storyInput.fill('Temporary story name');
+    await storyInput.press('Escape');
+    await expect(storyCard(adminPage)).toContainText(updatedStory);
+
+    // Enter with an empty name should remove the current story instead of saving an empty one.
+    await adminPage.getByRole('button', { name: 'Edit' }).click();
+    const emptyStoryInput = storyCard(adminPage).getByRole('textbox');
+    await emptyStoryInput.fill('');
+    let confirmationType = '';
+    const confirmationDialog = new Promise<void>((resolve) => {
+      adminPage.once('dialog', async (dialog) => {
+        confirmationType = dialog.type();
+        await dialog.dismiss();
+        resolve();
+      });
+    });
+    await emptyStoryInput.press('Enter');
+    await confirmationDialog;
+    expect(confirmationType).toBe('confirm');
+    await expect(storyCard(adminPage).getByRole('textbox')).toBeVisible();
+
+    const removeDialog = new Promise<void>((resolve) => {
+      adminPage.once('dialog', async (dialog) => {
+        await dialog.accept();
+        resolve();
+      });
+    });
+    await storyCard(adminPage).getByRole('textbox').press('Enter');
+    await removeDialog;
+    await expect(storyCard(adminPage).getByText(updatedStory, { exact: true })).not.toBeVisible();
+    await openBacklogModal(adminPage);
+    const adminBacklogDialog = backlogDialog(adminPage);
+    await expect(adminBacklogDialog.getByText(updatedStory, { exact: true })).not.toBeVisible();
+    await adminBacklogDialog.getByRole('button', { name: 'Close' }).click();
   } finally {
     await Promise.allSettled([ownerContext.close(), guestContext.close()]);
   }

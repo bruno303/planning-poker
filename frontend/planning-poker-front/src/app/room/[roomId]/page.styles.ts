@@ -30,11 +30,72 @@ export const styles = {
     fontSize: '1.25rem',
     fontWeight: '600',
     color: '#374151',
+    margin: 0
+  },
+  storyHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '0.75rem',
+    position: 'relative' as const,
     marginBottom: '0.5rem'
+  },
+  storyEditButton: {
+    padding: '0.5rem 1rem',
+    fontSize: '0.875rem',
+    position: 'absolute' as const,
+    right: 0
   },
   storyText: {
     color: '#6b7280',
     fontStyle: 'italic'
+  },
+  storyControls: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: '0.75rem',
+    flexWrap: 'wrap' as const,
+    gridColumn: 3,
+    justifySelf: 'end'
+  },
+  storyLine: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr)',
+    alignItems: 'center',
+    gap: '0.75rem',
+    minWidth: 0
+  },
+  storyContent: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '0.5rem',
+    gridColumn: 2,
+    width: '100%',
+    minWidth: 0
+  },
+  storyNavigation: {
+    display: 'flex',
+    gap: '0.375rem'
+  },
+  storyControlButton: {
+    width: '2.25rem',
+    height: '2.25rem',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 0,
+    borderRadius: '0.375rem',
+    backgroundColor: '#3b82f6',
+    color: 'white',
+    border: 'none',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s'
+  },
+  storyBacklogButton: {
+    padding: '0.5rem 0.875rem',
+    fontSize: '0.875rem'
   },
   card: {
     backgroundColor: 'white',
@@ -336,112 +397,6 @@ export const styles = {
     margin: '0.5rem',
   },
 
-  // Backlog Panel
-  backlogPanel: {
-    backgroundColor: 'white',
-    borderRadius: '0.5rem',
-    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-    padding: '1.5rem',
-    marginTop: '2rem',
-    marginBottom: '1rem'
-  },
-  backlogHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '1rem'
-  },
-  backlogList: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '0.5rem',
-    marginBottom: '1rem'
-  },
-  backlogStory: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '0.75rem',
-    borderRadius: '0.375rem',
-    border: '2px solid',
-    transition: 'colors 0.2s'
-  },
-  backlogStoryCurrent: {
-    borderColor: '#3b82f6',
-    backgroundColor: '#eff6ff'
-  },
-  backlogStoryVoted: {
-    borderColor: '#bbf7d0',
-    backgroundColor: '#f0fdf4'
-  },
-  backlogStoryPending: {
-    borderColor: '#fef3c7',
-    backgroundColor: '#fffbeb'
-  },
-  backlogStoryLeft: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem'
-  },
-  backlogStoryIndex: {
-    fontWeight: '600',
-    color: '#6b7280',
-    fontSize: '0.875rem',
-    minWidth: '1.5rem'
-  },
-  backlogStoryName: {
-    fontWeight: '500',
-    color: '#1f2937'
-  },
-  backlogStoryTag: {
-    fontSize: '0.75rem',
-    padding: '0.125rem 0.5rem',
-    borderRadius: '9999px',
-    backgroundColor: '#3b82f6',
-    color: 'white',
-    fontWeight: '600'
-  },
-  backlogStoryTagVoted: {
-    fontSize: '0.75rem',
-    padding: '0.125rem 0.5rem',
-    borderRadius: '9999px',
-    backgroundColor: '#10b981',
-    color: 'white',
-    fontWeight: '600'
-  },
-  backlogStoryRight: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem'
-  },
-  backlogAddForm: {
-    display: 'flex',
-    gap: '0.5rem',
-    marginBottom: '1rem'
-  },
-  backlogInput: {
-    flex: 1,
-    padding: '0.5rem',
-    borderRadius: '0.375rem',
-    border: '1px solid #d1d5db',
-    fontSize: '0.875rem',
-    outline: 'none'
-  },
-  backlogActions: {
-    display: 'flex',
-    gap: '0.5rem',
-    justifyContent: 'flex-end'
-  },
-  dangerButton: {
-    backgroundColor: '#ef4444',
-    color: 'white'
-  },
-  dangerSmallButton: {
-    backgroundColor: '#fecaca',
-    color: '#dc2626',
-    padding: '0.25rem 0.5rem',
-    border: '1px solid #fca5a5'
-  },
   backlogStoryPosition: {
     fontSize: '0.75rem',
     color: '#6b7280',
@@ -449,4 +404,5 @@ export const styles = {
     fontStyle: 'italic' as const,
     fontWeight: 400 as const
   },
+
 };
