@@ -45,8 +45,6 @@ type (
 		closeCh          chan struct{}
 		roomSubs         sync.Map
 		roomClientCounts map[string]int
-		ctx              context.Context
-		cancel           context.CancelFunc
 	}
 	BroadcastMessage struct {
 		RoomID  string `json:"roomId"`
@@ -60,15 +58,12 @@ var (
 )
 
 func NewRedisHub(ctx context.Context, redisClient RedisClient) (*RedisHub, error) {
-	hctx, cancel := context.WithCancel(context.Background())
 	hub := &RedisHub{
 		client:           redisClient,
 		logger:           log.NewLogger("redis.hub"),
 		buses:            make(map[string]domain.Bus),
 		closeCh:          make(chan struct{}),
 		roomClientCounts: make(map[string]int),
-		ctx:              hctx,
-		cancel:           cancel,
 	}
 	hub.logger.Info(ctx, "RedisHub initialized")
 	return hub, nil
@@ -76,10 +71,6 @@ func NewRedisHub(ctx context.Context, redisClient RedisClient) (*RedisHub, error
 
 func (h *RedisHub) Close() error {
 	close(h.closeCh)
-
-	if h.cancel != nil {
-		h.cancel()
-	}
 
 	h.wg.Wait()
 
@@ -211,7 +202,7 @@ func (h *RedisHub) AddBus(ctx context.Context, clientID string, bus domain.Bus) 
 	h.roomClientCounts[roomID]++
 	_, exists := h.roomSubs.Load(roomID)
 	if !exists {
-		sub := h.client.Subscribe(h.ctx, pubsubChannel+roomID)
+		sub := h.client.Subscribe(context.Background(), pubsubChannel+roomID)
 		subscribeCtx, cancel := context.WithTimeout(context.Background(), subscribeTimeout)
 		if _, err := sub.Receive(subscribeCtx); err != nil {
 			h.logger.Error(ctx, fmt.Sprintf("Failed to confirm pub/sub subscription for room %s", roomID), err)
@@ -219,7 +210,7 @@ func (h *RedisHub) AddBus(ctx context.Context, clientID string, bus domain.Bus) 
 		cancel()
 		h.roomSubs.Store(roomID, sub)
 		h.wg.Go(func() {
-			h.listenToRoomPubSub(h.ctx, roomID, sub)
+			h.listenToRoomPubSub(context.Background(), roomID, sub)
 		})
 		h.logger.Info(ctx, "Subscribed to pub/sub for room %s", roomID)
 	}

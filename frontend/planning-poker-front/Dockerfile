@@ -16,7 +16,7 @@ ENV NEXT_PUBLIC_LOG_LEVEL=debug
 COPY package*.json ./
 COPY . .
 
-RUN npm ci
+RUN npm ci --ignore-scripts
 RUN npm run build
 
 FROM node:20-alpine AS production
