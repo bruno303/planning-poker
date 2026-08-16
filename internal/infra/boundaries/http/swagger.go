@@ -11,9 +11,10 @@ import (
 var swaggerFS embed.FS
 
 const (
-	contentTypeYAML = "application/x-yaml"
-	contentTypeJSON = "application/json"
-	contentTypeHTML = "text/html; charset=utf-8"
+	headerContentType = "Content-Type"
+	contentTypeYAML   = "application/x-yaml"
+	contentTypeJSON   = "application/json"
+	contentTypeHTML   = "text/html; charset=utf-8"
 )
 
 type SwaggerAPI struct{}
@@ -44,7 +45,7 @@ func (s SwaggerAPI) Handle() http.Handler {
 				http.Error(w, "Failed to load OpenAPI spec", http.StatusInternalServerError)
 				return
 			}
-			w.Header().Set("Content-Type", contentTypeYAML)
+			w.Header().Set(headerContentType, contentTypeYAML)
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write(data)
 		case "swagger.json":
@@ -53,7 +54,7 @@ func (s SwaggerAPI) Handle() http.Handler {
 				http.Error(w, "Failed to load OpenAPI spec", http.StatusInternalServerError)
 				return
 			}
-			w.Header().Set("Content-Type", contentTypeJSON)
+			w.Header().Set(headerContentType, contentTypeJSON)
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write(data)
 		default:
@@ -81,7 +82,7 @@ func serveSwaggerUI(w http.ResponseWriter, _ *http.Request) {
     </script>
 </body>
 </html>`
-	w.Header().Set("Content-Type", contentTypeHTML)
+	w.Header().Set(headerContentType, contentTypeHTML)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(html))
 }
