@@ -985,6 +985,55 @@ func TestJoinRoomUseCase_Execute_ReconnectBroadcastErrorRollback(t *testing.T) {
 	}
 }
 
+func TestJoinRoomUseCase_Execute_AddBusErrorRollsBackNewClient(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	mockHub := domain.NewMockHub(ctrl)
+	mockLockManager := lock.NewMockLockManager(ctrl)
+	testMetric, metricMeter := newTestPlanningPokerMetric(ctrl)
+	mockBus := domain.NewMockBus(ctrl)
+
+	roomID := "room123"
+	clientID := "new-client"
+	room := &entity.Room{
+		ID:      roomID,
+		Clients: clientcollection.New(),
+	}
+	addBusErr := errors.New("subscription setup failed")
+
+	mockLockManager.EXPECT().
+		WithLock(gomock.Any(), roomID, gomock.Any()).
+		DoAndReturn(func(ctx context.Context, key string, fn func(context.Context) (any, error)) (any, error) {
+			return fn(ctx)
+		})
+
+	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
+	mockHub.EXPECT().AddClient(gomock.Any())
+	mockHub.EXPECT().AddBus(gomock.Any(), clientID, mockBus).Return(addBusErr)
+	mockHub.EXPECT().RemoveClient(gomock.Any(), clientID, roomID).Return(nil)
+
+	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric)
+	cmd := JoinRoomCommand{
+		RoomID:   roomID,
+		SenderID: clientID,
+		Bus:      mockBus,
+	}
+
+	output, err := uc.Execute(ctx, cmd)
+
+	if output != nil {
+		t.Fatal("expected nil output when adding the bus fails")
+	}
+	if !errors.Is(err, addBusErr) {
+		t.Fatalf("expected error to wrap %v, got %v", addBusErr, err)
+	}
+	if calls := metricMeter.getCalls(); len(calls) != 0 {
+		t.Fatalf("expected no metric changes when adding the bus fails, got %d calls", len(calls))
+	}
+}
+
 func TestJoinRoomUseCase_Execute_NilDependencies(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

@@ -19,7 +19,7 @@ type (
 		BroadcastToRoom(ctx context.Context, roomID string, message any) error
 
 		GetBus(clientID string) (Bus, bool)
-		AddBus(ctx context.Context, clientID string, bus Bus)
+		AddBus(ctx context.Context, clientID string, bus Bus) error
 		RemoveBus(ctx context.Context, clientID string)
 	}
 	AdminHub interface {
