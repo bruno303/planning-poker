@@ -54,54 +54,19 @@ func NewJoinRoomUseCase(hub domain.Hub, lockManager lock.LockManager, metric met
 
 func (uc JoinRoomUseCase) Execute(ctx context.Context, cmd JoinRoomCommand) (*JoinRoomOutput, error) {
 	output, err := uc.lockManager.WithLock(ctx, cmd.RoomID, func(ctx context.Context) (any, error) {
-		room, err := uc.hub.LoadRoom(ctx, cmd.RoomID)
-		autoCreated := false
+		room, autoCreated, err := uc.loadOrCreateRoom(ctx, cmd)
 		if err != nil {
-			if !errors.Is(err, domain.ErrRoomNotFound) {
-				return nil, fmt.Errorf("failed to load room %s: %w", cmd.RoomID, err)
-			}
-
-			room, err = uc.hub.NewRoomWithID(ctx, cmd.RoomID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to auto-create room %s: %w", cmd.RoomID, err)
-			}
-
-			autoCreated = true
-			uc.logger.Info(ctx, "Room auto-created with ID: %s during join by: %s", room.ID, cmd.SenderID)
+			return nil, err
 		}
 
 		client, isReconnect, rollbackFunc := uc.joinClient(ctx, room, cmd)
 
 		output := &JoinRoomOutput{Client: client, Room: room}
-		rollbackJoin := func(cause error) error {
-			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), rollbackJoinCleanupTimeout)
-			defer cancel()
-
-			if err := rollbackFunc(cleanupCtx); err != nil {
-				return fmt.Errorf("%w: rollback join initialization: %w", cause, err)
-			}
-
-			return cause
+		if err := uc.notifyJoin(ctx, cmd, room, client); err != nil {
+			return output, uc.rollbackJoin(ctx, rollbackFunc, err)
 		}
 
-		uc.logger.Debug(ctx, "sending update client ID command for client %s on room %s", client.ID, room.ID)
-		if err := cmd.Bus.Send(ctx, dto.NewUpdateClientIDCommand(client.ID)); err != nil {
-			return output, rollbackJoin(fmt.Errorf("failed to send update client ID command: %w", err))
-		}
-
-		uc.logger.Debug(ctx, "broadcasting room state for room %s", room.ID)
-		if err := uc.hub.BroadcastToRoom(ctx, room.ID, dto.NewRoomStateCommand(room)); err != nil {
-			return output, rollbackJoin(fmt.Errorf("failed to broadcast room state: %w", err))
-		}
-
-		if !isReconnect {
-			uc.metric.IncrementUsersTotal(ctx)
-			uc.metric.IncrementActiveUsers(ctx)
-		}
-
-		if autoCreated {
-			uc.metric.IncrementActiveRoomsCounter(ctx)
-		}
+		uc.recordJoinMetrics(ctx, autoCreated, isReconnect)
 
 		return output, nil
 	})
@@ -111,6 +76,59 @@ func (uc JoinRoomUseCase) Execute(ctx context.Context, cmd JoinRoomCommand) (*Jo
 	}
 
 	return output.(*JoinRoomOutput), nil
+}
+
+func (uc JoinRoomUseCase) loadOrCreateRoom(ctx context.Context, cmd JoinRoomCommand) (*entity.Room, bool, error) {
+	room, err := uc.hub.LoadRoom(ctx, cmd.RoomID)
+	if err == nil {
+		return room, false, nil
+	}
+	if !errors.Is(err, domain.ErrRoomNotFound) {
+		return nil, false, fmt.Errorf("failed to load room %s: %w", cmd.RoomID, err)
+	}
+
+	room, err = uc.hub.NewRoomWithID(ctx, cmd.RoomID)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to auto-create room %s: %w", cmd.RoomID, err)
+	}
+
+	uc.logger.Info(ctx, "Room auto-created with ID: %s during join by: %s", room.ID, cmd.SenderID)
+	return room, true, nil
+}
+
+func (uc JoinRoomUseCase) notifyJoin(ctx context.Context, cmd JoinRoomCommand, room *entity.Room, client *entity.Client) error {
+	uc.logger.Debug(ctx, "sending update client ID command for client %s on room %s", client.ID, room.ID)
+	if err := cmd.Bus.Send(ctx, dto.NewUpdateClientIDCommand(client.ID)); err != nil {
+		return fmt.Errorf("failed to send update client ID command: %w", err)
+	}
+
+	uc.logger.Debug(ctx, "broadcasting room state for room %s", room.ID)
+	if err := uc.hub.BroadcastToRoom(ctx, room.ID, dto.NewRoomStateCommand(room)); err != nil {
+		return fmt.Errorf("failed to broadcast room state: %w", err)
+	}
+
+	return nil
+}
+
+func (uc JoinRoomUseCase) rollbackJoin(ctx context.Context, rollbackFunc func(context.Context) error, cause error) error {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), rollbackJoinCleanupTimeout)
+	defer cancel()
+
+	if err := rollbackFunc(cleanupCtx); err != nil {
+		return fmt.Errorf("%w: rollback join initialization: %w", cause, err)
+	}
+
+	return cause
+}
+
+func (uc JoinRoomUseCase) recordJoinMetrics(ctx context.Context, autoCreated, isReconnect bool) {
+	if !isReconnect {
+		uc.metric.IncrementUsersTotal(ctx)
+		uc.metric.IncrementActiveUsers(ctx)
+	}
+	if autoCreated {
+		uc.metric.IncrementActiveRoomsCounter(ctx)
+	}
 }
 
 func (uc JoinRoomUseCase) joinClient(ctx context.Context, room *entity.Room, cmd JoinRoomCommand) (client *entity.Client, isReconnect bool, rollbackFunc func(context.Context) error) {

@@ -115,6 +115,11 @@ export const styles = {
     display: 'flex',
     flexDirection: 'column' as const
   },
+  userNameRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem'
+  },
   label: {
     fontSize: '0.875rem',
     fontWeight: '500',

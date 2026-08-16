@@ -6,7 +6,7 @@ fullnameOverride: ""
 backend:
   image:
     repository: bruno303/planning-poker-backend
-    tag: latest
+    tag: "0.0.55"
     pullPolicy: IfNotPresent
   replicas: 1
   imagePullSecrets: []
@@ -55,6 +55,7 @@ backend:
     requests:
       cpu: 100m
       memory: 128Mi
+      ephemeral-storage: 128Mi
     limits:
       cpu: 200m
       memory: 256Mi
@@ -154,6 +155,7 @@ redis:
     requests:
       cpu: 50m
       memory: 64Mi
+      ephemeral-storage: 128Mi
     limits:
       cpu: 500m
       memory: 256Mi

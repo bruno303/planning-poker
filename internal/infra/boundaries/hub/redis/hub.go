@@ -270,11 +270,11 @@ func (h *RedisHub) listenToRoomPubSub(ctx context.Context, roomID string, sub *r
 				h.logger.Error(ctx, "Failed to unmarshal broadcast message", err)
 				continue
 			}
-			opCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			opCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 			h.forwardToLocalClients(opCtx, broadcastMsg.RoomID, broadcastMsg.Payload)
 			cancel()
 		case <-h.closeCh:
-			opCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			opCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
 			_ = sub.Unsubscribe(opCtx, pubsubChannel+roomID)
 			cancel()
 			h.logger.Info(ctx, "Stopping pub/sub listener for room %s", roomID)

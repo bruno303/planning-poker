@@ -7,6 +7,50 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+func assertNewClient(t *testing.T, client *Client, wantID string) {
+	t.Helper()
+
+	if client == nil {
+		t.Fatal("newClient() returned nil")
+	}
+	if client.ID != wantID {
+		t.Errorf("newClient() ID = %v, want %v", client.ID, wantID)
+	}
+	if client.Name != "" {
+		t.Errorf("newClient() Name = %v, want empty string", client.Name)
+	}
+	if client.CurrentVote != nil {
+		t.Errorf("newClient() CurrentVote = %v, want nil", client.CurrentVote)
+	}
+	if client.HasVoted {
+		t.Errorf("newClient() HasVoted = %v, want false", client.HasVoted)
+	}
+	if client.IsSpectator {
+		t.Errorf("newClient() IsSpectator = %v, want false", client.IsSpectator)
+	}
+	if client.IsOwner {
+		t.Errorf("newClient() IsOwner = %v, want false", client.IsOwner)
+	}
+	if client.logger == nil {
+		t.Error("newClient() logger is nil")
+	}
+}
+
+func assertVoteResult(t *testing.T, client *Client, wantVote *string, wantHasVoted bool) {
+	t.Helper()
+
+	if wantVote == nil {
+		if client.CurrentVote != nil {
+			t.Errorf("Vote() CurrentVote = %v, want nil", *client.CurrentVote)
+		}
+	} else if client.CurrentVote == nil || *client.CurrentVote != *wantVote {
+		t.Errorf("Vote() CurrentVote = %v, want %v", client.CurrentVote, *wantVote)
+	}
+	if client.HasVoted != wantHasVoted {
+		t.Errorf("Vote() HasVoted = %v, want %v", client.HasVoted, wantHasVoted)
+	}
+}
+
 func TestNewClient(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -28,39 +72,7 @@ func TestNewClient(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := newClient(tt.clientID)
-
-			if client == nil {
-				t.Fatal("newClient() returned nil")
-			}
-
-			if client.ID != tt.clientID {
-				t.Errorf("newClient() ID = %v, want %v", client.ID, tt.clientID)
-			}
-
-			if client.Name != "" {
-				t.Errorf("newClient() Name = %v, want empty string", client.Name)
-			}
-
-			if client.CurrentVote != nil {
-				t.Errorf("newClient() CurrentVote = %v, want nil", client.CurrentVote)
-			}
-
-			if client.HasVoted {
-				t.Errorf("newClient() HasVoted = %v, want false", client.HasVoted)
-			}
-
-			if client.IsSpectator {
-				t.Errorf("newClient() IsSpectator = %v, want false", client.IsSpectator)
-			}
-
-			if client.IsOwner {
-				t.Errorf("newClient() IsOwner = %v, want false", client.IsOwner)
-			}
-
-			if client.logger == nil {
-				t.Error("newClient() logger is nil")
-			}
+			assertNewClient(t, newClient(tt.clientID), tt.clientID)
 		})
 	}
 }
@@ -160,32 +172,7 @@ func TestClient_Vote(t *testing.T) {
 
 			client.Vote(ctx, tt.vote)
 
-			if tt.reveal {
-				// When reveal is true, vote should be ignored
-				if client.CurrentVote != nil {
-					t.Errorf("Vote() with reveal=true, CurrentVote = %v, want nil", client.CurrentVote)
-				}
-				if client.HasVoted {
-					t.Errorf("Vote() with reveal=true, HasVoted = %v, want false", client.HasVoted)
-				}
-			} else {
-				// When reveal is false, vote should be accepted
-				if tt.wantVote == nil {
-					if client.CurrentVote != nil {
-						t.Errorf("Vote() CurrentVote = %v, want nil", *client.CurrentVote)
-					}
-				} else {
-					if client.CurrentVote == nil {
-						t.Errorf("Vote() CurrentVote = nil, want %v", *tt.wantVote)
-					} else if *client.CurrentVote != *tt.wantVote {
-						t.Errorf("Vote() CurrentVote = %v, want %v", *client.CurrentVote, *tt.wantVote)
-					}
-				}
-
-				if client.HasVoted != tt.wantHasVoted {
-					t.Errorf("Vote() HasVoted = %v, want %v", client.HasVoted, tt.wantHasVoted)
-				}
-			}
+			assertVoteResult(t, client, tt.wantVote, tt.wantHasVoted)
 		})
 	}
 }
@@ -344,64 +331,44 @@ func TestClient_UpdateName_Multiple(t *testing.T) {
 	}
 }
 
-func TestClient_VoteScenarios(t *testing.T) {
-	t.Run("should handle voting before and after reveal", func(t *testing.T) {
-		ctx := context.Background()
-		vote5 := "5"
-		vote8 := "8"
+func TestClient_VoteBeforeAndAfterReveal(t *testing.T) {
+	ctx := context.Background()
+	vote5 := "5"
+	vote8 := "8"
 
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-		client := newClient("test-client")
-		mockClientCollection := NewMockClientCollection(ctrl)
-		room := NewRoom(mockClientCollection)
-		room.Reveal = false
-		client.room = room
+	client := newClient("test-client")
+	room := NewRoom(NewMockClientCollection(ctrl))
+	room.Reveal = false
+	client.room = room
 
-		// Vote before reveal
-		client.Vote(ctx, &vote5)
-		if client.CurrentVote == nil || *client.CurrentVote != vote5 {
-			t.Errorf("Vote before reveal: CurrentVote = %v, want %v", client.CurrentVote, vote5)
-		}
-		if !client.HasVoted {
-			t.Error("Vote before reveal: HasVoted = false, want true")
-		}
+	client.Vote(ctx, &vote5)
+	assertVoteResult(t, client, &vote5, true)
 
-		// Reveal votes
-		room.Reveal = true
+	room.Reveal = true
+	client.Vote(ctx, &vote8)
+	assertVoteResult(t, client, &vote5, true)
+}
 
-		// Try to vote after reveal - should be ignored
-		client.Vote(ctx, &vote8)
-		if client.CurrentVote == nil || *client.CurrentVote != vote5 {
-			t.Errorf("Vote after reveal: CurrentVote = %v, want %v (unchanged)", client.CurrentVote, vote5)
-		}
-		if !client.HasVoted {
-			t.Error("Vote after reveal: HasVoted = false, want true (unchanged)")
-		}
-	})
+func TestClient_SpectatorAndOwnerFlags(t *testing.T) {
+	client := newClient("test-client")
 
-	t.Run("should handle spectator and owner flags", func(t *testing.T) {
-		client := newClient("test-client")
+	if client.IsSpectator {
+		t.Error("Initial IsSpectator = true, want false")
+	}
+	if client.IsOwner {
+		t.Error("Initial IsOwner = true, want false")
+	}
 
-		// Initially not spectator and not owner
-		if client.IsSpectator {
-			t.Error("Initial IsSpectator = true, want false")
-		}
-		if client.IsOwner {
-			t.Error("Initial IsOwner = true, want false")
-		}
+	client.IsSpectator = true
+	if !client.IsSpectator {
+		t.Error("IsSpectator = false after setting, want true")
+	}
 
-		// Set as spectator
-		client.IsSpectator = true
-		if !client.IsSpectator {
-			t.Error("IsSpectator = false after setting, want true")
-		}
-
-		// Set as owner
-		client.IsOwner = true
-		if !client.IsOwner {
-			t.Error("IsOwner = false after setting, want true")
-		}
-	})
+	client.IsOwner = true
+	if !client.IsOwner {
+		t.Error("IsOwner = false after setting, want true")
+	}
 }

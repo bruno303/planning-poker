@@ -1003,7 +1003,7 @@ func TestJoinRoomUseCase_Execute_NilDependencies(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			defer func() {
-				if r := recover(); r == nil {
+				if recover() == nil {
 					t.Fatal("expected panic, but none occurred")
 				}
 			}()
