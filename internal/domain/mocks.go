@@ -42,9 +42,11 @@ func (m *MockHub) EXPECT() *MockHubMockRecorder {
 }
 
 // AddBus mocks base method.
-func (m *MockHub) AddBus(ctx context.Context, clientID string, bus Bus) {
+func (m *MockHub) AddBus(ctx context.Context, clientID string, bus Bus) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AddBus", ctx, clientID, bus)
+	ret := m.ctrl.Call(m, "AddBus", ctx, clientID, bus)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // AddBus indicates an expected call of AddBus.
@@ -60,19 +62,19 @@ type MockHubAddBusCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockHubAddBusCall) Return() *MockHubAddBusCall {
-	c.Call = c.Call.Return()
+func (c *MockHubAddBusCall) Return(arg0 error) *MockHubAddBusCall {
+	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHubAddBusCall) Do(f func(context.Context, string, Bus)) *MockHubAddBusCall {
+func (c *MockHubAddBusCall) Do(f func(context.Context, string, Bus) error) *MockHubAddBusCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHubAddBusCall) DoAndReturn(f func(context.Context, string, Bus)) *MockHubAddBusCall {
+func (c *MockHubAddBusCall) DoAndReturn(f func(context.Context, string, Bus) error) *MockHubAddBusCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

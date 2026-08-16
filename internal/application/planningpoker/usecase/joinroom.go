@@ -59,7 +59,10 @@ func (uc JoinRoomUseCase) Execute(ctx context.Context, cmd JoinRoomCommand) (*Jo
 			return nil, err
 		}
 
-		client, isReconnect, rollbackFunc := uc.joinClient(ctx, room, cmd)
+		client, isReconnect, rollbackFunc, err := uc.joinClient(ctx, room, cmd)
+		if err != nil {
+			return nil, uc.rollbackJoin(ctx, rollbackFunc, err)
+		}
 
 		output := &JoinRoomOutput{Client: client, Room: room}
 		if err := uc.notifyJoin(ctx, cmd, room, client); err != nil {
@@ -131,20 +134,20 @@ func (uc JoinRoomUseCase) recordJoinMetrics(ctx context.Context, autoCreated, is
 	}
 }
 
-func (uc JoinRoomUseCase) joinClient(ctx context.Context, room *entity.Room, cmd JoinRoomCommand) (client *entity.Client, isReconnect bool, rollbackFunc func(context.Context) error) {
+func (uc JoinRoomUseCase) joinClient(ctx context.Context, room *entity.Room, cmd JoinRoomCommand) (client *entity.Client, isReconnect bool, rollbackFunc func(context.Context) error, err error) {
 	if existingClient, ok := room.FindClient(cmd.SenderID); ok {
 		isReconnect = true
 		client = existingClient
-		rollbackFunc = uc.reconnectClient(ctx, cmd)
+		rollbackFunc, err = uc.reconnectClient(ctx, cmd)
 	} else {
 		client = room.NewClient(cmd.SenderID)
-		rollbackFunc = uc.createNewClient(ctx, cmd, client)
+		rollbackFunc, err = uc.createNewClient(ctx, cmd, client)
 	}
 
 	return
 }
 
-func (uc JoinRoomUseCase) reconnectClient(ctx context.Context, cmd JoinRoomCommand) func(context.Context) error {
+func (uc JoinRoomUseCase) reconnectClient(ctx context.Context, cmd JoinRoomCommand) (func(context.Context) error, error) {
 	uc.logger.Info(ctx, "Client %s reconnecting to room %s", cmd.SenderID, cmd.RoomID)
 
 	if oldBus, ok := uc.hub.GetBus(cmd.SenderID); ok {
@@ -154,22 +157,28 @@ func (uc JoinRoomUseCase) reconnectClient(ctx context.Context, cmd JoinRoomComma
 		}
 	}
 
-	uc.hub.AddBus(ctx, cmd.SenderID, cmd.Bus)
-
-	return func(cleanupCtx context.Context) error {
+	rollbackFunc := func(cleanupCtx context.Context) error {
 		uc.hub.RemoveBus(cleanupCtx, cmd.SenderID)
 		return nil
 	}
+	if err := uc.hub.AddBus(ctx, cmd.SenderID, cmd.Bus); err != nil {
+		return rollbackFunc, fmt.Errorf("failed to add bus for client %s: %w", cmd.SenderID, err)
+	}
+
+	return rollbackFunc, nil
 }
 
-func (uc JoinRoomUseCase) createNewClient(ctx context.Context, cmd JoinRoomCommand, client *entity.Client) func(context.Context) error {
+func (uc JoinRoomUseCase) createNewClient(ctx context.Context, cmd JoinRoomCommand, client *entity.Client) (func(context.Context) error, error) {
 	uc.logger.Debug(ctx, "creating client for room %s", cmd.RoomID)
 	uc.hub.AddClient(client)
 
 	uc.logger.Debug(ctx, "creating bus for client %s on room %s", client.ID, cmd.RoomID)
-	uc.hub.AddBus(ctx, client.ID, cmd.Bus)
-
-	return func(cleanupCtx context.Context) error {
+	rollbackFunc := func(cleanupCtx context.Context) error {
 		return uc.hub.RemoveClient(cleanupCtx, client.ID, cmd.RoomID)
 	}
+	if err := uc.hub.AddBus(ctx, client.ID, cmd.Bus); err != nil {
+		return rollbackFunc, fmt.Errorf("failed to add bus for client %s: %w", client.ID, err)
+	}
+
+	return rollbackFunc, nil
 }

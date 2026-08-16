@@ -73,8 +73,9 @@ func (h *InMemoryHub) AddClient(c *entity.Client) {
 	h.Clients[c.ID] = c
 }
 
-func (h *InMemoryHub) AddBus(_ context.Context, clientID string, bus domain.Bus) {
+func (h *InMemoryHub) AddBus(_ context.Context, clientID string, bus domain.Bus) error {
 	h.Buses[clientID] = bus
+	return nil
 }
 
 func (h *InMemoryHub) GetBus(clientID string) (domain.Bus, bool) {

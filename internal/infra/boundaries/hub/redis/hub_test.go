@@ -133,8 +133,9 @@ func TestRedisHub_AddBus_SubscriptionSetupFails_CleansUpBus(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	hub.AddBus(ctx, clientID, mockBus)
+	err := hub.AddBus(ctx, clientID, mockBus)
 
+	assert.Error(t, err)
 	_, ok := hub.GetBus(clientID)
 	assert.False(t, ok)
 	assert.Zero(t, hub.GetClientsOfRoom(roomID))
