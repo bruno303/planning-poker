@@ -1,4 +1,4 @@
-import { expect, Page, test } from '@playwright/test';
+import { expect, Locator, Page, test } from '@playwright/test';
 
 const roomUrlPattern = /\/room\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 
@@ -28,6 +28,9 @@ const participantsPanel = (page: Page) =>
   page
     .getByRole('heading', { name: 'Participants' })
     .locator('xpath=ancestor::div[2]');
+
+const participantAvatar = (participantsPanel: Locator, participantName: string) =>
+  participantsPanel.getByText(participantName, { exact: true }).locator('xpath=..').getByRole('img');
 
 const createRoom = async (page: Page, baseURL: string | undefined, userName: string) => {
   await page.goto('/join');
@@ -82,8 +85,17 @@ test('client auto-reconnects after WebSocket disconnect from network', async ({ 
 
     // 3. Both see each other in the participant list
     const ownerParticipants = participantsPanel(ownerPage);
+    const guestParticipants = participantsPanel(guestPage);
     await expect(ownerParticipants.getByText(ownerName, { exact: true })).toBeVisible();
     await expect(ownerParticipants.getByText(guestName, { exact: true })).toBeVisible();
+    const ownerGuestAvatar = participantAvatar(ownerParticipants, guestName);
+    const guestGuestAvatar = participantAvatar(guestParticipants, guestName);
+    await expect(ownerGuestAvatar).toBeVisible();
+    await expect(guestGuestAvatar).toBeVisible();
+    const ownerGuestAvatarSrc = await ownerGuestAvatar.getAttribute('src');
+    const guestGuestAvatarSrc = await guestGuestAvatar.getAttribute('src');
+    expect(ownerGuestAvatarSrc).toBeTruthy();
+    expect(guestGuestAvatarSrc).toBe(ownerGuestAvatarSrc);
 
     // 4. Simulate network disconnect — close the WebSocket from browser side
     await guestPage.evaluate(() => {
@@ -101,6 +113,12 @@ test('client auto-reconnects after WebSocket disconnect from network', async ({ 
 
     // 7. Banner should be gone after reconnection
     await expect(guestPage.getByText('Connection lost. Reconnecting...')).not.toBeVisible({ timeout: 10000 });
+    await expect(ownerGuestAvatar).toBeVisible();
+    await expect(ownerGuestAvatar).toHaveAttribute('src', ownerGuestAvatarSrc ?? '');
+    await expect(participantAvatar(guestParticipants, guestName)).toHaveAttribute(
+      'src',
+      guestGuestAvatarSrc ?? ''
+    );
   } finally {
     await Promise.allSettled([ownerContext.close(), guestContext.close()]);
   }
