@@ -391,21 +391,7 @@ func (r *Room) reveal(reveal bool) {
 		return
 	}
 
-	var voteSum float32 = 0
-	var voteCount float32 = 0
-	var votesCountMap = make(map[int]int)
-
-	for _, client := range r.Clients.Values() {
-		if !client.IsSpectator {
-			if client.CurrentVote != nil {
-				if vote, err := strconv.Atoi(*client.CurrentVote); err == nil {
-					voteSum += float32(vote)
-					voteCount++
-					votesCountMap[vote]++
-				}
-			}
-		}
-	}
+	voteSum, voteCount, votesCountMap := r.collectVotes()
 
 	r.MostAppearingVotes = []int{}
 
@@ -421,6 +407,23 @@ func (r *Room) reveal(reveal bool) {
 	} else {
 		r.Result = nil
 	}
+}
+
+func (r *Room) collectVotes() (voteSum float32, voteCount float32, votesCountMap map[int]int) {
+	votesCountMap = make(map[int]int)
+
+	for _, client := range r.Clients.Values() {
+		if client.IsSpectator || client.CurrentVote == nil {
+			continue
+		}
+		if vote, err := strconv.Atoi(*client.CurrentVote); err == nil {
+			voteSum += float32(vote)
+			voteCount++
+			votesCountMap[vote]++
+		}
+	}
+
+	return voteSum, voteCount, votesCountMap
 }
 
 func (r *Room) getMostVoteCount(voteMap map[int]int) int {

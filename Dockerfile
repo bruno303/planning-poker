@@ -16,13 +16,18 @@ COPY . .
 # Build the Go application
 RUN go build -o app ./cmd/api
 
-# Use a minimal image for running
-FROM alpine:latest
+# Use a pinned minimal image for running
+FROM alpine:3.21.3
 
 WORKDIR /app
 
+# Run the application without root privileges.
+RUN addgroup -S app && adduser -S app -G app
+
 # Copy the built binary from builder
-COPY --from=builder /app/app .
+COPY --from=builder --chown=app:app /app/app .
+
+USER app
 
 # Expose port 8080 for the application
 EXPOSE 8080

@@ -267,141 +267,177 @@ func (c *WebsocketBus) pinger(ctx context.Context) {
 }
 
 func mapUsecases(usecases usecase.UseCasesFacade, clientID, roomID string) map[string]useCaseCall {
-	decode := func(payload any, out any) error {
-		if v, ok := payload.(map[string]any); ok {
-			b, err := json.Marshal(v)
-			if err != nil {
-				return err
-			}
-			return json.Unmarshal(b, out)
-		}
-		b, err := json.Marshal(payload)
-		if err != nil {
-			return err
-		}
-		return json.Unmarshal(b, out)
-	}
-
 	return map[string]useCaseCall{
-		"update-name": func(ctx context.Context, msg WebSocketMessage) error {
-			var payload UpdateNamePayload
-			if err := decode(msg.Payload, &payload); err != nil {
-				return errors.New("invalid payload")
-			}
-			return usecases.UpdateName.Execute(ctx, usecase.UpdateNameCommand{
-				RoomID:   roomID,
-				SenderID: clientID,
-				Username: payload.Username,
-			})
-		},
-		"vote": func(ctx context.Context, msg WebSocketMessage) error {
-			var payload VotePayload
-			if err := decode(msg.Payload, &payload); err != nil {
-				return errors.New("invalid payload")
-			}
-			return usecases.Vote.Execute(ctx, usecase.VoteCommand{
-				RoomID:   roomID,
-				SenderID: clientID,
-				Vote:     lo.ToPtr(payload.Vote),
-			})
-		},
-		"reset": func(ctx context.Context, msg WebSocketMessage) error {
+		"update-name": newUpdateNameCall(usecases, clientID, roomID),
+		"vote":        newVoteCall(usecases, clientID, roomID),
+		"reset": func(ctx context.Context, _ WebSocketMessage) error {
 			return usecases.Reset.Execute(ctx, usecase.ResetCommand{
 				RoomID:   roomID,
 				SenderID: clientID,
 			})
 		},
-		"reveal-votes": func(ctx context.Context, msg WebSocketMessage) error {
+		"reveal-votes": func(ctx context.Context, _ WebSocketMessage) error {
 			return usecases.Reveal.Execute(ctx, usecase.RevealCommand{
 				RoomID:   roomID,
 				SenderID: clientID,
 			})
 		},
-		"toggle-spectator": func(ctx context.Context, msg WebSocketMessage) error {
-			var payload ToggleSpectatorPayload
-			if err := decode(msg.Payload, &payload); err != nil {
-				return errors.New("invalid payload")
-			}
-			return usecases.ToggleSpectator.Execute(ctx, usecase.ToggleSpectatorCommand{
-				RoomID:         roomID,
-				SenderID:       clientID,
-				TargetClientID: payload.TargetClientID,
-			})
-		},
-		"toggle-owner": func(ctx context.Context, msg WebSocketMessage) error {
-			var payload ToggleOwnerPayload
-			if err := decode(msg.Payload, &payload); err != nil {
-				return errors.New("invalid payload")
-			}
-			return usecases.ToggleOwner.Execute(ctx, usecase.ToggleOwnerCommand{
-				RoomID:         roomID,
-				SenderID:       clientID,
-				TargetClientID: payload.TargetClientID,
-			})
-		},
-		"update-story": func(ctx context.Context, msg WebSocketMessage) error {
-			var payload UpdateStoryPayload
-			if err := decode(msg.Payload, &payload); err != nil {
-				return errors.New("invalid payload")
-			}
-			return usecases.UpdateStory.Execute(ctx, usecase.UpdateStoryCommand{
-				RoomID:   roomID,
-				SenderID: clientID,
-				Story:    payload.Story,
-			})
-		},
-		"new-voting": func(ctx context.Context, msg WebSocketMessage) error {
+		"toggle-spectator": newToggleSpectatorCall(usecases, clientID, roomID),
+		"toggle-owner":     newToggleOwnerCall(usecases, clientID, roomID),
+		"update-story":     newUpdateStoryCall(usecases, clientID, roomID),
+		"new-voting": func(ctx context.Context, _ WebSocketMessage) error {
 			return usecases.NewVoting.Execute(ctx, usecase.NewVotingCommand{
 				RoomID:   roomID,
 				SenderID: clientID,
 			})
 		},
-		"vote-again": func(ctx context.Context, msg WebSocketMessage) error {
+		"vote-again": func(ctx context.Context, _ WebSocketMessage) error {
 			return usecases.VoteAgain.Execute(ctx, usecase.VoteAgainCommand{
 				RoomID:   roomID,
 				SenderID: clientID,
 			})
 		},
-		"toggle-backlog-mode": func(ctx context.Context, msg WebSocketMessage) error {
+		"toggle-backlog-mode": func(ctx context.Context, _ WebSocketMessage) error {
 			return usecases.ToggleBacklogMode.Execute(ctx, usecase.ToggleBacklogModeCommand{
 				RoomID:   roomID,
 				SenderID: clientID,
 			})
 		},
-		"add-story": func(ctx context.Context, msg WebSocketMessage) error {
-			var payload AddStoryPayload
-			if err := decode(msg.Payload, &payload); err != nil {
-				return errors.New("invalid payload")
-			}
-			return usecases.AddStory.Execute(ctx, usecase.AddStoryCommand{
-				RoomID:    roomID,
-				SenderID:  clientID,
-				StoryName: payload.Story,
-			})
-		},
-		"remove-story": func(ctx context.Context, msg WebSocketMessage) error {
-			var payload RemoveStoryPayload
-			if err := decode(msg.Payload, &payload); err != nil {
-				return errors.New("invalid payload")
-			}
-			return usecases.RemoveStory.Execute(ctx, usecase.RemoveStoryCommand{
-				RoomID:     roomID,
-				SenderID:   clientID,
-				StoryIndex: payload.StoryIndex,
-			})
-		},
-		"advance-story": func(ctx context.Context, msg WebSocketMessage) error {
+		"add-story":    newAddStoryCall(usecases, clientID, roomID),
+		"remove-story": newRemoveStoryCall(usecases, clientID, roomID),
+		"advance-story": func(ctx context.Context, _ WebSocketMessage) error {
 			return usecases.AdvanceStory.Execute(ctx, usecase.AdvanceStoryCommand{
 				RoomID:   roomID,
 				SenderID: clientID,
 			})
 		},
-		"prev-story": func(ctx context.Context, msg WebSocketMessage) error {
+		"prev-story": func(ctx context.Context, _ WebSocketMessage) error {
 			return usecases.PrevStory.Execute(ctx, usecase.PrevStoryCommand{
 				RoomID:   roomID,
 				SenderID: clientID,
 			})
 		},
+	}
+}
+
+func decode(payload, out any) error {
+	if v, ok := payload.(map[string]any); ok {
+		b, err := json.Marshal(v)
+		if err != nil {
+			return err
+		}
+		return json.Unmarshal(b, out)
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(b, out)
+}
+
+func decodePayload[T any](payload any) (T, error) {
+	var out T
+	if err := decode(payload, &out); err != nil {
+		return out, errors.New("invalid payload")
+	}
+	return out, nil
+}
+
+func newUpdateNameCall(usecases usecase.UseCasesFacade, clientID, roomID string) useCaseCall {
+	return func(ctx context.Context, msg WebSocketMessage) error {
+		payload, err := decodePayload[UpdateNamePayload](msg.Payload)
+		if err != nil {
+			return err
+		}
+		return usecases.UpdateName.Execute(ctx, usecase.UpdateNameCommand{
+			RoomID:   roomID,
+			SenderID: clientID,
+			Username: payload.Username,
+		})
+	}
+}
+
+func newVoteCall(usecases usecase.UseCasesFacade, clientID, roomID string) useCaseCall {
+	return func(ctx context.Context, msg WebSocketMessage) error {
+		payload, err := decodePayload[VotePayload](msg.Payload)
+		if err != nil {
+			return err
+		}
+		return usecases.Vote.Execute(ctx, usecase.VoteCommand{
+			RoomID:   roomID,
+			SenderID: clientID,
+			Vote:     lo.ToPtr(payload.Vote),
+		})
+	}
+}
+
+func newToggleSpectatorCall(usecases usecase.UseCasesFacade, clientID, roomID string) useCaseCall {
+	return func(ctx context.Context, msg WebSocketMessage) error {
+		payload, err := decodePayload[ToggleSpectatorPayload](msg.Payload)
+		if err != nil {
+			return err
+		}
+		return usecases.ToggleSpectator.Execute(ctx, usecase.ToggleSpectatorCommand{
+			RoomID:         roomID,
+			SenderID:       clientID,
+			TargetClientID: payload.TargetClientID,
+		})
+	}
+}
+
+func newToggleOwnerCall(usecases usecase.UseCasesFacade, clientID, roomID string) useCaseCall {
+	return func(ctx context.Context, msg WebSocketMessage) error {
+		payload, err := decodePayload[ToggleOwnerPayload](msg.Payload)
+		if err != nil {
+			return err
+		}
+		return usecases.ToggleOwner.Execute(ctx, usecase.ToggleOwnerCommand{
+			RoomID:         roomID,
+			SenderID:       clientID,
+			TargetClientID: payload.TargetClientID,
+		})
+	}
+}
+
+func newUpdateStoryCall(usecases usecase.UseCasesFacade, clientID, roomID string) useCaseCall {
+	return func(ctx context.Context, msg WebSocketMessage) error {
+		payload, err := decodePayload[UpdateStoryPayload](msg.Payload)
+		if err != nil {
+			return err
+		}
+		return usecases.UpdateStory.Execute(ctx, usecase.UpdateStoryCommand{
+			RoomID:   roomID,
+			SenderID: clientID,
+			Story:    payload.Story,
+		})
+	}
+}
+
+func newAddStoryCall(usecases usecase.UseCasesFacade, clientID, roomID string) useCaseCall {
+	return func(ctx context.Context, msg WebSocketMessage) error {
+		payload, err := decodePayload[AddStoryPayload](msg.Payload)
+		if err != nil {
+			return err
+		}
+		return usecases.AddStory.Execute(ctx, usecase.AddStoryCommand{
+			RoomID:    roomID,
+			SenderID:  clientID,
+			StoryName: payload.Story,
+		})
+	}
+}
+
+func newRemoveStoryCall(usecases usecase.UseCasesFacade, clientID, roomID string) useCaseCall {
+	return func(ctx context.Context, msg WebSocketMessage) error {
+		payload, err := decodePayload[RemoveStoryPayload](msg.Payload)
+		if err != nil {
+			return err
+		}
+		return usecases.RemoveStory.Execute(ctx, usecase.RemoveStoryCommand{
+			RoomID:     roomID,
+			SenderID:   clientID,
+			StoryIndex: payload.StoryIndex,
+		})
 	}
 }
 

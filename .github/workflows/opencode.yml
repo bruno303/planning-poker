@@ -20,7 +20,7 @@ jobs:
       pull-requests: write
       issues: write
     
-    uses: bruno303/github-actions/.github/workflows/opencode.yml@v0.0.2
+    uses: bruno303/github-actions/.github/workflows/opencode.yml@c303d81969e33ef9b7120d4bffed99c4e11670b0 # v0.0.2
     with:
       repository: ${{ github.repository }}
     secrets:
