@@ -67,7 +67,7 @@ backend:
 frontend:
   image:
     repository: bruno303/planning-poker-frontend
-    tag: "0.0.1"
+    tag: "0.0.37"
     pullPolicy: IfNotPresent
   replicas: 1
   imagePullSecrets: []
