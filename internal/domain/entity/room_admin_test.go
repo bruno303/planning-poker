@@ -10,6 +10,41 @@ import (
 	"planning-poker/internal/infra/boundaries/hub/clientcollection"
 )
 
+func assertAdminToggleOwnerResult(t *testing.T, room *entity.Room, targetID string, wantIsOwner, wantErrLastOwner bool, wantErrSentinel, wantErr error) {
+	t.Helper()
+
+	err := room.AdminToggleOwner(context.Background(), targetID)
+	if wantErrLastOwner {
+		if err == nil || !errors.Is(err, domainerror.ErrLastOwner) {
+			t.Errorf("expected ErrLastOwner, got %v", err)
+		}
+		return
+	}
+	if wantErrSentinel != nil {
+		if err == nil || !errors.Is(err, wantErrSentinel) {
+			t.Errorf("expected sentinel %v, got %v", wantErrSentinel, err)
+		}
+		return
+	}
+	if wantErr != nil {
+		if err == nil || err.Error() != wantErr.Error() {
+			t.Errorf("error = %v, want %v", err, wantErr)
+		}
+		return
+	}
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	client, ok := room.FindClient(targetID)
+	if !ok {
+		t.Fatal("target client not found after toggle")
+	}
+	if client.IsOwner != wantIsOwner {
+		t.Errorf("IsOwner = %v, want %v", client.IsOwner, wantIsOwner)
+	}
+}
+
 func TestRoom_AdminToggleOwner(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -63,45 +98,7 @@ func TestRoom_AdminToggleOwner(t *testing.T) {
 			room := &entity.Room{ID: "room1", Clients: clientcollection.New()}
 			targetID := tt.setup(room)
 
-			err := room.AdminToggleOwner(context.Background(), targetID)
-
-			if tt.wantErrLastOwner {
-				if err == nil {
-					t.Fatal("expected ErrLastOwner, got nil")
-				}
-				if !errors.Is(err, domainerror.ErrLastOwner) {
-					t.Errorf("expected ErrLastOwner, got %v", err)
-				}
-				return
-			}
-			if tt.wantErrSentinel != nil {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
-				if !errors.Is(err, tt.wantErrSentinel) {
-					t.Errorf("expected sentinel %v, got %v", tt.wantErrSentinel, err)
-				}
-				return
-			}
-			if tt.wantErr != nil {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
-				if err.Error() != tt.wantErr.Error() {
-					t.Errorf("error = %v, want %v", err, tt.wantErr)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			client, ok := room.FindClient(targetID)
-			if !ok {
-				t.Fatal("target client not found after toggle")
-			}
-			if client.IsOwner != tt.wantIsOwner {
-				t.Errorf("IsOwner = %v, want %v", client.IsOwner, tt.wantIsOwner)
-			}
+			assertAdminToggleOwnerResult(t, room, targetID, tt.wantIsOwner, tt.wantErrLastOwner, tt.wantErrSentinel, tt.wantErr)
 		})
 	}
 }

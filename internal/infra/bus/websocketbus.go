@@ -266,43 +266,43 @@ func (c *WebsocketBus) pinger(ctx context.Context) {
 	}
 }
 
-func mapUsecases(usecases usecase.UseCasesFacade, clientID, roomID string) map[string]useCaseCall {
-	decode := func(payload any, out any) error {
-		if v, ok := payload.(map[string]any); ok {
-			b, err := json.Marshal(v)
-			if err != nil {
-				return err
-			}
-			return json.Unmarshal(b, out)
-		}
-		b, err := json.Marshal(payload)
-		if err != nil {
-			return err
-		}
-		return json.Unmarshal(b, out)
+func decodePayload(payload, out any) error {
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return err
 	}
+
+	return json.Unmarshal(b, out)
+}
+
+func withPayload[T any](payload any, execute func(T) error) error {
+	var decoded T
+	if err := decodePayload(payload, &decoded); err != nil {
+		return errors.New("invalid payload")
+	}
+
+	return execute(decoded)
+}
+
+func mapUsecases(usecases usecase.UseCasesFacade, clientID, roomID string) map[string]useCaseCall {
 
 	return map[string]useCaseCall{
 		"update-name": func(ctx context.Context, msg WebSocketMessage) error {
-			var payload UpdateNamePayload
-			if err := decode(msg.Payload, &payload); err != nil {
-				return errors.New("invalid payload")
-			}
-			return usecases.UpdateName.Execute(ctx, usecase.UpdateNameCommand{
-				RoomID:   roomID,
-				SenderID: clientID,
-				Username: payload.Username,
+			return withPayload(msg.Payload, func(payload UpdateNamePayload) error {
+				return usecases.UpdateName.Execute(ctx, usecase.UpdateNameCommand{
+					RoomID:   roomID,
+					SenderID: clientID,
+					Username: payload.Username,
+				})
 			})
 		},
 		"vote": func(ctx context.Context, msg WebSocketMessage) error {
-			var payload VotePayload
-			if err := decode(msg.Payload, &payload); err != nil {
-				return errors.New("invalid payload")
-			}
-			return usecases.Vote.Execute(ctx, usecase.VoteCommand{
-				RoomID:   roomID,
-				SenderID: clientID,
-				Vote:     lo.ToPtr(payload.Vote),
+			return withPayload(msg.Payload, func(payload VotePayload) error {
+				return usecases.Vote.Execute(ctx, usecase.VoteCommand{
+					RoomID:   roomID,
+					SenderID: clientID,
+					Vote:     lo.ToPtr(payload.Vote),
+				})
 			})
 		},
 		"reset": func(ctx context.Context, msg WebSocketMessage) error {
@@ -318,36 +318,30 @@ func mapUsecases(usecases usecase.UseCasesFacade, clientID, roomID string) map[s
 			})
 		},
 		"toggle-spectator": func(ctx context.Context, msg WebSocketMessage) error {
-			var payload ToggleSpectatorPayload
-			if err := decode(msg.Payload, &payload); err != nil {
-				return errors.New("invalid payload")
-			}
-			return usecases.ToggleSpectator.Execute(ctx, usecase.ToggleSpectatorCommand{
-				RoomID:         roomID,
-				SenderID:       clientID,
-				TargetClientID: payload.TargetClientID,
+			return withPayload(msg.Payload, func(payload ToggleSpectatorPayload) error {
+				return usecases.ToggleSpectator.Execute(ctx, usecase.ToggleSpectatorCommand{
+					RoomID:         roomID,
+					SenderID:       clientID,
+					TargetClientID: payload.TargetClientID,
+				})
 			})
 		},
 		"toggle-owner": func(ctx context.Context, msg WebSocketMessage) error {
-			var payload ToggleOwnerPayload
-			if err := decode(msg.Payload, &payload); err != nil {
-				return errors.New("invalid payload")
-			}
-			return usecases.ToggleOwner.Execute(ctx, usecase.ToggleOwnerCommand{
-				RoomID:         roomID,
-				SenderID:       clientID,
-				TargetClientID: payload.TargetClientID,
+			return withPayload(msg.Payload, func(payload ToggleOwnerPayload) error {
+				return usecases.ToggleOwner.Execute(ctx, usecase.ToggleOwnerCommand{
+					RoomID:         roomID,
+					SenderID:       clientID,
+					TargetClientID: payload.TargetClientID,
+				})
 			})
 		},
 		"update-story": func(ctx context.Context, msg WebSocketMessage) error {
-			var payload UpdateStoryPayload
-			if err := decode(msg.Payload, &payload); err != nil {
-				return errors.New("invalid payload")
-			}
-			return usecases.UpdateStory.Execute(ctx, usecase.UpdateStoryCommand{
-				RoomID:   roomID,
-				SenderID: clientID,
-				Story:    payload.Story,
+			return withPayload(msg.Payload, func(payload UpdateStoryPayload) error {
+				return usecases.UpdateStory.Execute(ctx, usecase.UpdateStoryCommand{
+					RoomID:   roomID,
+					SenderID: clientID,
+					Story:    payload.Story,
+				})
 			})
 		},
 		"new-voting": func(ctx context.Context, msg WebSocketMessage) error {
@@ -369,25 +363,21 @@ func mapUsecases(usecases usecase.UseCasesFacade, clientID, roomID string) map[s
 			})
 		},
 		"add-story": func(ctx context.Context, msg WebSocketMessage) error {
-			var payload AddStoryPayload
-			if err := decode(msg.Payload, &payload); err != nil {
-				return errors.New("invalid payload")
-			}
-			return usecases.AddStory.Execute(ctx, usecase.AddStoryCommand{
-				RoomID:    roomID,
-				SenderID:  clientID,
-				StoryName: payload.Story,
+			return withPayload(msg.Payload, func(payload AddStoryPayload) error {
+				return usecases.AddStory.Execute(ctx, usecase.AddStoryCommand{
+					RoomID:    roomID,
+					SenderID:  clientID,
+					StoryName: payload.Story,
+				})
 			})
 		},
 		"remove-story": func(ctx context.Context, msg WebSocketMessage) error {
-			var payload RemoveStoryPayload
-			if err := decode(msg.Payload, &payload); err != nil {
-				return errors.New("invalid payload")
-			}
-			return usecases.RemoveStory.Execute(ctx, usecase.RemoveStoryCommand{
-				RoomID:     roomID,
-				SenderID:   clientID,
-				StoryIndex: payload.StoryIndex,
+			return withPayload(msg.Payload, func(payload RemoveStoryPayload) error {
+				return usecases.RemoveStory.Execute(ctx, usecase.RemoveStoryCommand{
+					RoomID:     roomID,
+					SenderID:   clientID,
+					StoryIndex: payload.StoryIndex,
+				})
 			})
 		},
 		"advance-story": func(ctx context.Context, msg WebSocketMessage) error {

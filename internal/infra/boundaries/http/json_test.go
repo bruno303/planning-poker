@@ -8,6 +8,53 @@ import (
 	"testing"
 )
 
+func assertJSONResponse(t *testing.T, w *httptest.ResponseRecorder, wantStatus int, wantBody string) {
+	t.Helper()
+
+	if w.Code != wantStatus {
+		t.Errorf("response status = %v, want %v", w.Code, wantStatus)
+	}
+	if contentType := w.Header().Get("Content-Type"); contentType != "application/json" {
+		t.Errorf("response Content-Type = %v, want application/json", contentType)
+	}
+
+	var got, want any
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("failed to unmarshal response body: %v", err)
+	}
+	if err := json.Unmarshal([]byte(wantBody), &want); err != nil {
+		t.Fatalf("failed to unmarshal expected body: %v", err)
+	}
+
+	gotJSON, _ := json.Marshal(got)
+	wantJSON, _ := json.Marshal(want)
+	if string(gotJSON) != string(wantJSON) {
+		t.Errorf("response body = %s, want %s", gotJSON, wantJSON)
+	}
+}
+
+func assertJSONErrorResponse(t *testing.T, w *httptest.ResponseRecorder, wantStatus int, wantBody string) {
+	t.Helper()
+
+	if w.Code != wantStatus {
+		t.Errorf("response status = %v, want %v", w.Code, wantStatus)
+	}
+	if contentType := w.Header().Get("Content-Type"); contentType != "application/json" {
+		t.Errorf("response Content-Type = %v, want application/json", contentType)
+	}
+
+	var got, want map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("failed to unmarshal response body: %v", err)
+	}
+	if err := json.Unmarshal([]byte(wantBody), &want); err != nil {
+		t.Fatalf("failed to unmarshal expected body: %v", err)
+	}
+	if got["error"] != want["error"] {
+		t.Errorf("response error = %v, want %v", got["error"], want["error"])
+	}
+}
+
 func TestSendJsonResponse(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -76,28 +123,7 @@ func TestSendJsonResponse(t *testing.T) {
 
 			SendJsonResponse(w, tt.statusCode, tt.response)
 
-			if w.Code != tt.wantStatus {
-				t.Errorf("SendJsonResponse() status = %v, want %v", w.Code, tt.wantStatus)
-			}
-
-			contentType := w.Header().Get("Content-Type")
-			if contentType != "application/json" {
-				t.Errorf("SendJsonResponse() Content-Type = %v, want application/json", contentType)
-			}
-
-			var got, want any
-			if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
-				t.Fatalf("failed to unmarshal response body: %v", err)
-			}
-			if err := json.Unmarshal([]byte(tt.wantBody), &want); err != nil {
-				t.Fatalf("failed to unmarshal expected body: %v", err)
-			}
-
-			gotJSON, _ := json.Marshal(got)
-			wantJSON, _ := json.Marshal(want)
-			if string(gotJSON) != string(wantJSON) {
-				t.Errorf("SendJsonResponse() body = %s, want %s", gotJSON, wantJSON)
-			}
+			assertJSONResponse(t, w, tt.wantStatus, tt.wantBody)
 		})
 	}
 }
@@ -153,26 +179,7 @@ func TestSendJsonError(t *testing.T) {
 
 			SendJsonError(w, tt.statusCode, tt.err)
 
-			if w.Code != tt.wantStatus {
-				t.Errorf("SendJsonError() status = %v, want %v", w.Code, tt.wantStatus)
-			}
-
-			contentType := w.Header().Get("Content-Type")
-			if contentType != "application/json" {
-				t.Errorf("SendJsonError() Content-Type = %v, want application/json", contentType)
-			}
-
-			var got, want map[string]string
-			if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
-				t.Fatalf("failed to unmarshal response body: %v", err)
-			}
-			if err := json.Unmarshal([]byte(tt.wantBody), &want); err != nil {
-				t.Fatalf("failed to unmarshal expected body: %v", err)
-			}
-
-			if got["error"] != want["error"] {
-				t.Errorf("SendJsonError() error message = %v, want %v", got["error"], want["error"])
-			}
+			assertJSONErrorResponse(t, w, tt.wantStatus, tt.wantBody)
 		})
 	}
 }
@@ -235,26 +242,7 @@ func TestSendJsonErrorMsg(t *testing.T) {
 
 			SendJsonErrorMsg(w, tt.statusCode, tt.msg)
 
-			if w.Code != tt.wantStatus {
-				t.Errorf("SendJsonErrorMsg() status = %v, want %v", w.Code, tt.wantStatus)
-			}
-
-			contentType := w.Header().Get("Content-Type")
-			if contentType != "application/json" {
-				t.Errorf("SendJsonErrorMsg() Content-Type = %v, want application/json", contentType)
-			}
-
-			var got, want map[string]string
-			if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
-				t.Fatalf("failed to unmarshal response body: %v", err)
-			}
-			if err := json.Unmarshal([]byte(tt.wantBody), &want); err != nil {
-				t.Fatalf("failed to unmarshal expected body: %v", err)
-			}
-
-			if got["error"] != want["error"] {
-				t.Errorf("SendJsonErrorMsg() error message = %v, want %v", got["error"], want["error"])
-			}
+			assertJSONErrorResponse(t, w, tt.wantStatus, tt.wantBody)
 		})
 	}
 }
