@@ -12,100 +12,101 @@ import (
 )
 
 func TestWebSocketConnection(t *testing.T) {
+	t.Run("successful connection to existing room", testWebSocketExistingRoom)
+	t.Run("connection to non-existent room auto-creates room", testWebSocketAutoCreatesRoom)
+}
+
+func testWebSocketExistingRoom(t *testing.T) {
 	ts := integration.NewTestServer(t)
 	defer ts.Close()
 
-	t.Run("successful connection to existing room", func(t *testing.T) {
-		roomID := createRoom(t, ts)
-		conn := connectWebSocket(t, ts, roomID)
-		defer closeAndWait(conn)
+	roomID := createRoom(t, ts)
+	conn := connectWebSocket(t, ts, roomID)
+	defer closeAndWait(conn)
 
-		// Should receive update-client-id message
-		msg1 := receiveMessage(t, conn, 2*time.Second)
-		if msg1["type"] != "update-client-id" {
-			t.Errorf("expected first message type 'update-client-id', got '%v'", msg1["type"])
-		}
-		if msg1["clientId"] == nil {
-			t.Error("clientId should not be nil")
-		}
-	})
+	msg := receiveMessage(t, conn, 2*time.Second)
+	if msg["type"] != "update-client-id" {
+		t.Errorf("expected first message type 'update-client-id', got '%v'", msg["type"])
+	}
+	if msg["clientId"] == nil {
+		t.Error("clientId should not be nil")
+	}
+}
 
-	t.Run("connection to non-existent room auto-creates room", func(t *testing.T) {
-		roomID := "auto-created-room"
+func testWebSocketAutoCreatesRoom(t *testing.T) {
+	ts := integration.NewTestServer(t)
+	defer ts.Close()
 
-		conn1 := connectWebSocket(t, ts, roomID)
-		defer closeAndWait(conn1)
+	roomID := "auto-created-room"
+	conn1 := connectWebSocket(t, ts, roomID)
+	defer closeAndWait(conn1)
 
-		msg1 := receiveMessage(t, conn1, 2*time.Second)
-		if msg1["type"] != "update-client-id" {
-			t.Fatalf("expected first message type 'update-client-id', got '%v'", msg1["type"])
-		}
-		clientID1, ok := msg1["clientId"].(string)
-		if !ok || clientID1 == "" {
-			t.Fatal("clientId not found in update-client-id message")
-		}
+	clientID1 := clientIDFromUpdateMessage(t, receiveMessage(t, conn1, 2*time.Second))
 
-		msg2 := receiveMessage(t, conn1, 2*time.Second)
-		if msg2["type"] != "room-state" {
-			t.Fatalf("expected second message type 'room-state', got '%v'", msg2["type"])
-		}
-		participants1 := msg2["participants"].([]any)
-		if len(participants1) != 1 {
-			t.Fatalf("expected 1 participant in auto-created room, got %d", len(participants1))
-		}
-		firstParticipant := participants1[0].(map[string]any)
-		if firstParticipant["id"] != clientID1 {
-			t.Fatalf("expected first participant id '%s', got '%v'", clientID1, firstParticipant["id"])
-		}
-		if firstParticipant["isOwner"] != true {
-			t.Fatal("expected first auto-created room participant to be owner")
-		}
+	msg2 := receiveMessage(t, conn1, 2*time.Second)
+	assertRoomStateMessage(t, msg2, 1)
+	participants1 := msg2["participants"].([]any)
+	assertOwnerParticipant(t, participants1[0], clientID1)
 
-		conn2 := connectWebSocket(t, ts, roomID)
-		defer closeAndWait(conn2)
+	conn2 := connectWebSocket(t, ts, roomID)
+	defer closeAndWait(conn2)
 
-		msg3 := receiveMessage(t, conn2, 2*time.Second)
-		if msg3["type"] != "update-client-id" {
-			t.Fatalf("expected first message type 'update-client-id', got '%v'", msg3["type"])
+	clientID2 := clientIDFromUpdateMessage(t, receiveMessage(t, conn2, 2*time.Second))
+
+	msg4 := receiveMessage(t, conn2, 2*time.Second)
+	msg5 := receiveMessage(t, conn1, 2*time.Second)
+	assertRoomStateMessage(t, msg4, 2)
+	assertRoomStateMessage(t, msg5, 2)
+	assertParticipants(t, msg4["participants"], clientID1, clientID2)
+	assertParticipants(t, msg5["participants"], clientID1, clientID2)
+}
+
+func clientIDFromUpdateMessage(t *testing.T, msg map[string]any) string {
+	t.Helper()
+	if msg["type"] != "update-client-id" {
+		t.Fatalf("expected update-client-id message, got '%v'", msg["type"])
+	}
+	clientID, ok := msg["clientId"].(string)
+	if !ok || clientID == "" {
+		t.Fatal("clientId not found in update-client-id message")
+	}
+	return clientID
+}
+
+func assertOwnerParticipant(t *testing.T, raw any, expectedID string) {
+	t.Helper()
+	participant := raw.(map[string]any)
+	if participant["id"] != expectedID || participant["isOwner"] != true {
+		t.Fatalf("expected participant %q to be owner, got %#v", expectedID, participant)
+	}
+}
+
+func assertParticipants(t *testing.T, raw any, expectedIDs ...string) {
+	t.Helper()
+	participants := raw.([]any)
+	seen := make(map[string]bool, len(expectedIDs))
+	for _, participant := range participants {
+		id, ok := participant.(map[string]any)["id"].(string)
+		if ok {
+			seen[id] = true
 		}
-		clientID2, ok := msg3["clientId"].(string)
-		if !ok || clientID2 == "" {
-			t.Fatal("clientId not found in update-client-id message")
+	}
+	for _, expectedID := range expectedIDs {
+		if !seen[expectedID] {
+			t.Fatalf("expected participant %q, got %#v", expectedID, participants)
 		}
+	}
+}
 
-		msg4 := receiveMessage(t, conn2, 2*time.Second)
-		if msg4["type"] != "room-state" {
-			t.Fatalf("expected second message type 'room-state', got '%v'", msg4["type"])
-		}
-
-		msg5 := receiveMessage(t, conn1, 2*time.Second)
-		if msg5["type"] != "room-state" {
-			t.Fatalf("expected broadcast message type 'room-state', got '%v'", msg5["type"])
-		}
-
-		for _, msg := range []map[string]any{msg4, msg5} {
-			participants := msg["participants"].([]any)
-			if len(participants) != 2 {
-				t.Fatalf("expected 2 participants after second join, got %d", len(participants))
-			}
-
-			seenClient1 := false
-			seenClient2 := false
-			for _, p := range participants {
-				participant := p.(map[string]any)
-				switch participant["id"] {
-				case clientID1:
-					seenClient1 = true
-				case clientID2:
-					seenClient2 = true
-				}
-			}
-
-			if !seenClient1 || !seenClient2 {
-				t.Fatalf("expected both auto-created room participants to be present, got %#v", participants)
-			}
-		}
-	})
+func assertRoomStateMessage(t *testing.T, msg map[string]any, expectedParticipants int) {
+	t.Helper()
+	if msg["type"] != "room-state" {
+		t.Fatalf("expected room-state message, got '%v'", msg["type"])
+	}
+	participants := msg["participants"].([]any)
+	if len(participants) != expectedParticipants {
+		t.Fatalf("expected %d participants, got %d", expectedParticipants, len(participants))
+	}
 }
 
 func TestWebSocketUpdateName(t *testing.T) {
@@ -546,84 +547,53 @@ func TestWebSocketMultipleClients(t *testing.T) {
 	consumeMessages(t, conn1, conn2)
 
 	t.Run("all clients receive updates when one client votes", func(t *testing.T) {
-		send(t, conn1, bus.WebSocketMessage{
-			Type: "vote",
-			Payload: bus.VotePayload{
-				Vote: "3",
-			},
-		})
-
-		// All three clients should receive the update
-		msgs := readMessages(t, conn1, conn2, conn3)
-
-		for _, msg := range msgs {
-			if msg["type"] != "room-state" {
-				t.Error("all clients should receive room-state update")
-			}
-
-			participants := msg["participants"].([]any)
-			if len(participants) != 3 {
-				t.Errorf("expected 3 participants, got %d", len(participants))
-			}
-		}
+		testAllClientsReceiveVote(t, conn1, conn2, conn3)
 	})
-
 	t.Run("votes auto-reveal when all 3 clients vote", func(t *testing.T) {
-		// Reset voting first to clear the vote from client1 in the previous test
-		send(t, conn1, bus.WebSocketMessage{
-			Type: "reset",
-		})
-		// Consume reset messages
-		consumeMessages(t, conn1, conn2, conn3)
-
-		// Now have all 3 clients vote
-		send(t, conn1, bus.WebSocketMessage{
-			Type: "vote",
-			Payload: bus.VotePayload{
-				Vote: "3",
-			},
-		})
-		// Consume vote messages
-		consumeMessages(t, conn1, conn2, conn3)
-
-		// Client 2 votes
-		send(t, conn2, bus.WebSocketMessage{
-			Type: "vote",
-			Payload: bus.VotePayload{
-				Vote: "5",
-			},
-		})
-		// Consume room-state updates from all clients
-		consumeMessages(t, conn1, conn2, conn3)
-
-		// Client 3 votes - should trigger auto-reveal
-		send(t, conn3, bus.WebSocketMessage{
-			Type: "vote",
-			Payload: bus.VotePayload{
-				Vote: "8",
-			},
-		})
-
-		// Now get the reveal messages
-		msgs := readMessages(t, conn1, conn2, conn3)
-		for _, msg := range msgs {
-			if msg["reveal"] != true {
-				t.Error("votes should be auto-revealed when all clients vote")
-			}
-
-			// Result should be (3+5+8)/3 = 5.333...
-			result, ok := msg["result"].(float64)
-			if !ok {
-				t.Error("result should be present")
-			}
-			expectedResult := (3.0 + 5.0 + 8.0) / 3.0
-			// Use a small tolerance for floating point comparison
-			tolerance := 0.001
-			if result < expectedResult-tolerance || result > expectedResult+tolerance {
-				t.Errorf("expected result %.2f, got %.2f", expectedResult, result)
-			}
-		}
+		testAllClientsAutoReveal(t, conn1, conn2, conn3)
 	})
+}
+
+func testAllClientsReceiveVote(t *testing.T, connections ...*websocket.Conn) {
+	send(t, connections[0], bus.WebSocketMessage{
+		Type:    "vote",
+		Payload: bus.VotePayload{Vote: "3"},
+	})
+
+	for _, msg := range readMessages(t, connections...) {
+		if msg["type"] != "room-state" {
+			t.Error("all clients should receive room-state update")
+		}
+		if participants := msg["participants"].([]any); len(participants) != 3 {
+			t.Errorf("expected 3 participants, got %d", len(participants))
+		}
+	}
+}
+
+func testAllClientsAutoReveal(t *testing.T, connections ...*websocket.Conn) {
+	send(t, connections[0], bus.WebSocketMessage{Type: "reset"})
+	consumeMessages(t, connections...)
+
+	send(t, connections[0], bus.WebSocketMessage{Type: "vote", Payload: bus.VotePayload{Vote: "3"}})
+	consumeMessages(t, connections...)
+	send(t, connections[1], bus.WebSocketMessage{Type: "vote", Payload: bus.VotePayload{Vote: "5"}})
+	consumeMessages(t, connections...)
+	send(t, connections[2], bus.WebSocketMessage{Type: "vote", Payload: bus.VotePayload{Vote: "8"}})
+
+	expectedResult := (3.0 + 5.0 + 8.0) / 3.0
+	for _, msg := range readMessages(t, connections...) {
+		if msg["reveal"] != true {
+			t.Error("votes should be auto-revealed when all clients vote")
+		}
+		result, ok := msg["result"].(float64)
+		if !ok {
+			t.Error("result should be present")
+			continue
+		}
+		if result < expectedResult-0.001 || result > expectedResult+0.001 {
+			t.Errorf("expected result %.2f, got %.2f", expectedResult, result)
+		}
+	}
 }
 
 func TestWebSocketReconnectionWithClientId(t *testing.T) {

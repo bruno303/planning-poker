@@ -40,6 +40,26 @@ func newRecordedMeter(ctrl *gomock.Controller) (*MockMeter, *[]recordedCounterCa
 	return mockMeter, &calls
 }
 
+func assertRecordedCounterCall(t *testing.T, call recordedCounterCall, expectedName string, expectedValue float64) {
+	t.Helper()
+
+	if call.name != expectedName {
+		t.Fatalf("expected metric %q, got %q", expectedName, call.name)
+	}
+	if call.value != expectedValue {
+		t.Fatalf("expected value %v, got %v", expectedValue, call.value)
+	}
+	if call.description != "" {
+		t.Fatalf("expected empty description, got %q", call.description)
+	}
+	if call.unit != "" {
+		t.Fatalf("expected empty unit, got %q", call.unit)
+	}
+	if len(call.attributes) != 0 {
+		t.Fatalf("expected no attributes, got %d", len(call.attributes))
+	}
+}
+
 func TestNewPlanningPokerMetric_WithoutInjectedMeter_UsesNoopMeter(t *testing.T) {
 	m := NewPlanningPokerMetric()
 	ctx := context.Background()
@@ -138,22 +158,7 @@ func TestPlanningPokerMetric_CounterMethods_RecordExpectedCalls(t *testing.T) {
 				t.Fatalf("expected one new call, got %d total calls", got)
 			}
 
-			call := (*calls)[got-1]
-			if call.name != tt.expectedName {
-				t.Fatalf("expected metric %q, got %q", tt.expectedName, call.name)
-			}
-			if call.value != tt.expectedValue {
-				t.Fatalf("expected value %v, got %v", tt.expectedValue, call.value)
-			}
-			if call.description != "" {
-				t.Fatalf("expected empty description, got %q", call.description)
-			}
-			if call.unit != "" {
-				t.Fatalf("expected empty unit, got %q", call.unit)
-			}
-			if len(call.attributes) != 0 {
-				t.Fatalf("expected no attributes, got %d", len(call.attributes))
-			}
+			assertRecordedCounterCall(t, (*calls)[got-1], tt.expectedName, tt.expectedValue)
 		})
 	}
 }

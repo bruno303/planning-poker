@@ -85,7 +85,8 @@ func (m *RedisLockManager) releaseLock(ctx context.Context, key string, lockValu
 		end
 	`
 
-	opCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	// Lock release must finish even when the protected operation was cancelled.
+	opCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
 	defer cancel()
 
 	result, err := m.client.Eval(opCtx, script, []string{lockKey}, lockValue).Result()

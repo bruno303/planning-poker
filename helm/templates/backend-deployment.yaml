@@ -33,6 +33,7 @@ spec:
       {{- end }}
       {{- end }}
     spec:
+      automountServiceAccountToken: false
       {{- with .Values.backend.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
