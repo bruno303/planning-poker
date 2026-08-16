@@ -191,10 +191,10 @@ func (h *RedisHub) AddClient(c *entity.Client) {
 
 func (h *RedisHub) AddBus(ctx context.Context, clientID string, bus domain.Bus) {
 	h.busMux.Lock()
+	defer h.busMux.Unlock()
 	h.buses[clientID] = bus
 	roomID := bus.RoomID()
 	if roomID == "" {
-		h.busMux.Unlock()
 		h.logger.Warn(ctx, "Bus for client %s has empty RoomID", clientID)
 		return
 	}
@@ -202,10 +202,18 @@ func (h *RedisHub) AddBus(ctx context.Context, clientID string, bus domain.Bus) 
 	h.roomClientCounts[roomID]++
 	_, exists := h.roomSubs.Load(roomID)
 	if !exists {
-		sub := h.client.Subscribe(context.Background(), pubsubChannel+roomID)
-		subscribeCtx, cancel := context.WithTimeout(context.Background(), subscribeTimeout)
+		subscribeCtx, cancel := context.WithTimeout(ctx, subscribeTimeout)
+		sub := h.client.Subscribe(subscribeCtx, pubsubChannel+roomID)
 		if _, err := sub.Receive(subscribeCtx); err != nil {
+			cancel()
+			_ = sub.Close()
+			delete(h.buses, clientID)
+			h.roomClientCounts[roomID]--
+			if h.roomClientCounts[roomID] == 0 {
+				delete(h.roomClientCounts, roomID)
+			}
 			h.logger.Error(ctx, fmt.Sprintf("Failed to confirm pub/sub subscription for room %s", roomID), err)
+			return
 		}
 		cancel()
 		h.roomSubs.Store(roomID, sub)
@@ -214,7 +222,6 @@ func (h *RedisHub) AddBus(ctx context.Context, clientID string, bus domain.Bus) 
 		})
 		h.logger.Info(ctx, "Subscribed to pub/sub for room %s", roomID)
 	}
-	h.busMux.Unlock()
 }
 
 func (h *RedisHub) GetBus(clientID string) (domain.Bus, bool) {

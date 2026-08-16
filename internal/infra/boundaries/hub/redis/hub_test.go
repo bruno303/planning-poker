@@ -107,6 +107,39 @@ func TestRedisHub_AddClient_RemoveRoom(t *testing.T) {
 	hub.RemoveRoom(room.ID)
 }
 
+func TestRedisHub_AddBus_SubscriptionSetupFails_CleansUpBus(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockRedis := NewMockRedisClient(ctrl)
+	roomID := "room-cancelled"
+	clientID := "client-cancelled"
+	pubsubClient := redis.NewClient(&redis.Options{Addr: "127.0.0.1:0"})
+	pubsub := pubsubClient.Subscribe(context.Background(), pubsubChannel+roomID)
+	t.Cleanup(func() {
+		_ = pubsub.Close()
+		_ = pubsubClient.Close()
+	})
+
+	mockBus := domain.NewMockBus(ctrl)
+	mockBus.EXPECT().RoomID().Return(roomID)
+	mockRedis.EXPECT().Subscribe(gomock.Any(), pubsubChannel+roomID).Return(pubsub)
+
+	hub := &RedisHub{
+		client:           mockRedis,
+		logger:           log.NewLogger("test"),
+		buses:            make(map[string]domain.Bus),
+		closeCh:          make(chan struct{}),
+		roomClientCounts: make(map[string]int),
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	hub.AddBus(ctx, clientID, mockBus)
+
+	_, ok := hub.GetBus(clientID)
+	assert.False(t, ok)
+	assert.Zero(t, hub.GetClientsOfRoom(roomID))
+}
+
 func TestRedisHub_FindClientByID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockRedis := NewMockRedisClient(ctrl)
