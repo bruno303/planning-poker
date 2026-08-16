@@ -649,8 +649,8 @@ export default function PlanningPoker() {
                     <div style={styles.participantContent}>
                       <div>
                         <div style={styles.participantName}>
-                          {participant.name}
                           <Avatar participant={participant} />
+                          {participant.name}
                           {amIAdmin && (
                             <ParticipantIdBadge
                               participantId={participant.id}
