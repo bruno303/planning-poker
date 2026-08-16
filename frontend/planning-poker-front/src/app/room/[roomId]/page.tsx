@@ -2,6 +2,7 @@
 
 
 import BacklogModal from '@/components/backlogModal/backlogModal';
+import Avatar from '@/components/avatar/avatar';
 import FocusableComponent from '@/components/focusableInput/focusableInput';
 import LoadingSpinner from '@/components/loadingSpinner/loadingSpinner';
 import {
@@ -524,7 +525,10 @@ export default function PlanningPoker() {
               <div style={styles.userInfo}>
                 <div style={styles.inputGroup}>
                   {/* <label style={styles.label}>Your Name</label> */}
-                  <label style={styles.label}>{userName}</label>
+                  <div style={styles.userNameRow}>
+                    <Avatar participant={{ id: clientId }} />
+                    <label style={{ ...styles.label, marginBottom: 0 }}>{userName}</label>
+                  </div>
                 </div>
                 <div style={styles.voteStats}>
                   <div style={styles.voteStatsLabel}>Votes Cast</div>
@@ -646,6 +650,7 @@ export default function PlanningPoker() {
                       <div>
                         <div style={styles.participantName}>
                           {participant.name}
+                          <Avatar participant={participant} />
                           {amIAdmin && (
                             <ParticipantIdBadge
                               participantId={participant.id}

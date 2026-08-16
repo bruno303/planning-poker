@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const roomUrlPattern = /\/room\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 const userA = 'User A';
@@ -30,6 +30,9 @@ const openBacklogModal = async (page: Page) => {
 };
 
 const storyCard = (page: Page) => page.getByText('Current Story').locator('xpath=ancestor::div[2]');
+
+const participantAvatar = (participantsPanel: Locator, participantName: string) =>
+  participantsPanel.getByText(participantName, { exact: true }).locator('xpath=..').getByRole('img');
 
 test('allows two users to join, vote, and sync story updates', async ({ browser, baseURL }) => {
   test.setTimeout(60_000);
@@ -79,6 +82,25 @@ test('allows two users to join, vote, and sync story updates', async ({ browser,
     await expect(ownerParticipantsPanel.getByText(userB, { exact: true })).toBeVisible();
     await expect(guestParticipantsPanel.getByText(userA, { exact: true })).toBeVisible();
     await expect(guestParticipantsPanel.getByText(userB, { exact: true })).toBeVisible();
+
+    for (const participantName of [userA, userB]) {
+      const ownerAvatar = participantAvatar(ownerParticipantsPanel, participantName);
+      const guestAvatar = participantAvatar(guestParticipantsPanel, participantName);
+
+      await expect(ownerAvatar).toBeVisible();
+      await expect(guestAvatar).toBeVisible();
+      await expect(ownerAvatar).toHaveAttribute('src', /.+/);
+      await expect(guestAvatar).toHaveAttribute('src', /.+/);
+      await expect
+        .poll(() => ownerAvatar.evaluate((image) => (image as HTMLImageElement).naturalWidth))
+        .toBeGreaterThan(0);
+      await expect
+        .poll(() => guestAvatar.evaluate((image) => (image as HTMLImageElement).naturalWidth))
+        .toBeGreaterThan(0);
+
+      const ownerAvatarSrc = await ownerAvatar.getAttribute('src');
+      await expect(guestAvatar).toHaveAttribute('src', ownerAvatarSrc ?? '');
+    }
 
     // Add a story to the backlog so the Edit button becomes available
     const storyName = `Story: estimate websocket sync ${Date.now()}`;

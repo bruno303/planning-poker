@@ -1,0 +1,14 @@
+.container {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.image {
+  display: block;
+  width: 2rem;
+  height: 2rem;
+}
