@@ -14,6 +14,12 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 	originalRoom.ID = "test-room-123"
 	originalRoom.CurrentStory = "User Story #42"
 	originalRoom.Reveal = false
+	originalRoom.Consensus = "Medium"
+	originalRoom.LowestVote = lo.ToPtr(3)
+	originalRoom.HighestVote = lo.ToPtr(8)
+	originalRoom.VoteRange = lo.ToPtr(5)
+	originalRoom.VoteSpread = lo.ToPtr(2)
+	originalRoom.NonNumericVoteCount = 1
 
 	// Add some clients
 	client1 := originalRoom.NewClient("client-1")
@@ -50,6 +56,18 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 	}
 	if deserializedRoom.Reveal != originalRoom.Reveal {
 		t.Errorf("Expected reveal %v, got %v", originalRoom.Reveal, deserializedRoom.Reveal)
+	}
+	if deserializedRoom.Consensus != originalRoom.Consensus {
+		t.Errorf("Expected consensus %q, got %q", originalRoom.Consensus, deserializedRoom.Consensus)
+	}
+	if *deserializedRoom.LowestVote != *originalRoom.LowestVote ||
+		*deserializedRoom.HighestVote != *originalRoom.HighestVote ||
+		*deserializedRoom.VoteRange != *originalRoom.VoteRange ||
+		*deserializedRoom.VoteSpread != *originalRoom.VoteSpread {
+		t.Errorf("numeric consensus metrics were not preserved")
+	}
+	if deserializedRoom.NonNumericVoteCount != originalRoom.NonNumericVoteCount {
+		t.Errorf("Expected non-numeric vote count %d, got %d", originalRoom.NonNumericVoteCount, deserializedRoom.NonNumericVoteCount)
 	}
 
 	// Verify client count

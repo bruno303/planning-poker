@@ -261,6 +261,14 @@ export const styles = {
     borderColor: '#fef3c7',
     backgroundColor: '#fffbeb'
   },
+  participantLowest: {
+    borderColor: '#60a5fa',
+    backgroundColor: '#eff6ff'
+  },
+  participantHighest: {
+    borderColor: '#f97316',
+    backgroundColor: '#fff7ed'
+  },
   participantContent: {
     display: 'flex',
     alignItems: 'center',
@@ -276,6 +284,22 @@ export const styles = {
   participantStatus: {
     fontSize: '0.875rem',
     color: '#6b7280'
+  },
+  lowestVoteBadge: {
+    padding: '0.125rem 0.375rem',
+    borderRadius: '9999px',
+    backgroundColor: '#dbeafe',
+    color: '#1d4ed8',
+    fontSize: '0.6875rem',
+    fontWeight: '700'
+  },
+  highestVoteBadge: {
+    padding: '0.125rem 0.375rem',
+    borderRadius: '9999px',
+    backgroundColor: '#ffedd5',
+    color: '#c2410c',
+    fontSize: '0.6875rem',
+    fontWeight: '700'
   },
   participantRight: {
     display: 'flex',

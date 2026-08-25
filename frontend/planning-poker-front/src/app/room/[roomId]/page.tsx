@@ -3,11 +3,14 @@
 
 import BacklogModal from '@/components/backlogModal/backlogModal';
 import Avatar from '@/components/avatar/avatar';
+import { getExtremeVotes } from '@/components/consensus/consensus';
 import FocusableComponent from '@/components/focusableInput/focusableInput';
 import LoadingSpinner from '@/components/loadingSpinner/loadingSpinner';
 import {
   AddStoryPayload,
+  ConsensusLevel,
   RemoveStoryPayload,
+  RoomState,
   Story,
   ToggleOwnerPayload,
   ToggleSpectatorPayload,
@@ -64,6 +67,12 @@ export default function PlanningPoker() {
   const [clientId, setClientId] = useState('');
   const [result, setResult] = useState<number | null>(null);
   const [mostAppearingVotes, setMostAppearingVotes] = useState<number[]>([]);
+  const [consensus, setConsensus] = useState<ConsensusLevel | null>(null);
+  const [lowestVote, setLowestVote] = useState<number | null>(null);
+  const [highestVote, setHighestVote] = useState<number | null>(null);
+  const [voteRange, setVoteRange] = useState<number | null>(null);
+  const [voteSpread, setVoteSpread] = useState<number | null>(null);
+  const [nonNumericVoteCount, setNonNumericVoteCount] = useState(0);
   const [isEditingStory, setIsEditingStory] = useState(false);
   const [isConnected, setIsConnected] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
@@ -295,15 +304,22 @@ export default function PlanningPoker() {
         const data = JSON.parse(event.data);
 
         if (data.type === 'room-state') {
-          setParticipants(data.participants);
-          setCurrentStory(data.currentStory);
-          setIsRevealed(data.reveal);
+          const roomState = data as RoomState;
+          setParticipants(roomState.participants);
+          setCurrentStory(roomState.currentStory);
+          setIsRevealed(roomState.reveal);
           setSelectedCard(getCurrentUser()?.vote ?? null);
-          setResult(data.result ?? null);
-          setMostAppearingVotes(data.mostAppearingVotes ?? []);
-          setBacklogMode(data.backlogMode ?? false);
-          setStories(data.stories ?? []);
-          setCurrentStoryIndex(data.currentStoryIndex ?? 0);
+          setResult(roomState.result ?? null);
+          setMostAppearingVotes(roomState.mostAppearingVotes ?? []);
+          setConsensus(roomState.consensus ?? null);
+          setLowestVote(roomState.lowestVote ?? null);
+          setHighestVote(roomState.highestVote ?? null);
+          setVoteRange(roomState.voteRange ?? null);
+          setVoteSpread(roomState.voteSpread ?? null);
+          setNonNumericVoteCount(roomState.nonNumericVoteCount ?? 0);
+          setBacklogMode(roomState.backlogMode ?? false);
+          setStories(roomState.stories ?? []);
+          setCurrentStoryIndex(roomState.currentStoryIndex ?? 0);
 
         } else if (data.type === 'update-client-id') {
           setClientId(data.clientId);
@@ -392,6 +408,14 @@ export default function PlanningPoker() {
 
   const canGoPrev = currentStoryIndex > 0;
   const canGoNext = stories.length > 0 && currentStoryIndex < stories.length - 1;
+
+  const getParticipantExtremes = (participant: Participant) => {
+    if (!isRevealed || participant.isSpectator) {
+      return [];
+    }
+
+    return getExtremeVotes(participant.vote, lowestVote, highestVote);
+  };
 
   if (!isAuthorized) {
     return <LoadingSpinner />;
@@ -643,7 +667,12 @@ export default function PlanningPoker() {
                         ? styles.participantSpectator
                         : participant.hasVoted
                           ? styles.participantVoted
-                          : styles.participantWaiting)
+                          : styles.participantWaiting),
+                      ...(getParticipantExtremes(participant).includes('lowest')
+                        ? styles.participantLowest
+                        : getParticipantExtremes(participant).includes('highest')
+                          ? styles.participantHighest
+                          : {})
                     }}
                   >
                     <div style={styles.participantContent}>
@@ -657,6 +686,15 @@ export default function PlanningPoker() {
                               onCopied={() => pushSuccess('Participant ID copied!')}
                             />
                           )}
+                          {getParticipantExtremes(participant).map((extreme) => (
+                            <span
+                              key={extreme}
+                              style={extreme === 'lowest' ? styles.lowestVoteBadge : styles.highestVoteBadge}
+                              title={`${extreme === 'lowest' ? 'Lowest' : 'Highest'} numeric estimate`}
+                            >
+                              {extreme === 'lowest' ? 'Lowest' : 'Highest'}
+                            </span>
+                          ))}
                         </div>
                         <div style={styles.participantStatus}>
                           {participant.isSpectator ? 'Spectator' : participant.hasVoted ? 'Voted' : 'Waiting...'}
@@ -716,8 +754,18 @@ export default function PlanningPoker() {
                 <div style={styles.summary}>
                   <h4 style={styles.summaryTitle}>Results Summary</h4>
                   <div style={styles.summaryContent}>
-                    <div>Average: {result?.toFixed(1)}</div>
-                    <div>Most Common: {mostAppearingVotes.join(", ")}</div>
+                    <div>Consensus: {consensus ?? 'Unavailable'}</div>
+                    <div>Average: {result !== null ? result.toFixed(1) : 'Unavailable'}</div>
+                    <div>Most Common: {mostAppearingVotes.length > 0 ? mostAppearingVotes.join(", ") : 'Unavailable'}</div>
+                    {lowestVote !== null && highestVote !== null && (
+                      <div>Votes range from {lowestVote} to {highestVote} (spread: {voteRange ?? 0})</div>
+                    )}
+                    {voteSpread !== null && <div>Deck spread: {voteSpread} step{voteSpread === 1 ? '' : 's'}</div>}
+                    {nonNumericVoteCount > 0 && (
+                      <div>
+                        Non-numeric votes: {nonNumericVoteCount}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

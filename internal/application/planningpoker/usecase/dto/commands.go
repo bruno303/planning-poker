@@ -17,15 +17,21 @@ type (
 	}
 
 	RoomState struct {
-		Type               string        `json:"type"`
-		CurrentStory       string        `json:"currentStory"`
-		Reveal             bool          `json:"reveal"`
-		Result             *float32      `json:"result,omitempty"`
-		MostAppearingVotes []int         `json:"mostAppearingVotes"`
-		Participants       []Participant `json:"participants"`
-		BacklogMode        bool          `json:"backlogMode"`
-		Stories            []Story       `json:"stories"`
-		CurrentStoryIndex  int           `json:"currentStoryIndex"`
+		Type                string        `json:"type"`
+		CurrentStory        string        `json:"currentStory"`
+		Reveal              bool          `json:"reveal"`
+		Result              *float32      `json:"result,omitempty"`
+		MostAppearingVotes  []int         `json:"mostAppearingVotes"`
+		Consensus           string        `json:"consensus,omitempty"`
+		LowestVote          *int          `json:"lowestVote,omitempty"`
+		HighestVote         *int          `json:"highestVote,omitempty"`
+		VoteRange           *int          `json:"voteRange,omitempty"`
+		VoteSpread          *int          `json:"voteSpread,omitempty"`
+		NonNumericVoteCount int           `json:"nonNumericVoteCount,omitempty"`
+		Participants        []Participant `json:"participants"`
+		BacklogMode         bool          `json:"backlogMode"`
+		Stories             []Story       `json:"stories"`
+		CurrentStoryIndex   int           `json:"currentStoryIndex"`
 	}
 	Participant struct {
 		ID          string  `json:"id"`
@@ -48,15 +54,21 @@ type (
 
 func NewRoomStateCommand(room *entity.Room) RoomState {
 	return RoomState{
-		Type:               "room-state",
-		CurrentStory:       room.EffectiveCurrentStory(),
-		Reveal:             room.Reveal,
-		Participants:       MapToParticipants(room.Clients.Values()),
-		Result:             room.Result,
-		MostAppearingVotes: room.MostAppearingVotes,
-		BacklogMode:        room.BacklogMode,
-		Stories:            mapStories(room.Stories),
-		CurrentStoryIndex:  room.CurrentStoryIndex,
+		Type:                "room-state",
+		CurrentStory:        room.EffectiveCurrentStory(),
+		Reveal:              room.Reveal,
+		Participants:        MapToParticipants(room.Clients.Values()),
+		Result:              room.Result,
+		MostAppearingVotes:  room.MostAppearingVotes,
+		Consensus:           room.Consensus,
+		LowestVote:          room.LowestVote,
+		HighestVote:         room.HighestVote,
+		VoteRange:           room.VoteRange,
+		VoteSpread:          room.VoteSpread,
+		NonNumericVoteCount: room.NonNumericVoteCount,
+		BacklogMode:         room.BacklogMode,
+		Stories:             mapStories(room.Stories),
+		CurrentStoryIndex:   room.CurrentStoryIndex,
 	}
 }
 
