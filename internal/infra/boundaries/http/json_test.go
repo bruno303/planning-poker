@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -244,5 +245,15 @@ func TestSendJsonErrorMsg(t *testing.T) {
 
 			assertJSONErrorResponse(t, w, tt.wantStatus, tt.wantBody)
 		})
+	}
+}
+
+func TestSendJsonResponse_WhenResponseCannotBeEncodedWritesEncodingError(t *testing.T) {
+	w := httptest.NewRecorder()
+
+	SendJsonResponse(w, http.StatusOK, func() {})
+
+	if !strings.Contains(w.Body.String(), `"error":"failed to encode JSON response"`) {
+		t.Fatalf("expected encoding error response, got %q", w.Body.String())
 	}
 }

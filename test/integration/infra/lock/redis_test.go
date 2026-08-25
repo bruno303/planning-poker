@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"planning-poker/internal/infra/lock"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -53,7 +54,7 @@ func TestRedisLockManager_WithLock_Success(t *testing.T) {
 	}
 
 	// Verify lock was released
-	exists, _ := client.Exists(ctx, key).Result()
+	exists, _ := client.Exists(ctx, "planning-poker:lock:"+key).Result()
 	if exists != 0 {
 		t.Error("expected lock to be released after execution")
 	}
@@ -79,7 +80,7 @@ func TestRedisLockManager_WithLock_FunctionError(t *testing.T) {
 	}
 
 	// Verify lock was released even after error
-	exists, _ := client.Exists(ctx, key).Result()
+	exists, _ := client.Exists(ctx, "planning-poker:lock:"+key).Result()
 	if exists != 0 {
 		t.Error("expected lock to be released after error")
 	}
@@ -106,7 +107,7 @@ func TestRedisLockManager_ExecuteWithLock_Success(t *testing.T) {
 	}
 
 	// Verify lock was released
-	exists, _ := client.Exists(ctx, key).Result()
+	exists, _ := client.Exists(ctx, "planning-poker:lock:"+key).Result()
 	if exists != 0 {
 		t.Error("expected lock to be released after execution")
 	}
@@ -132,7 +133,7 @@ func TestRedisLockManager_ExecuteWithLock_FunctionError(t *testing.T) {
 	}
 
 	// Verify lock was released even after error
-	exists, _ := client.Exists(ctx, key).Result()
+	exists, _ := client.Exists(ctx, "planning-poker:lock:"+key).Result()
 	if exists != 0 {
 		t.Error("expected lock to be released after error")
 	}
@@ -208,6 +209,76 @@ func TestRedisLockManager_ContextCancellation(t *testing.T) {
 
 	// Cleanup
 	client.Del(ctx, keyWithPrefix)
+}
+
+func TestRedisLockManager_RetryExhaustion(t *testing.T) {
+	manager, client := setupRedisLockManagerTest(t)
+	defer client.Close()
+
+	ctx := context.Background()
+	key := "test-lock-retries" + uuid.NewString()
+	keyWithPrefix := "planning-poker:lock:" + key
+	if err := client.Set(ctx, keyWithPrefix, "held", time.Minute).Err(); err != nil {
+		t.Fatalf("failed to seed held lock: %v", err)
+	}
+	defer client.Del(ctx, keyWithPrefix)
+
+	manager.SetRetry(3, time.Millisecond)
+	err := manager.ExecuteWithLock(ctx, key, func(context.Context) error {
+		t.Fatal("function should not run while lock is held")
+		return nil
+	})
+
+	if err == nil {
+		t.Fatal("expected retry exhaustion error")
+	}
+	if !strings.Contains(err.Error(), "after 3 retries") {
+		t.Fatalf("expected retry exhaustion details, got %v", err)
+	}
+}
+
+func TestRedisLockManager_RedisFailureReturnsAcquireError(t *testing.T) {
+	manager, client := setupRedisLockManagerTest(t)
+	if err := client.Close(); err != nil {
+		t.Fatalf("failed to close Redis client: %v", err)
+	}
+
+	err := manager.ExecuteWithLock(context.Background(), "test-lock-redis-error", func(context.Context) error {
+		t.Fatal("function should not run when Redis is unavailable")
+		return nil
+	})
+
+	if err == nil {
+		t.Fatal("expected Redis acquisition error")
+	}
+	if !strings.Contains(err.Error(), "failed to acquire lock") {
+		t.Fatalf("expected acquire context, got %v", err)
+	}
+}
+
+func TestRedisLockManager_CancelledCallbackStillReleasesLock(t *testing.T) {
+	manager, client := setupRedisLockManagerTest(t)
+	defer client.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	key := "test-lock-callback-cancel" + uuid.NewString()
+	callbackErr := errors.New("callback cancelled")
+
+	_, err := manager.WithLock(ctx, key, func(context.Context) (any, error) {
+		cancel()
+		return nil, callbackErr
+	})
+	if !errors.Is(err, callbackErr) {
+		t.Fatalf("expected callback error, got %v", err)
+	}
+
+	exists, redisErr := client.Exists(context.Background(), "planning-poker:lock:"+key).Result()
+	if redisErr != nil {
+		t.Fatalf("failed to inspect lock: %v", redisErr)
+	}
+	if exists != 0 {
+		t.Fatal("expected cancelled callback to release lock")
+	}
 }
 
 func TestRedisLockManager_LockExpiration(t *testing.T) {
