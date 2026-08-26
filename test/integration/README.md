@@ -5,7 +5,10 @@ This directory contains integration tests that verify the application works corr
 ## Running Tests
 
 ```bash
-# Run all integration tests
+# Run all integration tests with the matching local Redis infrastructure
+make test-integration
+
+# Run directly when Redis is already available
 go test ./test/integration/...
 
 # Run specific test
@@ -27,6 +30,11 @@ go test -cover ./test/integration/...
 ## Writing Integration Tests
 
 Integration tests use `httptest.Server` to spin up a real HTTP server with all middleware and dependencies configured. This ensures tests reflect actual production behavior.
+
+The Make target starts the current Compose project with the local profile,
+passes its Redis host port through `REDIS_HOST` and `REDIS_PORT`, and always
+tears that project down after the test command. Direct `go test` runs support
+`REDIS_HOST`, `REDIS_PORT`, and `REDIS_DB` environment overrides.
 
 ### Example Test
 

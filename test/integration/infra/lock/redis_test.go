@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"planning-poker/internal/infra/lock"
 	"strings"
 	"sync"
 	"testing"
@@ -12,13 +11,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+
+	"planning-poker/internal/infra/lock"
+	"planning-poker/test/integration"
 )
 
 func setupRedisLockManagerTest(t *testing.T) (*lock.RedisLockManager, *redis.Client) {
-	client := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
-		DB:   6,
-	})
+	client := redis.NewClient(integration.RedisOptions(t, 6))
 
 	ctx := context.Background()
 	if err := client.Ping(ctx).Err(); err != nil {

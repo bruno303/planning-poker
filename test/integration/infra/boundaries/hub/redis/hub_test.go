@@ -3,26 +3,26 @@ package redishub_test
 import (
 	"context"
 	"errors"
-	"planning-poker/internal/domain"
-	redishub "planning-poker/internal/infra/boundaries/hub/redis"
 	"testing"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
+
+	"planning-poker/internal/domain"
+	redishub "planning-poker/internal/infra/boundaries/hub/redis"
+	"planning-poker/test/integration"
 )
 
-func setupRedisClient() *redis.Client {
-	client := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
-		DB:   5,
-	})
+func setupRedisClient(t *testing.T) *redis.Client {
+	t.Helper()
+	client := redis.NewClient(integration.RedisOptions(t, 5))
 	client.FlushDB(context.Background())
 	return client
 }
 
 func TestIntegration_RoomLifecycle(t *testing.T) {
-	client := setupRedisClient()
+	client := setupRedisClient(t)
 	defer client.Close()
 
 	hub, err := redishub.NewRedisHub(context.Background(), client)
@@ -59,7 +59,7 @@ func TestIntegration_RoomLifecycle(t *testing.T) {
 }
 
 func TestIntegration_RemoveClient_WhenRoomIsAlreadyMissing_CleansUpAndSucceeds(t *testing.T) {
-	client := setupRedisClient()
+	client := setupRedisClient(t)
 	defer client.Close()
 
 	hub, err := redishub.NewRedisHub(context.Background(), client)
@@ -90,7 +90,7 @@ func TestIntegration_RemoveClient_WhenRoomIsAlreadyMissing_CleansUpAndSucceeds(t
 }
 
 func TestIntegration_RoomTTLExpiry(t *testing.T) {
-	client := setupRedisClient()
+	client := setupRedisClient(t)
 	defer client.Close()
 
 	hub, err := redishub.NewRedisHub(context.Background(), client)
@@ -110,7 +110,7 @@ func TestIntegration_RoomTTLExpiry(t *testing.T) {
 }
 
 func TestIntegration_GetBus(t *testing.T) {
-	client := setupRedisClient()
+	client := setupRedisClient(t)
 	defer client.Close()
 
 	hub, err := redishub.NewRedisHub(context.Background(), client)
@@ -137,7 +137,7 @@ func TestIntegration_GetBus(t *testing.T) {
 }
 
 func TestIntegration_PubSubInvalidMessage(t *testing.T) {
-	client := setupRedisClient()
+	client := setupRedisClient(t)
 	defer client.Close()
 
 	hub, err := redishub.NewRedisHub(context.Background(), client)
@@ -190,7 +190,7 @@ func TestIntegration_PubSubInvalidMessage(t *testing.T) {
 }
 
 func TestIntegration_PubSubUnsubscribe(t *testing.T) {
-	client := setupRedisClient()
+	client := setupRedisClient(t)
 	defer client.Close()
 
 	hub, err := redishub.NewRedisHub(context.Background(), client)
@@ -237,7 +237,7 @@ func TestIntegration_PubSubUnsubscribe(t *testing.T) {
 }
 
 func TestIntegration_BroadcastToRoom(t *testing.T) {
-	client := setupRedisClient()
+	client := setupRedisClient(t)
 	defer client.Close()
 
 	hub, err := redishub.NewRedisHub(context.Background(), client)
@@ -274,7 +274,7 @@ func TestIntegration_BroadcastToRoom(t *testing.T) {
 }
 
 func TestIntegration_GetRooms(t *testing.T) {
-	client := setupRedisClient()
+	client := setupRedisClient(t)
 	defer client.Close()
 
 	hub, err := redishub.NewRedisHub(context.Background(), client)
@@ -307,7 +307,7 @@ func TestIntegration_GetRooms(t *testing.T) {
 }
 
 func TestIntegration_SaveRoom(t *testing.T) {
-	client := setupRedisClient()
+	client := setupRedisClient(t)
 	defer client.Close()
 
 	hub, err := redishub.NewRedisHub(context.Background(), client)
@@ -337,7 +337,7 @@ func TestIntegration_SaveRoom(t *testing.T) {
 }
 
 func TestIntegration_Close(t *testing.T) {
-	client := setupRedisClient()
+	client := setupRedisClient(t)
 	defer client.Close()
 
 	hub, err := redishub.NewRedisHub(context.Background(), client)

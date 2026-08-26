@@ -1,9 +1,8 @@
 services:
   redis:
     image: redis:7-alpine
-    container_name: planning-poker-redis
     ports:
-      - "6379:6379"
+      - "${REDIS_HOST_PORT:-6379}:6379"
     networks:
       - planning-poker
     profiles:
@@ -15,47 +14,20 @@ services:
       timeout: 3s
       retries: 5
 
-  loki:
-    image: grafana/loki:3.4.2
-    container_name: planning-poker-loki
-    ports:
-      - "3100:3100"
-    networks:
-      - planning-poker
-    profiles:
-      - app
-      - local
-    command: -config.file=/etc/loki/local-config.yaml
-    volumes:
-      - ./infra/loki/local-config.yaml:/etc/loki/local-config.yaml:ro
-      - loki-data:/loki
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3100/ready || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 10s
-
   frontend:
     build:
       context: ./frontend/planning-poker-front
       args:
-        - NEXT_PUBLIC_BACKEND_URL=http://localhost:8080
-        - NEXT_PUBLIC_WEBSOCKET_URL=ws://localhost:8080
-    container_name: planning-poker-frontend
+        - NEXT_PUBLIC_BACKEND_URL=http://localhost:${BACKEND_HOST_PORT:-8080}
+        - NEXT_PUBLIC_WEBSOCKET_URL=ws://localhost:${BACKEND_HOST_PORT:-8080}
     ports:
-      - "3000:3000"
-    environment:
-      - LOKI_URL=http://loki:3100
-      - LOG_ENV=docker
+      - "${FRONTEND_HOST_PORT:-3000}:3000"
     profiles:
       - app
     networks:
       - planning-poker
     depends_on:
       backend:
-        condition: service_healthy
-      loki:
         condition: service_healthy
 
   frontend-e2e:
@@ -65,7 +37,6 @@ services:
         - NEXT_PUBLIC_BACKEND_URL=http://backend:8080
         - NEXT_PUBLIC_WEBSOCKET_URL=ws://backend:8080
         - NEXT_PUBLIC_EXPOSE_WS_GLOBAL=true
-    container_name: planning-poker-frontend-e2e
     profiles:
       - e2e
     networks:
@@ -76,7 +47,6 @@ services:
 
   playwright:
     image: mcr.microsoft.com/playwright:v1.58.2-noble
-    container_name: planning-poker-playwright
     working_dir: /work
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     volumes:
@@ -93,11 +63,10 @@ services:
   backend:
     build:
       context: ./
-    container_name: planning-poker-backend
     ports:
-      - "8080:8080"
+      - "${BACKEND_HOST_PORT:-8080}:8080"
     environment:
-      - API_CORS_ALLOWED_ORIGINS=http://localhost:3000,http://frontend:3000,http://frontend-e2e:3000
+      - API_CORS_ALLOWED_ORIGINS=http://localhost:${FRONTEND_HOST_PORT:-3000},http://frontend:3000,http://frontend-e2e:3000
       - LOG_LEVEL=DEBUG
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -122,4 +91,3 @@ networks:
 
 volumes:
   playwright-node-modules:
-  loki-data:

@@ -5,8 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"os"
+	"strconv"
 	"testing"
+
+	"github.com/redis/go-redis/v9"
 )
 
 // HTTPClient provides helper methods for making HTTP requests in tests
@@ -108,5 +113,28 @@ func AssertJSONField(t *testing.T, data map[string]interface{}, field string, ex
 
 	if actual != expected {
 		t.Errorf("field '%s': expected %v, got %v", field, expected, actual)
+	}
+}
+
+// RedisOptions returns Redis connection options using the current test environment.
+func RedisOptions(t *testing.T, defaultDB int) *redis.Options {
+	t.Helper()
+
+	host := os.Getenv("REDIS_HOST")
+	if host == "" {
+		host = "localhost"
+	}
+
+	port := os.Getenv("REDIS_PORT")
+	if port == "" {
+		port = "6379"
+	}
+	if _, err := strconv.Atoi(port); err != nil {
+		t.Fatalf("invalid REDIS_PORT %q: %v", port, err)
+	}
+
+	return &redis.Options{
+		Addr: net.JoinHostPort(host, port),
+		DB:   defaultDB,
 	}
 }

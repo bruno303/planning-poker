@@ -35,15 +35,41 @@ planning-poker/
 
 ## Running with Docker
 
-To build and run all services (backend, frontend, and Redis):
+To build and run the application services (backend, frontend, and Redis):
 
 ```bash
-docker-compose up --build
+make app-compose-up
 ```
 
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8080
 - Redis: localhost:6379
+
+## Isolated worktree infrastructure
+
+Compose resources are scoped to a project name, and host ports can be changed for
+each worktree. The defaults remain `planning-poker`, Redis `6379`, backend `8080`,
+and frontend `3000`.
+
+For a second worktree, use a different project and host-port set:
+
+```bash
+COMPOSE_PROJECT_NAME=planning-poker-feature-x \
+REDIS_HOST_PORT=6381 \
+BACKEND_HOST_PORT=8081 \
+FRONTEND_HOST_PORT=3001 \
+make app-compose-up
+```
+
+Use the same values to bring down only that worktree:
+
+```bash
+COMPOSE_PROJECT_NAME=planning-poker-feature-x \
+REDIS_HOST_PORT=6381 \
+BACKEND_HOST_PORT=8081 \
+FRONTEND_HOST_PORT=3001 \
+make app-compose-down
+```
 
 ## Local Development
 
@@ -55,17 +81,28 @@ Make sure Redis is running locally:
 docker run -p 6379:6379 redis:7-alpine
 ```
 
-Or use the provided docker-compose.
+Or use the provided Compose infrastructure:
+
+```bash
+make infra-up
+```
 
 ### Backend
 
 ```bash
 make init      # Install Go and frontend dependencies
 make run       # Run backend server
-make test      # Run Go tests
+make tests      # Run all Go tests
 ```
 
 The backend requires Redis to be available at `localhost:6379` (configurable via environment variables).
+
+`make test-integration` starts and tears down an isolated local Redis Compose
+project automatically. To use a custom worktree Redis port:
+
+```bash
+COMPOSE_PROJECT_NAME=planning-poker-feature-x REDIS_HOST_PORT=6381 make test-integration
+```
 
 ### Frontend
 
@@ -79,7 +116,7 @@ See `example.env` and `frontend/planning-poker-front/example.env` for configurat
 
 ## Testing
 
-- Backend: `make test`
+- Backend: `make tests`
 - Frontend: Use your preferred React/Next.js testing tools
 
 ## Building for Production
