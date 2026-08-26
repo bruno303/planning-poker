@@ -59,9 +59,9 @@ Regenerate after interface changes, especially when mocks are generated from `go
 
 ### Tests
 
-- `make tests` - real all-tests target; runs lint, fmt, then `go test ./...`.
+- `make tests` - real all-tests target; runs lint, fmt, starts isolated Redis infrastructure, then `go test ./...` and tears infrastructure down.
 - `make test-unit` - unit tests under `./internal/...`.
-- `make test-integration` - integration tests under `./test/integration/...`.
+- `make test-integration` - starts isolated Redis infrastructure, runs integration tests under `./test/integration/...`, then tears infrastructure down.
 - `make test-coverage` - generate `coverage.out` and `coverage.html`.
 
 ### E2E tests (Playwright)
@@ -88,6 +88,32 @@ Important: the real Makefile target is `make tests`, not `make test`.
 
 - `make infra-up` - start local infra with Docker Compose.
 - `make infra-down` - stop local infra with Docker Compose.
+
+### Isolated local infrastructure
+
+Use a unique Compose project name and host ports for each worktree:
+
+```bash
+COMPOSE_PROJECT_NAME=planning-poker-feature-x \
+REDIS_HOST_PORT=6381 \
+BACKEND_HOST_PORT=8081 \
+FRONTEND_HOST_PORT=3001 \
+make app-compose-up
+```
+
+Use the same values for teardown:
+
+```bash
+COMPOSE_PROJECT_NAME=planning-poker-feature-x \
+REDIS_HOST_PORT=6381 \
+BACKEND_HOST_PORT=8081 \
+FRONTEND_HOST_PORT=3001 \
+make app-compose-down
+```
+
+`make test-integration` and `make tests` automatically start and tear down the
+current project's Redis infrastructure. For concurrent worktrees, provide a
+unique `COMPOSE_PROJECT_NAME` and `REDIS_HOST_PORT`.
 
 ## Backend Go Conventions
 

@@ -1,9 +1,11 @@
 package config
 
 import (
+	"fmt"
 	"os"
-	"planning-poker/config"
 	"time"
+
+	"planning-poker/config"
 
 	toolkitconfig "github.com/bruno303/go-toolkit/pkg/config"
 )
@@ -51,8 +53,19 @@ func LoadConfig() (*Config, error) {
 }
 
 func LoadTestConfig() (*Config, error) {
-	_ = os.Setenv("CONFIG_FILE", "config-test.yaml")
+	previousConfigFile, wasConfigFileSet := os.LookupEnv("CONFIG_FILE")
+	if err := os.Setenv("CONFIG_FILE", "config-test.yaml"); err != nil {
+		return nil, fmt.Errorf("set test config file: %w", err)
+	}
+	defer func() {
+		if wasConfigFileSet {
+			_ = os.Setenv("CONFIG_FILE", previousConfigFile)
+			return
+		}
+		_ = os.Unsetenv("CONFIG_FILE")
+	}()
+
 	cfg := &Config{}
-	toolkitconfig.LoadConfigWithoutEnvs(cfg, config.ConfigFS)
+	toolkitconfig.LoadConfig(cfg, config.ConfigFS)
 	return cfg, nil
 }

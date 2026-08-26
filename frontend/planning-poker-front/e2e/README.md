@@ -6,7 +6,9 @@ Override it with `PLAYWRIGHT_BASE_URL` when needed.
 ## Compose-based E2E prerequisites
 
 - Docker and Docker Compose installed and running.
-- Ports `3000` (frontend), `8080` (backend), and `6379` (redis) available on the host.
+- The default host ports are `3000` (frontend), `8080` (backend), and `6379` (Redis).
+  Override them with `FRONTEND_HOST_PORT`, `BACKEND_HOST_PORT`, and
+  `REDIS_HOST_PORT` when another worktree is using the defaults.
 - No host Playwright browser/system libraries are required; tests run inside a Playwright Docker image.
 
 ## Local run
@@ -27,7 +29,7 @@ make e2e-ci
 
 ## Startup and cleanup behavior
 
-- E2E brings app services up with Docker Compose profiles `app` and `e2e`, explicitly starting `redis`, `backend`, `frontend`, and `frontend-e2e`.
+- E2E brings the Redis, backend, and `frontend-e2e` services up with Docker Compose profiles `app` and `e2e`.
 - `frontend` is built for host-browser usage (`localhost` backend/websocket URLs), while `frontend-e2e` is built for Docker-internal addressing (`backend` service URL).
 - Playwright itself runs in a separate `playwright` container using profile `e2e` when `make e2e-local` / `make e2e-ci` invokes the runner.
 - The Playwright runner container uses host-mapped UID/GID (`HOST_UID`/`HOST_GID`, default `1000:1000`) to avoid root-owned artifacts on the mounted workspace.
