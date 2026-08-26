@@ -21,6 +21,8 @@ export interface WebSocketMessage<T = any> {
   payload: T;
 }
 
+export type ConsensusLevel = 'High' | 'Medium' | 'Low' | 'Unavailable';
+
 export interface VotePayload {
   vote: string | null;
 }
@@ -54,4 +56,29 @@ export interface Story {
   result?: number;
   mostAppearingVotes: number[];
   voted: boolean;
+}
+
+export interface RoomState {
+  type: 'room-state';
+  currentStory: string;
+  reveal: boolean;
+  result?: number;
+  mostAppearingVotes: number[];
+  consensus?: ConsensusLevel;
+  lowestVote?: number;
+  highestVote?: number;
+  voteRange?: number;
+  voteSpread?: number;
+  nonNumericVoteCount?: number;
+  participants: Array<{
+    id: string;
+    name: string;
+    vote: string | null;
+    hasVoted: boolean;
+    isSpectator: boolean;
+    isOwner: boolean;
+  }>;
+  backlogMode?: boolean;
+  stories?: Story[];
+  currentStoryIndex?: number;
 }

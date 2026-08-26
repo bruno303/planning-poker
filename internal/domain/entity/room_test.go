@@ -3,6 +3,7 @@ package entity
 import (
 	"context"
 	"math"
+	"reflect"
 	"testing"
 
 	"github.com/samber/lo"
@@ -179,6 +180,142 @@ func TestRoom_RevealWithSpectators(t *testing.T) {
 		t.Errorf("expected Result to be 5, got nil")
 	} else if *room.Result != 5 {
 		t.Errorf("expected Result to be 5, got: %v", *room.Result)
+	}
+}
+
+func TestCalculateConsensus(t *testing.T) {
+	tests := []struct {
+		name       string
+		votes      []int
+		consensus  string
+		lowest     *int
+		highest    *int
+		voteRange  *int
+		voteSpread *int
+	}{
+		{
+			name:      "no numeric votes",
+			consensus: consensusUnavailable,
+		},
+		{
+			name:       "single vote",
+			votes:      []int{5},
+			consensus:  consensusHigh,
+			lowest:     lo.ToPtr(5),
+			highest:    lo.ToPtr(5),
+			voteRange:  lo.ToPtr(0),
+			voteSpread: lo.ToPtr(0),
+		},
+		{
+			name:       "strong majority on adjacent estimates",
+			votes:      []int{3, 5, 5},
+			consensus:  consensusHigh,
+			lowest:     lo.ToPtr(3),
+			highest:    lo.ToPtr(5),
+			voteRange:  lo.ToPtr(2),
+			voteSpread: lo.ToPtr(1),
+		},
+		{
+			name:       "modest two-step spread",
+			votes:      []int{3, 5, 8},
+			consensus:  consensusMedium,
+			lowest:     lo.ToPtr(3),
+			highest:    lo.ToPtr(8),
+			voteRange:  lo.ToPtr(5),
+			voteSpread: lo.ToPtr(2),
+		},
+		{
+			name:       "large spread",
+			votes:      []int{3, 13},
+			consensus:  consensusLow,
+			lowest:     lo.ToPtr(3),
+			highest:    lo.ToPtr(13),
+			voteRange:  lo.ToPtr(10),
+			voteSpread: lo.ToPtr(3),
+		},
+		{
+			name:      "unknown ordered values",
+			votes:     []int{4, 5},
+			consensus: consensusUnavailable,
+			lowest:    lo.ToPtr(4),
+			highest:   lo.ToPtr(5),
+			voteRange: lo.ToPtr(1),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			consensus, lowest, highest, voteRange, voteSpread := calculateConsensus(tt.votes)
+
+			if consensus != tt.consensus {
+				t.Errorf("consensus = %q, want %q", consensus, tt.consensus)
+			}
+			if !reflect.DeepEqual(lowest, tt.lowest) {
+				t.Errorf("lowest = %v, want %v", lowest, tt.lowest)
+			}
+			if !reflect.DeepEqual(highest, tt.highest) {
+				t.Errorf("highest = %v, want %v", highest, tt.highest)
+			}
+			if !reflect.DeepEqual(voteRange, tt.voteRange) {
+				t.Errorf("vote range = %v, want %v", voteRange, tt.voteRange)
+			}
+			if !reflect.DeepEqual(voteSpread, tt.voteSpread) {
+				t.Errorf("vote spread = %v, want %v", voteSpread, tt.voteSpread)
+			}
+		})
+	}
+}
+
+func TestRoom_RevealCalculatesConsensusAndCountsSpecialVotes(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	clients := []*Client{
+		{ID: "low-1", CurrentVote: lo.ToPtr("3"), HasVoted: true},
+		{ID: "low-2", CurrentVote: lo.ToPtr("3"), HasVoted: true},
+		{ID: "high", CurrentVote: lo.ToPtr("13"), HasVoted: true},
+		{ID: "question", CurrentVote: lo.ToPtr("?"), HasVoted: true},
+		{ID: "coffee", CurrentVote: lo.ToPtr("☕"), HasVoted: true},
+		{ID: "spectator", CurrentVote: lo.ToPtr("89"), HasVoted: true, IsSpectator: true},
+	}
+	mockCC := NewMockClientCollection(ctrl)
+	mockCC.EXPECT().Values().Return(clients).AnyTimes()
+
+	room := NewRoom(mockCC)
+	room.reveal(true)
+
+	if room.Consensus != consensusLow {
+		t.Errorf("consensus = %q, want %q", room.Consensus, consensusLow)
+	}
+	if !reflect.DeepEqual(room.LowestVote, lo.ToPtr(3)) {
+		t.Errorf("lowest vote = %v, want 3", room.LowestVote)
+	}
+	if !reflect.DeepEqual(room.HighestVote, lo.ToPtr(13)) {
+		t.Errorf("highest vote = %v, want 13", room.HighestVote)
+	}
+	if room.NonNumericVoteCount != 2 {
+		t.Errorf("non-numeric vote count = %d, want 2", room.NonNumericVoteCount)
+	}
+	if !reflect.DeepEqual(room.MostAppearingVotes, []int{3}) {
+		t.Errorf("most appearing votes = %v, want [3]", room.MostAppearingVotes)
+	}
+}
+
+func TestRoom_HideVotesClearsConsensusMetrics(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockCC := NewMockClientCollection(ctrl)
+	mockCC.EXPECT().Values().Return([]*Client{{CurrentVote: lo.ToPtr("5"), HasVoted: true}}).AnyTimes()
+
+	room := NewRoom(mockCC)
+	room.reveal(true)
+	room.reveal(false)
+
+	if room.Result != nil || room.MostAppearingVotes != nil || room.Consensus != "" ||
+		room.LowestVote != nil || room.HighestVote != nil || room.VoteRange != nil ||
+		room.VoteSpread != nil || room.NonNumericVoteCount != 0 {
+		t.Fatalf("consensus metrics were not cleared: %+v", room)
 	}
 }
 

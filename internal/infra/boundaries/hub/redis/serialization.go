@@ -15,15 +15,21 @@ type (
 		Voted              bool     `json:"voted"`
 	}
 	SerializedRoom struct {
-		ID                 string             `json:"id"`
-		Clients            []SerializedClient `json:"clients"`
-		CurrentStory       string             `json:"currentStory"`
-		Reveal             bool               `json:"reveal"`
-		Result             *float32           `json:"result,omitempty"`
-		MostAppearingVotes []int              `json:"mostAppearingVotes"`
-		BacklogMode        bool               `json:"backlogMode"`
-		Stories            []SerializedStory  `json:"stories,omitempty"`
-		CurrentStoryIndex  int                `json:"currentStoryIndex"`
+		ID                  string             `json:"id"`
+		Clients             []SerializedClient `json:"clients"`
+		CurrentStory        string             `json:"currentStory"`
+		Reveal              bool               `json:"reveal"`
+		Result              *float32           `json:"result,omitempty"`
+		MostAppearingVotes  []int              `json:"mostAppearingVotes"`
+		Consensus           string             `json:"consensus,omitempty"`
+		LowestVote          *int               `json:"lowestVote,omitempty"`
+		HighestVote         *int               `json:"highestVote,omitempty"`
+		VoteRange           *int               `json:"voteRange,omitempty"`
+		VoteSpread          *int               `json:"voteSpread,omitempty"`
+		NonNumericVoteCount int                `json:"nonNumericVoteCount,omitempty"`
+		BacklogMode         bool               `json:"backlogMode"`
+		Stories             []SerializedStory  `json:"stories,omitempty"`
+		CurrentStoryIndex   int                `json:"currentStoryIndex"`
 	}
 	SerializedClient struct {
 		ID          string  `json:"id"`
@@ -64,15 +70,21 @@ func SerializeRoom(room *entity.Room) ([]byte, error) {
 	})
 
 	serialized := SerializedRoom{
-		ID:                 room.ID,
-		Clients:            clients,
-		CurrentStory:       room.CurrentStory,
-		Reveal:             room.Reveal,
-		Result:             room.Result,
-		MostAppearingVotes: room.MostAppearingVotes,
-		BacklogMode:        room.BacklogMode,
-		Stories:            serializeStories(room.Stories),
-		CurrentStoryIndex:  room.CurrentStoryIndex,
+		ID:                  room.ID,
+		Clients:             clients,
+		CurrentStory:        room.CurrentStory,
+		Reveal:              room.Reveal,
+		Result:              room.Result,
+		MostAppearingVotes:  room.MostAppearingVotes,
+		Consensus:           room.Consensus,
+		LowestVote:          room.LowestVote,
+		HighestVote:         room.HighestVote,
+		VoteRange:           room.VoteRange,
+		VoteSpread:          room.VoteSpread,
+		NonNumericVoteCount: room.NonNumericVoteCount,
+		BacklogMode:         room.BacklogMode,
+		Stories:             serializeStories(room.Stories),
+		CurrentStoryIndex:   room.CurrentStoryIndex,
 	}
 
 	return json.Marshal(serialized)
@@ -98,15 +110,21 @@ func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 	}
 
 	room := &entity.Room{
-		ID:                 serialized.ID,
-		Clients:            clientCollection,
-		CurrentStory:       serialized.CurrentStory,
-		Reveal:             serialized.Reveal,
-		Result:             serialized.Result,
-		MostAppearingVotes: serialized.MostAppearingVotes,
-		BacklogMode:        serialized.BacklogMode,
-		Stories:            deserializeStories(serialized.Stories),
-		CurrentStoryIndex:  serialized.CurrentStoryIndex,
+		ID:                  serialized.ID,
+		Clients:             clientCollection,
+		CurrentStory:        serialized.CurrentStory,
+		Reveal:              serialized.Reveal,
+		Result:              serialized.Result,
+		MostAppearingVotes:  serialized.MostAppearingVotes,
+		Consensus:           serialized.Consensus,
+		LowestVote:          serialized.LowestVote,
+		HighestVote:         serialized.HighestVote,
+		VoteRange:           serialized.VoteRange,
+		VoteSpread:          serialized.VoteSpread,
+		NonNumericVoteCount: serialized.NonNumericVoteCount,
+		BacklogMode:         serialized.BacklogMode,
+		Stories:             deserializeStories(serialized.Stories),
+		CurrentStoryIndex:   serialized.CurrentStoryIndex,
 	}
 
 	for _, sc := range serialized.Clients {

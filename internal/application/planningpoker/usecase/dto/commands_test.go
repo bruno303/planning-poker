@@ -22,13 +22,19 @@ func TestNewRoomStateCommand(t *testing.T) {
 	}
 
 	room := &entity.Room{
-		ID:                 "room1",
-		Clients:            clientCollection,
-		CurrentStory:       "Story 1",
-		Reveal:             true,
-		Result:             lo.ToPtr(float32(5)),
-		MostAppearingVotes: []int{1, 2},
-		BacklogMode:        true,
+		ID:                  "room1",
+		Clients:             clientCollection,
+		CurrentStory:        "Story 1",
+		Reveal:              true,
+		Result:              lo.ToPtr(float32(5)),
+		MostAppearingVotes:  []int{1, 2},
+		Consensus:           "Medium",
+		LowestVote:          lo.ToPtr(3),
+		HighestVote:         lo.ToPtr(8),
+		VoteRange:           lo.ToPtr(5),
+		VoteSpread:          lo.ToPtr(2),
+		NonNumericVoteCount: 1,
+		BacklogMode:         true,
 	}
 	got := NewRoomStateCommand(room)
 	want := RoomState{
@@ -39,11 +45,17 @@ func TestNewRoomStateCommand(t *testing.T) {
 			{ID: "1", Name: "Alice", Vote: &vote, HasVoted: true, IsSpectator: false, IsOwner: true},
 			{ID: "2", Name: "Bob", Vote: nil, HasVoted: false, IsSpectator: true, IsOwner: false},
 		},
-		Result:             lo.ToPtr(float32(5)),
-		MostAppearingVotes: []int{1, 2},
-		BacklogMode:        true,
-		Stories:            []Story{},
-		CurrentStoryIndex:  0,
+		Result:              lo.ToPtr(float32(5)),
+		MostAppearingVotes:  []int{1, 2},
+		Consensus:           "Medium",
+		LowestVote:          lo.ToPtr(3),
+		HighestVote:         lo.ToPtr(8),
+		VoteRange:           lo.ToPtr(5),
+		VoteSpread:          lo.ToPtr(2),
+		NonNumericVoteCount: 1,
+		BacklogMode:         true,
+		Stories:             []Story{},
+		CurrentStoryIndex:   0,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("NewRoomStateCommand() = %+v, want %+v", got, want)

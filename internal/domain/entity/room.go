@@ -5,6 +5,7 @@ package entity
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 
 	"github.com/google/uuid"
@@ -25,15 +26,21 @@ type (
 	}
 
 	Room struct {
-		ID                 string
-		Clients            ClientCollection
-		CurrentStory       string
-		Reveal             bool
-		Result             *float32
-		MostAppearingVotes []int
-		BacklogMode        bool
-		Stories            []Story
-		CurrentStoryIndex  int
+		ID                  string
+		Clients             ClientCollection
+		CurrentStory        string
+		Reveal              bool
+		Result              *float32
+		MostAppearingVotes  []int
+		Consensus           string
+		LowestVote          *int
+		HighestVote         *int
+		VoteRange           *int
+		VoteSpread          *int
+		NonNumericVoteCount int
+		BacklogMode         bool
+		Stories             []Story
+		CurrentStoryIndex   int
 	}
 )
 
@@ -387,24 +394,33 @@ func (r *Room) reveal(reveal bool) {
 	r.Reveal = reveal
 
 	if !reveal {
-		r.Result = nil
+		r.clearConsensus()
 		return
 	}
 
-	voteSum, voteCount, votesCountMap := r.collectVotes()
-	r.MostAppearingVotes = mostAppearingVotes(votesCountMap, r.getMostVoteCount(votesCountMap))
+	metrics := r.collectVotes()
+	r.MostAppearingVotes = mostAppearingVotes(metrics.counts, getMostVoteCount(metrics.counts))
 
-	if voteCount > 0 {
-		r.Result = lo.ToPtr(voteSum / voteCount)
+	if metrics.count > 0 {
+		r.Result = lo.ToPtr(metrics.sum / metrics.count)
 	} else {
 		r.Result = nil
 	}
+
+	r.Consensus, r.LowestVote, r.HighestVote, r.VoteRange, r.VoteSpread = calculateConsensus(metrics.values)
+	r.NonNumericVoteCount = metrics.nonNumericCount
 }
 
-func (r *Room) collectVotes() (float32, float32, map[int]int) {
-	var voteSum float32
-	var voteCount float32
-	votesCountMap := make(map[int]int)
+type voteMetrics struct {
+	sum             float32
+	count           float32
+	counts          map[int]int
+	values          []int
+	nonNumericCount int
+}
+
+func (r *Room) collectVotes() voteMetrics {
+	metrics := voteMetrics{counts: make(map[int]int)}
 
 	for _, client := range r.Clients.Values() {
 		if client.IsSpectator || client.CurrentVote == nil {
@@ -413,15 +429,17 @@ func (r *Room) collectVotes() (float32, float32, map[int]int) {
 
 		vote, err := strconv.Atoi(*client.CurrentVote)
 		if err != nil {
+			metrics.nonNumericCount++
 			continue
 		}
 
-		voteSum += float32(vote)
-		voteCount++
-		votesCountMap[vote]++
+		metrics.sum += float32(vote)
+		metrics.count++
+		metrics.counts[vote]++
+		metrics.values = append(metrics.values, vote)
 	}
 
-	return voteSum, voteCount, votesCountMap
+	return metrics
 }
 
 func mostAppearingVotes(votes map[int]int, mostVoteCount int) []int {
@@ -431,11 +449,12 @@ func mostAppearingVotes(votes map[int]int, mostVoteCount int) []int {
 			mostVotes = append(mostVotes, vote)
 		}
 	}
+	slices.Sort(mostVotes)
 
 	return mostVotes
 }
 
-func (r *Room) getMostVoteCount(voteMap map[int]int) int {
+func getMostVoteCount(voteMap map[int]int) int {
 	var mostVoteCount int
 	for _, count := range voteMap {
 		if count > mostVoteCount {
@@ -444,6 +463,75 @@ func (r *Room) getMostVoteCount(voteMap map[int]int) int {
 	}
 
 	return mostVoteCount
+}
+
+const (
+	consensusHigh        = "High"
+	consensusMedium      = "Medium"
+	consensusLow         = "Low"
+	consensusUnavailable = "Unavailable"
+)
+
+var planningPokerDeck = []int{0, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89}
+
+func calculateConsensus(votes []int) (string, *int, *int, *int, *int) {
+	if len(votes) == 0 {
+		return consensusUnavailable, nil, nil, nil, nil
+	}
+
+	minVote, maxVote := votes[0], votes[0]
+	voteCounts := make(map[int]int, len(votes))
+	for _, vote := range votes {
+		voteCounts[vote]++
+		if vote < minVote {
+			minVote = vote
+		}
+		if vote > maxVote {
+			maxVote = vote
+		}
+	}
+
+	voteRange := maxVote - minVote
+	minPosition, minKnown := deckPosition(minVote)
+	maxPosition, maxKnown := deckPosition(maxVote)
+	var spread *int
+	if minKnown && maxKnown {
+		deckSpread := maxPosition - minPosition
+		spread = lo.ToPtr(deckSpread)
+	}
+
+	mostVoteCount := getMostVoteCount(voteCounts)
+	strongMajority := mostVoteCount >= (2*len(votes)+2)/3
+	consensus := consensusUnavailable
+	if spread != nil {
+		consensus = consensusLow
+	}
+	switch {
+	case minVote == maxVote:
+		consensus = consensusHigh
+	case spread != nil && strongMajority && *spread <= 1:
+		consensus = consensusHigh
+	case spread != nil && *spread <= 2:
+		consensus = consensusMedium
+	}
+
+	return consensus, lo.ToPtr(minVote), lo.ToPtr(maxVote), lo.ToPtr(voteRange), spread
+}
+
+func deckPosition(vote int) (int, bool) {
+	position, ok := slices.BinarySearch(planningPokerDeck, vote)
+	return position, ok
+}
+
+func (r *Room) clearConsensus() {
+	r.Result = nil
+	r.MostAppearingVotes = nil
+	r.Consensus = ""
+	r.LowestVote = nil
+	r.HighestVote = nil
+	r.VoteRange = nil
+	r.VoteSpread = nil
+	r.NonNumericVoteCount = 0
 }
 
 func (r *Room) IsEmpty() bool {

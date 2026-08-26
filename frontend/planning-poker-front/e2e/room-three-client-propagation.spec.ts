@@ -104,8 +104,42 @@ test('propagates participants and reveal state consistently across three clients
     for (const page of pages) {
       await expect(page.getByText('Results Summary')).toBeVisible();
       await expect(page.getByText('Average: 5.3')).toBeVisible();
+      await expect(page.getByText('Consensus: Medium')).toBeVisible();
+      await expect(page.getByText('Votes range from 3 to 8 (spread: 5)')).toBeVisible();
       await expect(page.getByText('Most Common')).toBeVisible();
       await expect(page.getByText('3/3', { exact: true })).toBeVisible();
+    }
+
+    await ownerPage.getByRole('button', { name: 'Vote Again' }).click();
+    for (const page of pages) {
+      await expect(page.getByText('Results Summary')).not.toBeVisible();
+    }
+
+    for (const page of pages) {
+      await page.getByRole('button', { name: '5', exact: true }).click();
+    }
+
+    for (const page of pages) {
+      await expect(page.getByText('Results Summary')).toBeVisible();
+      await expect(page.getByText('Consensus: High')).toBeVisible();
+      await expect(page.getByText('Votes range from 5 to 5 (spread: 0)')).toBeVisible();
+    }
+
+    await ownerPage.getByRole('button', { name: 'Vote Again' }).click();
+    for (const page of pages) {
+      await expect(page.getByText('Results Summary')).not.toBeVisible();
+    }
+
+    await ownerPage.getByRole('button', { name: '3', exact: true }).click();
+    await guestBPage.getByRole('button', { name: '3', exact: true }).click();
+    await guestCPage.getByRole('button', { name: '13', exact: true }).click();
+
+    for (const page of pages) {
+      await expect(page.getByText('Results Summary')).toBeVisible();
+      await expect(page.getByText('Consensus: Low')).toBeVisible();
+      await expect(page.getByText('Votes range from 3 to 13 (spread: 10)')).toBeVisible();
+      await expect(participantsPanel(page).getByText('Lowest', { exact: true })).toHaveCount(2);
+      await expect(participantsPanel(page).getByText('Highest', { exact: true })).toHaveCount(1);
     }
   } finally {
     await Promise.allSettled([ownerContext.close(), guestBContext.close(), guestCContext.close()]);
