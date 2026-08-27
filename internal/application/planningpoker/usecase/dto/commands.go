@@ -10,6 +10,7 @@ import (
 
 type (
 	Story struct {
+		ID                 string   `json:"id"`
 		Name               string   `json:"name"`
 		Result             *float32 `json:"result,omitempty"`
 		MostAppearingVotes []int    `json:"mostAppearingVotes"`
@@ -32,6 +33,7 @@ type (
 		BacklogMode         bool          `json:"backlogMode"`
 		Stories             []Story       `json:"stories"`
 		CurrentStoryIndex   int           `json:"currentStoryIndex"`
+		BacklogVersion      int           `json:"backlogVersion"`
 	}
 	Participant struct {
 		ID          string  `json:"id"`
@@ -69,6 +71,7 @@ func NewRoomStateCommand(room *entity.Room) RoomState {
 		BacklogMode:         room.BacklogMode,
 		Stories:             mapStories(room.Stories),
 		CurrentStoryIndex:   room.CurrentStoryIndex,
+		BacklogVersion:      room.BacklogVersion,
 	}
 }
 
@@ -88,6 +91,7 @@ func NewKickNotification() KickNotification {
 func mapStories(stories []entity.Story) []Story {
 	return lo.Map(stories, func(s entity.Story, _ int) Story {
 		return Story{
+			ID:                 s.ID,
 			Name:               s.Name,
 			Result:             s.Result,
 			MostAppearingVotes: s.MostAppearingVotes,

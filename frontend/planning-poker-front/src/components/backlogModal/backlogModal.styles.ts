@@ -99,6 +99,9 @@ export const styles = {
     borderColor: '#fef3c7',
     backgroundColor: '#fffbeb'
   },
+  backlogStoryDragging: {
+    opacity: 0.55
+  },
   backlogStoryLeft: {
     display: 'flex',
     alignItems: 'center',
@@ -123,6 +126,22 @@ export const styles = {
     fontWeight: '600'
   },
   backlogStoryTagVoted: {
+    fontSize: '0.75rem',
+    padding: '0.125rem 0.5rem',
+    borderRadius: '9999px',
+    backgroundColor: '#10b981',
+    color: 'white',
+    fontWeight: '600'
+  },
+  backlogStoryTagPending: {
+    fontSize: '0.75rem',
+    padding: '0.125rem 0.5rem',
+    borderRadius: '9999px',
+    backgroundColor: '#f59e0b',
+    color: 'white',
+    fontWeight: '600'
+  },
+  backlogStoryTagEstimated: {
     fontSize: '0.75rem',
     padding: '0.125rem 0.5rem',
     borderRadius: '9999px',
@@ -162,6 +181,20 @@ export const styles = {
     color: '#dc2626',
     padding: '0.25rem 0.5rem',
     border: '1px solid #fca5a5'
+  },
+  primarySmallButton: {
+    backgroundColor: '#dbeafe',
+    color: '#1d4ed8',
+    padding: '0.25rem 0.5rem',
+    border: '1px solid #93c5fd',
+    fontSize: '0.75rem'
+  },
+  secondarySmallButton: {
+    backgroundColor: '#f3f4f6',
+    color: '#374151',
+    padding: '0.25rem 0.5rem',
+    border: '1px solid #d1d5db',
+    fontSize: '0.75rem'
   },
   confirmButtons: {
     display: 'flex',

@@ -1,31 +1,38 @@
 'use client';
 
-import { useEffect, useState, type MouseEvent } from 'react';
-import { Plus, Trash2, X } from 'lucide-react';
+import { useEffect, useState, type DragEvent, type MouseEvent } from 'react';
+import { ChevronDown, ChevronUp, GripVertical, Plus, Trash2, X } from 'lucide-react';
 import type { Story } from '@/components/messages/websocket';
 import { styles } from './backlogModal.styles';
 
 type BacklogModalProps = {
   stories: Story[];
   currentStoryIndex: number;
+  backlogVersion: number;
   amIAdmin: boolean;
   onClose: () => void;
   onAddStory: (story: string) => void;
   onRemoveStory: (index: number) => void;
+  onSelectStory: (storyId: string) => void;
+  onReorderStory: (storyId: string, targetIndex: number, expectedBacklogVersion: number) => void;
   onDisableBacklog: () => void;
 };
 
 export default function BacklogModal({
   stories,
   currentStoryIndex,
+  backlogVersion,
   amIAdmin,
   onClose,
   onAddStory,
   onRemoveStory,
+  onSelectStory,
+  onReorderStory,
   onDisableBacklog,
 }: BacklogModalProps) {
   const [newStoryInput, setNewStoryInput] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
+  const [draggedStoryId, setDraggedStoryId] = useState<string | null>(null);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -58,6 +65,32 @@ export default function BacklogModal({
     if (event.target === event.currentTarget) {
       onClose();
     }
+  };
+
+  const handleDragStart = (event: DragEvent<HTMLDivElement>, storyId: string) => {
+    if (!amIAdmin) {
+      return;
+    }
+    setDraggedStoryId(storyId);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', storyId);
+  };
+
+  const handleDrop = (event: DragEvent<HTMLDivElement>, targetIndex: number) => {
+    event.preventDefault();
+    if (!amIAdmin) {
+      return;
+    }
+
+    const storyId = event.dataTransfer.getData('text/plain') || draggedStoryId;
+    if (storyId) {
+      onReorderStory(storyId, targetIndex, backlogVersion);
+    }
+    setDraggedStoryId(null);
+  };
+
+  const handleMove = (storyId: string, targetIndex: number) => {
+    onReorderStory(storyId, targetIndex, backlogVersion);
   };
 
   return (
@@ -103,18 +136,26 @@ export default function BacklogModal({
             <div style={styles.backlogList}>
               {stories.map((story, index) => (
                 <div
-                  key={index}
+                  key={story.id}
+                  draggable={amIAdmin}
+                  onDragStart={(event) => handleDragStart(event, story.id)}
+                  onDragEnd={() => setDraggedStoryId(null)}
+                  onDragOver={(event) => {
+                    if (amIAdmin) {
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = 'move';
+                    }
+                  }}
+                  onDrop={(event) => handleDrop(event, index)}
                   style={{
                     ...styles.backlogStory,
+                    ...(story.voted ? styles.backlogStoryVoted : styles.backlogStoryPending),
                     ...(index === currentStoryIndex ? styles.backlogStoryCurrent : {}),
-                    ...(story.voted
-                      ? styles.backlogStoryVoted
-                      : index < currentStoryIndex
-                        ? styles.backlogStoryVoted
-                        : styles.backlogStoryPending),
+                    ...(draggedStoryId === story.id ? styles.backlogStoryDragging : {}),
                   }}
                 >
                   <div style={styles.backlogStoryLeft}>
+                    {amIAdmin && <GripVertical size={16} aria-label="Drag to reorder" />}
                     <span style={styles.backlogStoryIndex}>{index + 1}.</span>
                     <span
                       style={{
@@ -124,22 +165,59 @@ export default function BacklogModal({
                     >
                       {story.name}
                     </span>
-                    {index === currentStoryIndex && !story.voted && (
+                    {index === currentStoryIndex && (
                       <span style={styles.backlogStoryTag}>Current</span>
+                    )}
+                    {!story.voted && index !== currentStoryIndex && (
+                      <span style={styles.backlogStoryTagPending}>Pending</span>
+                    )}
+                    {story.voted && (
+                      <span style={styles.backlogStoryTagEstimated}>Estimated</span>
                     )}
                     {story.voted && story.result != null && (
                       <span style={styles.backlogStoryTagVoted}>Avg: {story.result.toFixed(1)}</span>
                     )}
                   </div>
                   <div style={styles.backlogStoryRight}>
-                    {amIAdmin && !story.voted && index !== currentStoryIndex && (
-                      <button
-                        style={{ ...styles.button, ...styles.dangerSmallButton }}
-                        onClick={() => onRemoveStory(index)}
-                        title="Remove story"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                    {amIAdmin && (
+                      <>
+                        {!story.voted && index !== currentStoryIndex && (
+                          <button
+                            style={{ ...styles.button, ...styles.primarySmallButton }}
+                            onClick={() => onSelectStory(story.id)}
+                            title="Select story"
+                          >
+                            Select
+                          </button>
+                        )}
+                        <button
+                          style={{ ...styles.button, ...styles.secondarySmallButton }}
+                          onClick={() => handleMove(story.id, index - 1)}
+                          disabled={index === 0}
+                          aria-label={`Move ${story.name} up`}
+                          title="Move up"
+                        >
+                          <ChevronUp size={14} />
+                        </button>
+                        <button
+                          style={{ ...styles.button, ...styles.secondarySmallButton }}
+                          onClick={() => handleMove(story.id, index + 1)}
+                          disabled={index === stories.length - 1}
+                          aria-label={`Move ${story.name} down`}
+                          title="Move down"
+                        >
+                          <ChevronDown size={14} />
+                        </button>
+                        {!story.voted && index !== currentStoryIndex && (
+                          <button
+                            style={{ ...styles.button, ...styles.dangerSmallButton }}
+                            onClick={() => onRemoveStory(index)}
+                            title="Remove story"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>

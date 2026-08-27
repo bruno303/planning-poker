@@ -14,7 +14,9 @@ export type WebSocketMessageType =
   | 'add-story'
   | 'remove-story'
   | 'advance-story'
-  | 'prev-story';
+  | 'prev-story'
+  | 'select-story'
+  | 'reorder-story';
 
 export interface WebSocketMessage<T = any> {
   type: WebSocketMessageType;
@@ -51,7 +53,18 @@ export interface RemoveStoryPayload {
   storyIndex: number;
 }
 
+export interface SelectStoryPayload {
+  storyId: string;
+}
+
+export interface ReorderStoryPayload {
+  storyId: string;
+  targetIndex: number;
+  expectedBacklogVersion: number;
+}
+
 export interface Story {
+  id: string;
   name: string;
   result?: number;
   mostAppearingVotes: number[];
@@ -81,4 +94,5 @@ export interface RoomState {
   backlogMode?: boolean;
   stories?: Story[];
   currentStoryIndex?: number;
+  backlogVersion?: number;
 }

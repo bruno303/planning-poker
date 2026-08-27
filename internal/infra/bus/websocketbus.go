@@ -54,6 +54,14 @@ type (
 	RemoveStoryPayload struct {
 		StoryIndex int `json:"storyIndex"`
 	}
+	SelectStoryPayload struct {
+		StoryID string `json:"storyId"`
+	}
+	ReorderStoryPayload struct {
+		StoryID                string `json:"storyId"`
+		TargetIndex            int    `json:"targetIndex"`
+		ExpectedBacklogVersion int    `json:"expectedBacklogVersion"`
+	}
 	useCaseCall func(context.Context, WebSocketMessage) error
 
 	WebsocketBus struct {
@@ -390,6 +398,26 @@ func mapUsecases(usecases usecase.UseCasesFacade, clientID, roomID string) map[s
 			return usecases.PrevStory.Execute(ctx, usecase.PrevStoryCommand{
 				RoomID:   roomID,
 				SenderID: clientID,
+			})
+		},
+		"select-story": func(ctx context.Context, msg WebSocketMessage) error {
+			return withPayload(msg.Payload, func(payload SelectStoryPayload) error {
+				return usecases.SelectStory.Execute(ctx, usecase.SelectStoryCommand{
+					RoomID:   roomID,
+					SenderID: clientID,
+					StoryID:  payload.StoryID,
+				})
+			})
+		},
+		"reorder-story": func(ctx context.Context, msg WebSocketMessage) error {
+			return withPayload(msg.Payload, func(payload ReorderStoryPayload) error {
+				return usecases.ReorderStory.Execute(ctx, usecase.ReorderStoryCommand{
+					RoomID:                 roomID,
+					SenderID:               clientID,
+					StoryID:                payload.StoryID,
+					TargetIndex:            payload.TargetIndex,
+					ExpectedBacklogVersion: payload.ExpectedBacklogVersion,
+				})
 			})
 		},
 	}

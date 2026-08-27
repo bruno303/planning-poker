@@ -148,6 +148,8 @@ func newUsecases(hub domain.Hub, lockManager lock.LockManager, metric metric.Pla
 	removeStoryUseCase := usecase.NewRemoveStoryUseCase(hub, lockManager)
 	advanceStoryUseCase := usecase.NewAdvanceStoryUseCase(hub, lockManager)
 	prevStoryUseCase := usecase.NewPrevStoryUseCase(hub, lockManager)
+	selectStoryUseCase := usecase.NewSelectStoryUseCase(hub, lockManager)
+	reorderStoryUseCase := usecase.NewReorderStoryUseCase(hub, lockManager)
 
 	return usecase.UseCasesFacade{
 		UpdateName:        usecasedecorators.NewTraceableUseCase(updateNameUseCase, "UpdateNameUseCase", "UpdateName"),
@@ -168,6 +170,8 @@ func newUsecases(hub domain.Hub, lockManager lock.LockManager, metric metric.Pla
 		RemoveStory:       usecasedecorators.NewTraceableUseCase(removeStoryUseCase, "RemoveStoryUseCase", "RemoveStory"),
 		AdvanceStory:      usecasedecorators.NewTraceableUseCase(advanceStoryUseCase, "AdvanceStoryUseCase", "AdvanceStory"),
 		PrevStory:         usecasedecorators.NewTraceableUseCase(prevStoryUseCase, "PrevStoryUseCase", "PrevStory"),
+		SelectStory:       usecasedecorators.NewTraceableUseCase(selectStoryUseCase, "SelectStoryUseCase", "SelectStory"),
+		ReorderStory:      usecasedecorators.NewTraceableUseCase(reorderStoryUseCase, "ReorderStoryUseCase", "ReorderStory"),
 	}
 }
 

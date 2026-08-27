@@ -37,6 +37,8 @@ func TestMapUsecases_DispatchesSupportedCommands(t *testing.T) {
 	removeStory := usecase.NewMockUseCase[usecase.RemoveStoryCommand](ctrl)
 	advanceStory := usecase.NewMockUseCase[usecase.AdvanceStoryCommand](ctrl)
 	prevStory := usecase.NewMockUseCase[usecase.PrevStoryCommand](ctrl)
+	selectStory := usecase.NewMockUseCase[usecase.SelectStoryCommand](ctrl)
+	reorderStory := usecase.NewMockUseCase[usecase.ReorderStoryCommand](ctrl)
 
 	voteValue := "5"
 	commands := []struct {
@@ -147,6 +149,24 @@ func TestMapUsecases_DispatchesSupportedCommands(t *testing.T) {
 				prevStory.EXPECT().Execute(gomock.Any(), usecase.PrevStoryCommand{RoomID: roomID, SenderID: clientID}).Return(nil)
 			},
 		},
+		{
+			name: "select-story",
+			msg:  WebSocketMessage{Type: "select-story", Payload: SelectStoryPayload{StoryID: "story-1"}},
+			set: func() {
+				selectStory.EXPECT().Execute(gomock.Any(), usecase.SelectStoryCommand{RoomID: roomID, SenderID: clientID, StoryID: "story-1"}).Return(nil)
+			},
+		},
+		{
+			name: "reorder-story",
+			msg: WebSocketMessage{Type: "reorder-story", Payload: ReorderStoryPayload{
+				StoryID: "story-2", TargetIndex: 1, ExpectedBacklogVersion: 4,
+			}},
+			set: func() {
+				reorderStory.EXPECT().Execute(gomock.Any(), usecase.ReorderStoryCommand{
+					RoomID: roomID, SenderID: clientID, StoryID: "story-2", TargetIndex: 1, ExpectedBacklogVersion: 4,
+				}).Return(nil)
+			},
+		},
 	}
 
 	usecases := usecase.UseCasesFacade{
@@ -164,6 +184,8 @@ func TestMapUsecases_DispatchesSupportedCommands(t *testing.T) {
 		RemoveStory:       removeStory,
 		AdvanceStory:      advanceStory,
 		PrevStory:         prevStory,
+		SelectStory:       selectStory,
+		ReorderStory:      reorderStory,
 	}
 	calls := mapUsecases(usecases, clientID, roomID)
 

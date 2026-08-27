@@ -9,19 +9,25 @@ const CONFIRM_TEXT = 'This will remove the story backlog and keep only the curre
 const renderBacklogModal = (overrides: Partial<{
   stories: Story[];
   currentStoryIndex: number;
+  backlogVersion: number;
   amIAdmin: boolean;
   onClose: ReturnType<typeof vi.fn>;
   onAddStory: ReturnType<typeof vi.fn>;
   onRemoveStory: ReturnType<typeof vi.fn>;
+  onSelectStory: ReturnType<typeof vi.fn>;
+  onReorderStory: ReturnType<typeof vi.fn>;
   onDisableBacklog: ReturnType<typeof vi.fn>;
 }> = {}) => {
   const props = {
     stories: [] as Story[],
     currentStoryIndex: 0,
+    backlogVersion: 0,
     amIAdmin: false,
     onClose: vi.fn(),
     onAddStory: vi.fn(),
     onRemoveStory: vi.fn(),
+    onSelectStory: vi.fn(),
+    onReorderStory: vi.fn(),
     onDisableBacklog: vi.fn(),
     ...overrides,
   };
@@ -30,10 +36,13 @@ const renderBacklogModal = (overrides: Partial<{
     <BacklogModal
       stories={props.stories}
       currentStoryIndex={props.currentStoryIndex}
+      backlogVersion={props.backlogVersion}
       amIAdmin={props.amIAdmin}
       onClose={props.onClose}
       onAddStory={props.onAddStory}
       onRemoveStory={props.onRemoveStory}
+      onSelectStory={props.onSelectStory}
+      onReorderStory={props.onReorderStory}
       onDisableBacklog={props.onDisableBacklog}
     />,
   );
@@ -49,9 +58,9 @@ describe('BacklogModal', () => {
 
   it('renders story list with status tags', () => {
     const stories: Story[] = [
-      { name: 'Story one', mostAppearingVotes: [], voted: false },
-      { name: 'Story two', result: 6.5, mostAppearingVotes: [6, 7], voted: true },
-      { name: 'Story three', mostAppearingVotes: [], voted: false },
+      { id: 'story-1', name: 'Story one', mostAppearingVotes: [], voted: false },
+      { id: 'story-2', name: 'Story two', result: 6.5, mostAppearingVotes: [6, 7], voted: true },
+      { id: 'story-3', name: 'Story three', mostAppearingVotes: [], voted: false },
     ];
 
     renderBacklogModal({ stories, currentStoryIndex: 0 });
@@ -60,14 +69,16 @@ describe('BacklogModal', () => {
     expect(screen.getByText('Story two')).not.toBeNull();
     expect(screen.getByText('Story three')).not.toBeNull();
     expect(screen.getByText('Current')).not.toBeNull();
+    expect(screen.getByText('Pending')).not.toBeNull();
+    expect(screen.getByText('Estimated')).not.toBeNull();
     expect(screen.getByText('Avg: 6.5')).not.toBeNull();
   });
 
   it('renders admin controls when amIAdmin is true', () => {
     const stories: Story[] = [
-      { name: 'Current story', mostAppearingVotes: [], voted: false },
-      { name: 'Voted story', result: 3, mostAppearingVotes: [], voted: true },
-      { name: 'Pending story', mostAppearingVotes: [], voted: false },
+      { id: 'story-1', name: 'Current story', mostAppearingVotes: [], voted: false },
+      { id: 'story-2', name: 'Voted story', result: 3, mostAppearingVotes: [], voted: true },
+      { id: 'story-3', name: 'Pending story', mostAppearingVotes: [], voted: false },
     ];
 
     renderBacklogModal({ stories, currentStoryIndex: 0, amIAdmin: true });
@@ -76,13 +87,16 @@ describe('BacklogModal', () => {
     expect(screen.getByRole('button', { name: 'Add' })).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Disable Backlog' })).not.toBeNull();
     expect(screen.getAllByTitle('Remove story')).toHaveLength(1);
+    expect(screen.getAllByTitle('Select story')).toHaveLength(1);
+    expect(screen.getAllByTitle('Move up')).toHaveLength(3);
+    expect(screen.getAllByTitle('Move down')).toHaveLength(3);
   });
 
   it('hides admin controls when amIAdmin is false', () => {
     const stories: Story[] = [
-      { name: 'Current story', mostAppearingVotes: [], voted: false },
-      { name: 'Voted story', result: 3, mostAppearingVotes: [], voted: true },
-      { name: 'Pending story', mostAppearingVotes: [], voted: false },
+      { id: 'story-1', name: 'Current story', mostAppearingVotes: [], voted: false },
+      { id: 'story-2', name: 'Voted story', result: 3, mostAppearingVotes: [], voted: true },
+      { id: 'story-3', name: 'Pending story', mostAppearingVotes: [], voted: false },
     ];
 
     renderBacklogModal({ stories, currentStoryIndex: 0, amIAdmin: false });
@@ -91,6 +105,8 @@ describe('BacklogModal', () => {
     expect(screen.queryByRole('button', { name: 'Add' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Disable Backlog' })).toBeNull();
     expect(screen.queryAllByTitle('Remove story')).toHaveLength(0);
+    expect(screen.queryAllByTitle('Select story')).toHaveLength(0);
+    expect(screen.queryAllByTitle('Move up')).toHaveLength(0);
   });
 
   it('calls onAddStory with trimmed story on Add click and clears input', () => {
@@ -126,9 +142,9 @@ describe('BacklogModal', () => {
 
   it('calls onRemoveStory with correct index', () => {
     const stories: Story[] = [
-      { name: 'Current story', mostAppearingVotes: [], voted: false },
-      { name: 'Voted story', result: 3, mostAppearingVotes: [], voted: true },
-      { name: 'Pending story', mostAppearingVotes: [], voted: false },
+      { id: 'story-1', name: 'Current story', mostAppearingVotes: [], voted: false },
+      { id: 'story-2', name: 'Voted story', result: 3, mostAppearingVotes: [], voted: true },
+      { id: 'story-3', name: 'Pending story', mostAppearingVotes: [], voted: false },
     ];
 
     const { onRemoveStory } = renderBacklogModal({ stories, currentStoryIndex: 0, amIAdmin: true });
@@ -136,6 +152,51 @@ describe('BacklogModal', () => {
     fireEvent.click(screen.getAllByTitle('Remove story')[0]);
 
     expect(onRemoveStory).toHaveBeenCalledWith(2);
+  });
+
+  it('selects pending stories by stable id', () => {
+    const stories: Story[] = [
+      { id: 'story-1', name: 'Current story', mostAppearingVotes: [], voted: false },
+      { id: 'story-2', name: 'Pending story', mostAppearingVotes: [], voted: false },
+    ];
+    const { onSelectStory } = renderBacklogModal({ stories, amIAdmin: true });
+
+    fireEvent.click(screen.getByTitle('Select story'));
+
+    expect(onSelectStory).toHaveBeenCalledWith('story-2');
+  });
+
+  it('sends move button commands with the current backlog version', () => {
+    const stories: Story[] = [
+      { id: 'story-1', name: 'Current story', mostAppearingVotes: [], voted: false },
+      { id: 'story-2', name: 'Pending story', mostAppearingVotes: [], voted: false },
+    ];
+    const { onReorderStory } = renderBacklogModal({ stories, amIAdmin: true, backlogVersion: 4 });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move Pending story up' }));
+
+    expect(onReorderStory).toHaveBeenCalledWith('story-2', 0, 4);
+  });
+
+  it('supports native drag and drop with the current backlog version', () => {
+    const stories: Story[] = [
+      { id: 'story-1', name: 'Current story', mostAppearingVotes: [], voted: false },
+      { id: 'story-2', name: 'Pending story', mostAppearingVotes: [], voted: false },
+    ];
+    const { onReorderStory } = renderBacklogModal({ stories, amIAdmin: true, backlogVersion: 7 });
+    const currentRow = screen.getByText('Current story').parentElement?.parentElement as HTMLElement;
+    const pendingRow = screen.getByText('Pending story').parentElement?.parentElement as HTMLElement;
+    const dataTransfer = {
+      effectAllowed: '',
+      dropEffect: '',
+      setData: vi.fn(),
+      getData: vi.fn().mockReturnValue('story-2'),
+    };
+
+    fireEvent.dragStart(pendingRow, { dataTransfer });
+    fireEvent.drop(currentRow, { dataTransfer });
+
+    expect(onReorderStory).toHaveBeenCalledWith('story-2', 0, 7);
   });
 
   it('handles disable backlog confirm flow', () => {

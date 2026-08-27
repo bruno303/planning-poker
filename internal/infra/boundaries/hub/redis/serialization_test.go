@@ -5,6 +5,7 @@ import (
 	"planning-poker/internal/infra/boundaries/hub/clientcollection"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/samber/lo"
 )
 
@@ -20,6 +21,14 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 	originalRoom.VoteRange = lo.ToPtr(5)
 	originalRoom.VoteSpread = lo.ToPtr(2)
 	originalRoom.NonNumericVoteCount = 1
+	originalRoom.BacklogVersion = 6
+	originalRoom.Stories = []entity.Story{{
+		ID:                 "story-1",
+		Name:               "Backlog story",
+		Result:             lo.ToPtr(float32(8)),
+		MostAppearingVotes: []int{8},
+		Voted:              true,
+	}}
 
 	// Add some clients
 	client1 := originalRoom.NewClient("client-1")
@@ -69,6 +78,15 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 	if deserializedRoom.NonNumericVoteCount != originalRoom.NonNumericVoteCount {
 		t.Errorf("Expected non-numeric vote count %d, got %d", originalRoom.NonNumericVoteCount, deserializedRoom.NonNumericVoteCount)
 	}
+	if deserializedRoom.BacklogVersion != originalRoom.BacklogVersion {
+		t.Errorf("Expected backlog version %d, got %d", originalRoom.BacklogVersion, deserializedRoom.BacklogVersion)
+	}
+	if len(deserializedRoom.Stories) != 1 || deserializedRoom.Stories[0].ID != "story-1" {
+		t.Fatalf("story ID was not preserved: %+v", deserializedRoom.Stories)
+	}
+	if deserializedRoom.Stories[0].Result == nil || *deserializedRoom.Stories[0].Result != 8 || !deserializedRoom.Stories[0].Voted {
+		t.Fatalf("story estimate was not preserved: %+v", deserializedRoom.Stories[0])
+	}
 
 	// Verify client count
 	if deserializedRoom.Clients.Count() != originalRoom.Clients.Count() {
@@ -103,5 +121,23 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 	}
 	if deserializedClient2.CurrentVote == nil || *deserializedClient2.CurrentVote != "5" {
 		t.Errorf("Expected client 2 vote to be 5, got %v", lo.FromPtr(deserializedClient2.CurrentVote))
+	}
+}
+
+func TestDeserializeRoomBackfillsLegacyStoryIDs(t *testing.T) {
+	data := []byte(`{"id":"room-legacy","backlogMode":true,"stories":[{"name":"Legacy story","mostAppearingVotes":[],"voted":false}]}`)
+
+	room, err := DeserializeRoom(data, clientcollection.New())
+	if err != nil {
+		t.Fatalf("DeserializeRoom returned error: %v", err)
+	}
+	if room.BacklogVersion != 0 {
+		t.Fatalf("legacy backlog version = %d, want 0", room.BacklogVersion)
+	}
+	if len(room.Stories) != 1 || room.Stories[0].ID == "" {
+		t.Fatalf("legacy story ID was not backfilled: %+v", room.Stories)
+	}
+	if _, err := uuid.Parse(room.Stories[0].ID); err != nil {
+		t.Fatalf("backfilled story ID is not a UUID: %v", err)
 	}
 }

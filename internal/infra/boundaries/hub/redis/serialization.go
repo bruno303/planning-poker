@@ -5,10 +5,12 @@ import (
 	"planning-poker/internal/domain/entity"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
+	"github.com/google/uuid"
 )
 
 type (
 	SerializedStory struct {
+		ID                 string   `json:"id,omitempty"`
 		Name               string   `json:"name"`
 		Result             *float32 `json:"result,omitempty"`
 		MostAppearingVotes []int    `json:"mostAppearingVotes"`
@@ -30,6 +32,7 @@ type (
 		BacklogMode         bool               `json:"backlogMode"`
 		Stories             []SerializedStory  `json:"stories,omitempty"`
 		CurrentStoryIndex   int                `json:"currentStoryIndex"`
+		BacklogVersion      int                `json:"backlogVersion"`
 	}
 	SerializedClient struct {
 		ID          string  `json:"id"`
@@ -85,6 +88,7 @@ func SerializeRoom(room *entity.Room) ([]byte, error) {
 		BacklogMode:         room.BacklogMode,
 		Stories:             serializeStories(room.Stories),
 		CurrentStoryIndex:   room.CurrentStoryIndex,
+		BacklogVersion:      room.BacklogVersion,
 	}
 
 	return json.Marshal(serialized)
@@ -94,6 +98,7 @@ func serializeStories(stories []entity.Story) []SerializedStory {
 	result := make([]SerializedStory, len(stories))
 	for i, s := range stories {
 		result[i] = SerializedStory{
+			ID:                 s.ID,
 			Name:               s.Name,
 			Result:             s.Result,
 			MostAppearingVotes: s.MostAppearingVotes,
@@ -125,6 +130,7 @@ func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 		BacklogMode:         serialized.BacklogMode,
 		Stories:             deserializeStories(serialized.Stories),
 		CurrentStoryIndex:   serialized.CurrentStoryIndex,
+		BacklogVersion:      serialized.BacklogVersion,
 	}
 
 	for _, sc := range serialized.Clients {
@@ -139,6 +145,7 @@ func deserializeStories(stories []SerializedStory) []entity.Story {
 	result := make([]entity.Story, len(stories))
 	for i, s := range stories {
 		result[i] = entity.Story{
+			ID:                 storyID(s.ID),
 			Name:               s.Name,
 			Result:             s.Result,
 			MostAppearingVotes: s.MostAppearingVotes,
@@ -146,4 +153,11 @@ func deserializeStories(stories []SerializedStory) []entity.Story {
 		}
 	}
 	return result
+}
+
+func storyID(id string) string {
+	if id != "" {
+		return id
+	}
+	return uuid.NewString()
 }

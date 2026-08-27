@@ -9,8 +9,10 @@ import LoadingSpinner from '@/components/loadingSpinner/loadingSpinner';
 import {
   AddStoryPayload,
   ConsensusLevel,
+  ReorderStoryPayload,
   RemoveStoryPayload,
   RoomState,
+  SelectStoryPayload,
   Story,
   ToggleOwnerPayload,
   ToggleSpectatorPayload,
@@ -79,6 +81,7 @@ export default function PlanningPoker() {
   const [backlogMode, setBacklogMode] = useState(false);
   const [stories, setStories] = useState<Story[]>([]);
   const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
+  const [backlogVersion, setBacklogVersion] = useState(0);
   const [showBacklogModal, setShowBacklogModal] = useState(false);
   const deliberateDisconnect = useRef(false);
   const editingStoryRef = useRef('');
@@ -213,6 +216,16 @@ export default function PlanningPoker() {
     sendMessage<RemoveStoryPayload>({ type: 'remove-story', payload });
   };
 
+  const handleSelectStory = (storyId: string) => {
+    const payload: SelectStoryPayload = { storyId };
+    sendMessage<SelectStoryPayload>({ type: 'select-story', payload });
+  };
+
+  const handleReorderStory = (storyId: string, targetIndex: number, expectedBacklogVersion: number) => {
+    const payload: ReorderStoryPayload = { storyId, targetIndex, expectedBacklogVersion };
+    sendMessage<ReorderStoryPayload>({ type: 'reorder-story', payload });
+  };
+
   const handleStartStoryEdit = () => {
     editingStoryRef.current = currentStory;
     setIsEditingStory(true);
@@ -320,6 +333,7 @@ export default function PlanningPoker() {
           setBacklogMode(roomState.backlogMode ?? false);
           setStories(roomState.stories ?? []);
           setCurrentStoryIndex(roomState.currentStoryIndex ?? 0);
+          setBacklogVersion(roomState.backlogVersion ?? 0);
 
         } else if (data.type === 'update-client-id') {
           setClientId(data.clientId);
@@ -777,10 +791,13 @@ export default function PlanningPoker() {
             <BacklogModal
               stories={stories}
               currentStoryIndex={currentStoryIndex}
+              backlogVersion={backlogVersion}
               amIAdmin={amIAdmin}
               onClose={() => setShowBacklogModal(false)}
               onAddStory={handleAddStory}
               onRemoveStory={handleRemoveStory}
+              onSelectStory={handleSelectStory}
+              onReorderStory={handleReorderStory}
               onDisableBacklog={() => {
                 setShowBacklogModal(false);
                 handleToggleBacklogMode();

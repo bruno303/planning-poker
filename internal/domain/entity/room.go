@@ -41,6 +41,7 @@ type (
 		BacklogMode         bool
 		Stories             []Story
 		CurrentStoryIndex   int
+		BacklogVersion      int
 	}
 )
 
@@ -117,13 +118,17 @@ func (r *Room) ToggleBacklogMode(ctx context.Context, clientID string) error {
 	if !r.BacklogMode {
 		r.BacklogMode = true
 		if r.CurrentStory != "" {
-			r.Stories = []Story{{Name: r.CurrentStory}}
+			r.Stories = []Story{{ID: uuid.NewString(), Name: r.CurrentStory}}
 			r.CurrentStoryIndex = 0
+			r.BacklogVersion++
 		}
 	} else {
 		r.BacklogMode = false
 		if name := r.getCurrentStoryName(); name != "" {
 			r.CurrentStory = name
+		}
+		if len(r.Stories) > 0 {
+			r.BacklogVersion++
 		}
 		r.Stories = nil
 		r.CurrentStoryIndex = 0
@@ -145,7 +150,8 @@ func (r *Room) AddStory(ctx context.Context, clientID string, name string) error
 		r.BacklogMode = true
 	}
 
-	r.Stories = append(r.Stories, Story{Name: name})
+	r.Stories = append(r.Stories, Story{ID: uuid.NewString(), Name: name})
+	r.BacklogVersion++
 	if len(r.Stories) == 1 {
 		r.CurrentStoryIndex = 0
 	}
@@ -166,6 +172,8 @@ func (r *Room) RemoveStory(ctx context.Context, clientID string, index int) erro
 		return fmt.Errorf("story index %d out of range", index)
 	}
 
+	r.BacklogVersion++
+
 	if index == r.CurrentStoryIndex {
 		if len(r.Stories) == 1 {
 			r.CurrentStoryIndex = 0
@@ -185,6 +193,105 @@ func (r *Room) RemoveStory(ctx context.Context, clientID string, index int) erro
 	r.Stories = append(r.Stories[:index], r.Stories[index+1:]...)
 
 	return nil
+}
+
+// SelectStory selects a pending story and starts a fresh voting round.
+func (r *Room) SelectStory(ctx context.Context, clientID string, storyID string) error {
+	client, ok := r.FindClient(clientID)
+	if !ok {
+		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+	}
+	if !client.IsOwner {
+		return fmt.Errorf("only the room owner can select a story")
+	}
+	if storyID == "" {
+		return fmt.Errorf("story ID cannot be empty")
+	}
+
+	index := r.storyIndexByID(storyID)
+	if index == -1 {
+		return fmt.Errorf("story %s not found in room %s", storyID, r.ID)
+	}
+	if index == r.CurrentStoryIndex {
+		return fmt.Errorf("story %s is already the current story", storyID)
+	}
+	if r.Stories[index].Voted {
+		return fmt.Errorf("estimated story %s cannot be selected", storyID)
+	}
+
+	r.CurrentStoryIndex = index
+	r.reveal(false)
+	r.Clients.ForEach(func(c *Client) {
+		c.Vote(ctx, nil)
+	})
+
+	return nil
+}
+
+// ReorderStory moves a story to targetIndex when the caller has the current
+// backlog version. The current story remains identified by its stable ID.
+func (r *Room) ReorderStory(ctx context.Context, clientID string, storyID string, targetIndex int, expectedBacklogVersion int) error {
+	client, ok := r.FindClient(clientID)
+	if !ok {
+		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+	}
+	if !client.IsOwner {
+		return fmt.Errorf("only the room owner can reorder stories")
+	}
+	if storyID == "" {
+		return fmt.Errorf("story ID cannot be empty")
+	}
+	if expectedBacklogVersion != r.BacklogVersion {
+		return fmt.Errorf("stale backlog version %d, current version is %d", expectedBacklogVersion, r.BacklogVersion)
+	}
+	if targetIndex < 0 || targetIndex >= len(r.Stories) {
+		return fmt.Errorf("target story index %d out of range", targetIndex)
+	}
+
+	storyIndex := r.storyIndexByID(storyID)
+	if storyIndex == -1 {
+		return fmt.Errorf("story %s not found in room %s", storyID, r.ID)
+	}
+	if storyIndex == targetIndex {
+		return nil
+	}
+
+	currentStoryIndex := r.CurrentStoryIndex
+	currentStoryID := ""
+	if currentStoryIndex >= 0 && currentStoryIndex < len(r.Stories) {
+		currentStoryID = r.Stories[currentStoryIndex].ID
+	}
+
+	story := r.Stories[storyIndex]
+	r.Stories = append(r.Stories[:storyIndex], r.Stories[storyIndex+1:]...)
+	r.Stories = slices.Insert(r.Stories, targetIndex, story)
+	if currentStoryID != "" {
+		r.CurrentStoryIndex = r.storyIndexByID(currentStoryID)
+	} else {
+		if currentStoryIndex == storyIndex {
+			currentStoryIndex = targetIndex
+		} else {
+			if storyIndex < currentStoryIndex {
+				currentStoryIndex--
+			}
+			if targetIndex <= currentStoryIndex {
+				currentStoryIndex++
+			}
+		}
+		r.CurrentStoryIndex = currentStoryIndex
+	}
+	r.BacklogVersion++
+
+	return nil
+}
+
+func (r *Room) storyIndexByID(storyID string) int {
+	for index, story := range r.Stories {
+		if story.ID == storyID {
+			return index
+		}
+	}
+	return -1
 }
 
 func (r *Room) AdvanceToNextStory(ctx context.Context, clientID string) error {

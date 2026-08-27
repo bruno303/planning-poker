@@ -20,5 +20,7 @@ type (
 		RemoveStory       UseCase[RemoveStoryCommand]
 		AdvanceStory      UseCase[AdvanceStoryCommand]
 		PrevStory         UseCase[PrevStoryCommand]
+		SelectStory       UseCase[SelectStoryCommand]
+		ReorderStory      UseCase[ReorderStoryCommand]
 	}
 )

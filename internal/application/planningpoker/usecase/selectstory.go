@@ -1,0 +1,44 @@
+package usecase
+
+import (
+	"context"
+
+	"planning-poker/internal/application/lock"
+	"planning-poker/internal/application/planningpoker/usecase/dto"
+	"planning-poker/internal/domain"
+)
+
+type (
+	SelectStoryCommand struct {
+		RoomID   string
+		SenderID string
+		StoryID  string
+	}
+	SelectStoryUseCase struct {
+		hub         domain.Hub
+		lockManager lock.LockManager
+	}
+)
+
+var _ UseCase[SelectStoryCommand] = (*SelectStoryUseCase)(nil)
+
+func NewSelectStoryUseCase(hub domain.Hub, lockManager lock.LockManager) SelectStoryUseCase {
+	return SelectStoryUseCase{hub: hub, lockManager: lockManager}
+}
+
+func (uc SelectStoryUseCase) Execute(ctx context.Context, cmd SelectStoryCommand) error {
+	return uc.lockManager.ExecuteWithLock(ctx, cmd.RoomID, func(ctx context.Context) error {
+		room, err := uc.hub.LoadRoom(ctx, cmd.RoomID)
+		if err != nil {
+			return err
+		}
+
+		if err := room.SelectStory(ctx, cmd.SenderID, cmd.StoryID); err != nil {
+			return err
+		}
+		if err := uc.hub.SaveRoom(ctx, room); err != nil {
+			return err
+		}
+		return uc.hub.BroadcastToRoom(ctx, room.ID, dto.NewRoomStateCommand(room))
+	})
+}
