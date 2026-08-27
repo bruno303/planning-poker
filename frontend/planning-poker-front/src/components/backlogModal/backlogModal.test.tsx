@@ -78,6 +78,12 @@ describe('BacklogModal', () => {
     expect(screen.getAllByTitle('Remove story')).toHaveLength(1);
   });
 
+  it('focuses the story input when opened by an administrator', () => {
+    renderBacklogModal({ amIAdmin: true });
+
+    expect(document.activeElement).toBe(screen.getByPlaceholderText('Enter story name...'));
+  });
+
   it('hides admin controls when amIAdmin is false', () => {
     const stories: Story[] = [
       { name: 'Current story', mostAppearingVotes: [], voted: false },
