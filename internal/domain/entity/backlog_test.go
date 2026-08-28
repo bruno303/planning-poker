@@ -186,6 +186,34 @@ func TestRoomSelectStoryResetsActiveVotingAndPreservesEstimates(t *testing.T) {
 	}
 }
 
+func TestRoomAutomaticRevealRecordsCurrentStoryEstimate(t *testing.T) {
+	room, owner, participant := newBacklogRoom([]entity.Story{
+		{ID: "current", Name: "Current"},
+		{ID: "pending", Name: "Pending"},
+	}, 0, 0)
+
+	if err := room.Vote(context.Background(), owner.ID, lo.ToPtr("5")); err != nil {
+		t.Fatalf("owner Vote returned error: %v", err)
+	}
+	if err := room.Vote(context.Background(), participant.ID, lo.ToPtr("8")); err != nil {
+		t.Fatalf("participant Vote returned error: %v", err)
+	}
+
+	if !room.Reveal || !room.Stories[0].Voted {
+		t.Fatalf("automatic reveal did not estimate current story: %+v", room.Stories[0])
+	}
+	if room.Stories[0].Result == nil || *room.Stories[0].Result != 6.5 {
+		t.Fatalf("current story result = %v, want 6.5", room.Stories[0].Result)
+	}
+
+	if err := room.ReorderStory(context.Background(), owner.ID, "current", 1, 0); err != nil {
+		t.Fatalf("ReorderStory returned error: %v", err)
+	}
+	if !room.Stories[1].Voted || room.Stories[1].Result == nil || *room.Stories[1].Result != 6.5 {
+		t.Fatalf("estimated current story changed after reorder: %+v", room.Stories[1])
+	}
+}
+
 func TestRoomSelectStoryRejectsCurrentEstimatedAndNonOwner(t *testing.T) {
 	tests := []struct {
 		name     string

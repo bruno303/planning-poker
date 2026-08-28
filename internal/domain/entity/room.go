@@ -488,12 +488,6 @@ func (r *Room) ToggleReveal(ctx context.Context, clientID string) error {
 
 	r.reveal(!r.Reveal)
 
-	if r.Reveal && r.BacklogMode && r.CurrentStoryIndex >= 0 && r.CurrentStoryIndex < len(r.Stories) {
-		r.Stories[r.CurrentStoryIndex].Result = r.Result
-		r.Stories[r.CurrentStoryIndex].MostAppearingVotes = r.MostAppearingVotes
-		r.Stories[r.CurrentStoryIndex].Voted = true
-	}
-
 	return nil
 }
 
@@ -516,6 +510,11 @@ func (r *Room) reveal(reveal bool) {
 
 	r.Consensus, r.LowestVote, r.HighestVote, r.VoteRange, r.VoteSpread = calculateConsensus(metrics.values)
 	r.NonNumericVoteCount = metrics.nonNumericCount
+	if r.BacklogMode && r.CurrentStoryIndex >= 0 && r.CurrentStoryIndex < len(r.Stories) {
+		r.Stories[r.CurrentStoryIndex].Result = r.Result
+		r.Stories[r.CurrentStoryIndex].MostAppearingVotes = r.MostAppearingVotes
+		r.Stories[r.CurrentStoryIndex].Voted = true
+	}
 }
 
 type voteMetrics struct {
