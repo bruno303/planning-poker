@@ -1,0 +1,139 @@
+name: Planning Poker Staging Frontend Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Branch, tag, or commit to build and deploy
+        required: true
+        default: main
+        type: string
+
+concurrency:
+  group: planning-poker-staging-frontend
+  cancel-in-progress: false
+
+env:
+  APP_DIR: frontend/planning-poker-front
+  DOCKER_REPO: bruno303/planning-poker-frontend
+  DEPLOYMENT_REPOSITORY: bruno303/study-topics
+  DEPLOYMENT_BRANCH: main
+  DEPLOYMENT_MANIFEST: self_hosted/k8s/planning-poker/staging/frontend/deployment.yaml
+
+jobs:
+  build-and-deploy:
+    name: Build and deploy frontend to staging
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout source ref
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.source_ref }}
+          fetch-depth: 1
+
+      - name: Resolve source commit
+        id: source
+        run: |
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          echo "sha=${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
+          echo "Building frontend from $SOURCE_SHA"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ env.APP_DIR }}
+          build-args: |
+            NEXT_PUBLIC_BACKEND_URL=${{ vars.STAGING_BACKEND_URL }}
+            NEXT_PUBLIC_WEBSOCKET_URL=${{ vars.STAGING_WEBSOCKET_URL }}
+          push: true
+          tags: ${{ env.DOCKER_REPO }}:${{ steps.source.outputs.sha }}
+
+      - name: Checkout deployment repository
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ env.DEPLOYMENT_REPOSITORY }}
+          ref: ${{ env.DEPLOYMENT_BRANCH }}
+          token: ${{ secrets.PLANNING_POKER_PAT }}
+          path: deployment-config
+
+      - name: Update staging frontend image
+        working-directory: deployment-config
+        env:
+          IMAGE: ${{ env.DOCKER_REPO }}:${{ steps.source.outputs.sha }}
+        run: |
+          test -f "$DEPLOYMENT_MANIFEST"
+          yq eval '.spec.template.spec.containers[0].image = strenv(IMAGE)' -i "$DEPLOYMENT_MANIFEST"
+
+      - name: Detect deployment change
+        id: change
+        working-directory: deployment-config
+        run: |
+          if git diff --quiet -- "$DEPLOYMENT_MANIFEST"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Staging frontend already references the requested image."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create deployment pull request
+        id: pull-request
+        if: steps.change.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.PLANNING_POKER_PAT }}
+          path: deployment-config
+          branch: bump/staging/frontend-${{ steps.source.outputs.short_sha }}-${{ github.run_id }}
+          base: ${{ env.DEPLOYMENT_BRANCH }}
+          title: "[staging] Frontend ${{ steps.source.outputs.short_sha }}"
+          body: |
+            Update the staging frontend image.
+
+            - Source repository: `${{ github.repository }}`
+            - Source ref: `${{ inputs.source_ref }}`
+            - Source commit: `${{ steps.source.outputs.sha }}`
+            - Image: `${{ env.DOCKER_REPO }}:${{ steps.source.outputs.sha }}`
+            - Environment: `staging`
+          commit-message: "chore(staging/frontend): deploy ${{ steps.source.outputs.short_sha }}"
+          delete-branch: true
+
+      - name: Enable native squash auto-merge
+        if: steps.change.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PLANNING_POKER_PAT }}
+        run: |
+          test -n "${{ steps.pull-request.outputs.pull-request-url }}"
+          gh pr merge "${{ steps.pull-request.outputs.pull-request-url }}" \
+            --repo "$DEPLOYMENT_REPOSITORY" \
+            --auto \
+            --squash \
+            --delete-branch
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Staging frontend deployment"
+            echo
+            echo "- Source ref: `${{ inputs.source_ref }}`"
+            echo "- Source commit: `${{ steps.source.outputs.sha }}`"
+            echo "- Image: `${{ env.DOCKER_REPO }}:${{ steps.source.outputs.sha }}`"
+            if [ "${{ steps.change.outputs.changed }}" = "true" ]; then
+              echo "- Deployment PR: ${{ steps.pull-request.outputs.pull-request-url }}"
+              echo "- Auto-merge: requested"
+            else
+              echo "- Deployment PR: not needed; image already deployed"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
