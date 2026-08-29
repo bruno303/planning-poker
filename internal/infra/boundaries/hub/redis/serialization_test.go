@@ -55,7 +55,14 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 		t.Fatalf("Failed to deserialize room: %v", err)
 	}
 
-	// Verify room properties
+	assertSerializedRoomProperties(t, originalRoom, deserializedRoom)
+	assertSerializedStories(t, deserializedRoom)
+	assertSerializedClients(t, originalRoom, deserializedRoom)
+}
+
+func assertSerializedRoomProperties(t *testing.T, originalRoom, deserializedRoom *entity.Room) {
+	t.Helper()
+
 	if deserializedRoom.ID != originalRoom.ID {
 		t.Errorf("Expected room ID %s, got %s", originalRoom.ID, deserializedRoom.ID)
 	}
@@ -77,19 +84,26 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 	if deserializedRoom.NonNumericVoteCount != originalRoom.NonNumericVoteCount {
 		t.Errorf("Expected non-numeric vote count %d, got %d", originalRoom.NonNumericVoteCount, deserializedRoom.NonNumericVoteCount)
 	}
+}
+
+func assertSerializedStories(t *testing.T, deserializedRoom *entity.Room) {
+	t.Helper()
+
 	if len(deserializedRoom.Stories) != 1 || deserializedRoom.Stories[0].ID != "story-1" {
 		t.Fatalf("story ID was not preserved: %+v", deserializedRoom.Stories)
 	}
 	if deserializedRoom.Stories[0].Result == nil || *deserializedRoom.Stories[0].Result != 8 || !deserializedRoom.Stories[0].Voted {
 		t.Fatalf("story estimate was not preserved: %+v", deserializedRoom.Stories[0])
 	}
+}
 
-	// Verify client count
+func assertSerializedClients(t *testing.T, originalRoom, deserializedRoom *entity.Room) {
+	t.Helper()
+
 	if deserializedRoom.Clients.Count() != originalRoom.Clients.Count() {
 		t.Errorf("Expected %d clients, got %d", originalRoom.Clients.Count(), deserializedRoom.Clients.Count())
 	}
 
-	// Verify client properties
 	deserializedClient1, ok := deserializedRoom.Clients.Filter(func(c *entity.Client) bool {
 		return c.ID == "client-1"
 	}).First()

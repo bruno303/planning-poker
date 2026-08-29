@@ -135,11 +135,13 @@ jobs:
 
       - name: Summary
         if: always()
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
         run: |
           {
             echo "## Staging backend deployment"
             echo
-            echo "- Source ref: `${{ inputs.source_ref }}`"
+            echo "- Source ref: \`$SOURCE_REF\`"
             echo "- Source commit: `${{ steps.source.outputs.sha }}`"
             echo "- Image: `${{ env.DOCKER_REPO }}:${{ steps.source.outputs.sha }}`"
             if [ "${{ steps.change.outputs.changed }}" = "true" ]; then
