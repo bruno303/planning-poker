@@ -54,6 +54,7 @@ export default function BacklogModal({
     }
     onAddStory(trimmed);
     setNewStoryInput('');
+    newStoryInputRef.current?.focus();
   };
 
   const handleDisableBacklog = () => {

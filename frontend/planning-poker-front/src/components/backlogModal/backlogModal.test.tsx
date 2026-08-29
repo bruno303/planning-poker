@@ -103,11 +103,14 @@ describe('BacklogModal', () => {
     const { onAddStory } = renderBacklogModal({ amIAdmin: true });
 
     const input = screen.getByPlaceholderText('Enter story name...');
+    const addButton = screen.getByRole('button', { name: 'Add' });
     fireEvent.change(input, { target: { value: '  New Story  ' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    addButton.focus();
+    fireEvent.click(addButton);
 
     expect(onAddStory).toHaveBeenCalledWith('New Story');
     expect((input as HTMLInputElement).value).toBe('');
+    expect(document.activeElement).toBe(input);
   });
 
   it('calls onAddStory on Enter key', () => {
