@@ -246,23 +246,28 @@ func TestCalculateConsensus(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			consensus, lowest, highest, voteRange, voteSpread := calculateConsensus(tt.votes)
-
-			if consensus != tt.consensus {
-				t.Errorf("consensus = %q, want %q", consensus, tt.consensus)
-			}
-			if !reflect.DeepEqual(lowest, tt.lowest) {
-				t.Errorf("lowest = %v, want %v", lowest, tt.lowest)
-			}
-			if !reflect.DeepEqual(highest, tt.highest) {
-				t.Errorf("highest = %v, want %v", highest, tt.highest)
-			}
-			if !reflect.DeepEqual(voteRange, tt.voteRange) {
-				t.Errorf("vote range = %v, want %v", voteRange, tt.voteRange)
-			}
-			if !reflect.DeepEqual(voteSpread, tt.voteSpread) {
-				t.Errorf("vote spread = %v, want %v", voteSpread, tt.voteSpread)
-			}
+			assertConsensus(t, consensus, lowest, highest, voteRange, voteSpread, tt.consensus, tt.lowest, tt.highest, tt.voteRange, tt.voteSpread)
 		})
+	}
+}
+
+func assertConsensus(t *testing.T, consensus string, lowest, highest, voteRange, voteSpread *int, wantConsensus string, wantLowest, wantHighest, wantVoteRange, wantVoteSpread *int) {
+	t.Helper()
+
+	if consensus != wantConsensus {
+		t.Errorf("consensus = %q, want %q", consensus, wantConsensus)
+	}
+	if !reflect.DeepEqual(lowest, wantLowest) {
+		t.Errorf("lowest = %v, want %v", lowest, wantLowest)
+	}
+	if !reflect.DeepEqual(highest, wantHighest) {
+		t.Errorf("highest = %v, want %v", highest, wantHighest)
+	}
+	if !reflect.DeepEqual(voteRange, wantVoteRange) {
+		t.Errorf("vote range = %v, want %v", voteRange, wantVoteRange)
+	}
+	if !reflect.DeepEqual(voteSpread, wantVoteSpread) {
+		t.Errorf("vote spread = %v, want %v", voteSpread, wantVoteSpread)
 	}
 }
 
