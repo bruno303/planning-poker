@@ -9,8 +9,10 @@ import LoadingSpinner from '@/components/loadingSpinner/loadingSpinner';
 import {
   AddStoryPayload,
   ConsensusLevel,
+  ReorderStoryPayload,
   RemoveStoryPayload,
   RoomState,
+  SelectStoryPayload,
   Story,
   ToggleOwnerPayload,
   ToggleSpectatorPayload,
@@ -23,7 +25,7 @@ import ParticipantIdBadge from '@/components/participantIdBadge/participantIdBad
 import { useLogger } from '@/context/logger/loggerContext';
 import { useRoom } from '@/context/room/roomContext';
 import { useToast } from '@/context/toast/toastContext';
-import { ChevronLeft, ChevronRight, Eye, EyeOff, List, Repeat, RotateCcw, Shield, Users, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye, EyeOff, List, Repeat, Shield, Users, X } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import Header from './page.header';
@@ -176,11 +178,6 @@ export default function PlanningPoker() {
     sendMessage<any>({ type: 'reveal-votes', payload });
   };
 
-  const handleNewVoting = () => {
-    const payload: any = null;
-    sendMessage<any>({ type: 'new-voting', payload });
-  };
-
   const handleToggleSpectator = (participantId: string) => {
     const payload: ToggleSpectatorPayload = { targetClientId: participantId };
     sendMessage<ToggleSpectatorPayload>({ type: 'toggle-spectator', payload });
@@ -208,9 +205,19 @@ export default function PlanningPoker() {
     sendMessage<AddStoryPayload>({ type: 'add-story', payload });
   };
 
-  const handleRemoveStory = (index: number) => {
-    const payload: RemoveStoryPayload = { storyIndex: index };
+  const handleRemoveStory = (storyId: string) => {
+    const payload: RemoveStoryPayload = { storyId };
     sendMessage<RemoveStoryPayload>({ type: 'remove-story', payload });
+  };
+
+  const handleSelectStory = (storyId: string) => {
+    const payload: SelectStoryPayload = { storyId };
+    sendMessage<SelectStoryPayload>({ type: 'select-story', payload });
+  };
+
+  const handleReorderStory = (storyId: string, targetIndex: number) => {
+    const payload: ReorderStoryPayload = { storyId, targetIndex };
+    sendMessage<ReorderStoryPayload>({ type: 'reorder-story', payload });
   };
 
   const handleStartStoryEdit = () => {
@@ -231,7 +238,10 @@ export default function PlanningPoker() {
       if (!shouldRemoveStory) {
         return;
       }
-      handleRemoveStory(currentStoryIndex);
+      const currentStoryToRemove = stories[currentStoryIndex];
+      if (currentStoryToRemove) {
+        handleRemoveStory(currentStoryToRemove.id);
+      }
     } else {
       const payload: UpdateStoryPayload = { story: trimmedStory };
       sendMessage<UpdateStoryPayload>({ type: 'update-story', payload });
@@ -629,15 +639,6 @@ export default function PlanningPoker() {
                     {isRevealed ? 'Hide Votes' : 'Reveal Votes'}
                   </button>
                   <button
-                    onClick={handleNewVoting}
-                    style={{ ...styles.button, ...styles.successButton }}
-                    onMouseEnter={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#059669'}
-                    onMouseLeave={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#10b981'}
-                  >
-                    <RotateCcw size={20} />
-                    New Voting
-                  </button>
-                  <button
                     onClick={handleVoteAgain}
                     style={{ ...styles.button, ...styles.warningButton }}
                     onMouseEnter={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#f97316'}
@@ -781,10 +782,8 @@ export default function PlanningPoker() {
               onClose={() => setShowBacklogModal(false)}
               onAddStory={handleAddStory}
               onRemoveStory={handleRemoveStory}
-              onDisableBacklog={() => {
-                setShowBacklogModal(false);
-                handleToggleBacklogMode();
-              }}
+              onSelectStory={handleSelectStory}
+              onReorderStory={handleReorderStory}
             />
           )}
         </div>

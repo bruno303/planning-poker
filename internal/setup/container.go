@@ -137,7 +137,6 @@ func newUsecases(hub domain.Hub, lockManager lock.LockManager, metric metric.Pla
 	toggleSpectatorUseCase := usecase.NewToggleSpectatorUseCase(hub, lockManager)
 	toggleOwnerUseCase := usecase.NewToggleOwnerUseCase(hub, lockManager)
 	updateStoryUseCase := usecase.NewUpdateStoryUseCase(hub, lockManager)
-	newVotingUseCase := usecase.NewNewVotingUseCase(hub, lockManager)
 	voteAgainUseCase := usecase.NewVoteAgainUseCase(hub, lockManager)
 	leaveRoomUseCase := usecase.NewLeaveRoomUseCase(hub, lockManager, metric)
 	joinRoomUseCase := usecase.NewJoinRoomUseCase(hub, lockManager, metric)
@@ -148,6 +147,8 @@ func newUsecases(hub domain.Hub, lockManager lock.LockManager, metric metric.Pla
 	removeStoryUseCase := usecase.NewRemoveStoryUseCase(hub, lockManager)
 	advanceStoryUseCase := usecase.NewAdvanceStoryUseCase(hub, lockManager)
 	prevStoryUseCase := usecase.NewPrevStoryUseCase(hub, lockManager)
+	selectStoryUseCase := usecase.NewSelectStoryUseCase(hub, lockManager)
+	reorderStoryUseCase := usecase.NewReorderStoryUseCase(hub, lockManager)
 
 	return usecase.UseCasesFacade{
 		UpdateName:        usecasedecorators.NewTraceableUseCase(updateNameUseCase, "UpdateNameUseCase", "UpdateName"),
@@ -157,7 +158,6 @@ func newUsecases(hub domain.Hub, lockManager lock.LockManager, metric metric.Pla
 		ToggleSpectator:   usecasedecorators.NewTraceableUseCase(toggleSpectatorUseCase, "ToggleSpectatorUseCase", "ToggleSpectator"),
 		ToggleOwner:       usecasedecorators.NewTraceableUseCase(toggleOwnerUseCase, "ToggleOwnerUseCase", "ToggleOwner"),
 		UpdateStory:       usecasedecorators.NewTraceableUseCase(updateStoryUseCase, "UpdateStoryUseCase", "UpdateStory"),
-		NewVoting:         usecasedecorators.NewTraceableUseCase(newVotingUseCase, "NewVotingUseCase", "NewVoting"),
 		VoteAgain:         usecasedecorators.NewTraceableUseCase(voteAgainUseCase, "VoteAgainUseCase", "VoteAgain"),
 		LeaveRoom:         usecasedecorators.NewTraceableUseCase(leaveRoomUseCase, "LeaveRoomUseCase", "LeaveRoom"),
 		JoinRoom:          usecasedecorators.NewTraceableUseCaseR(joinRoomUseCase, "JoinRoomUseCase", "JoinRoom"),
@@ -168,6 +168,8 @@ func newUsecases(hub domain.Hub, lockManager lock.LockManager, metric metric.Pla
 		RemoveStory:       usecasedecorators.NewTraceableUseCase(removeStoryUseCase, "RemoveStoryUseCase", "RemoveStory"),
 		AdvanceStory:      usecasedecorators.NewTraceableUseCase(advanceStoryUseCase, "AdvanceStoryUseCase", "AdvanceStory"),
 		PrevStory:         usecasedecorators.NewTraceableUseCase(prevStoryUseCase, "PrevStoryUseCase", "PrevStory"),
+		SelectStory:       usecasedecorators.NewTraceableUseCase(selectStoryUseCase, "SelectStoryUseCase", "SelectStory"),
+		ReorderStory:      usecasedecorators.NewTraceableUseCase(reorderStoryUseCase, "ReorderStoryUseCase", "ReorderStory"),
 	}
 }
 

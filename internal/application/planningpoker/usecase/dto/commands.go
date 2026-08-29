@@ -10,6 +10,7 @@ import (
 
 type (
 	Story struct {
+		ID                 string   `json:"id"`
 		Name               string   `json:"name"`
 		Result             *float32 `json:"result,omitempty"`
 		MostAppearingVotes []int    `json:"mostAppearingVotes"`
@@ -88,6 +89,7 @@ func NewKickNotification() KickNotification {
 func mapStories(stories []entity.Story) []Story {
 	return lo.Map(stories, func(s entity.Story, _ int) Story {
 		return Story{
+			ID:                 s.ID,
 			Name:               s.Name,
 			Result:             s.Result,
 			MostAppearingVotes: s.MostAppearingVotes,

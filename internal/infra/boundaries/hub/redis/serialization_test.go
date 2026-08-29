@@ -1,11 +1,12 @@
 package redis
 
 import (
-	"planning-poker/internal/domain/entity"
-	"planning-poker/internal/infra/boundaries/hub/clientcollection"
 	"testing"
 
 	"github.com/samber/lo"
+
+	"planning-poker/internal/domain/entity"
+	"planning-poker/internal/infra/boundaries/hub/clientcollection"
 )
 
 func TestSerializeDeserializeRoom(t *testing.T) {
@@ -20,6 +21,13 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 	originalRoom.VoteRange = lo.ToPtr(5)
 	originalRoom.VoteSpread = lo.ToPtr(2)
 	originalRoom.NonNumericVoteCount = 1
+	originalRoom.Stories = []entity.Story{{
+		ID:                 "story-1",
+		Name:               "Backlog story",
+		Result:             lo.ToPtr(float32(8)),
+		MostAppearingVotes: []int{8},
+		Voted:              true,
+	}}
 
 	// Add some clients
 	client1 := originalRoom.NewClient("client-1")
@@ -69,6 +77,12 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 	if deserializedRoom.NonNumericVoteCount != originalRoom.NonNumericVoteCount {
 		t.Errorf("Expected non-numeric vote count %d, got %d", originalRoom.NonNumericVoteCount, deserializedRoom.NonNumericVoteCount)
 	}
+	if len(deserializedRoom.Stories) != 1 || deserializedRoom.Stories[0].ID != "story-1" {
+		t.Fatalf("story ID was not preserved: %+v", deserializedRoom.Stories)
+	}
+	if deserializedRoom.Stories[0].Result == nil || *deserializedRoom.Stories[0].Result != 8 || !deserializedRoom.Stories[0].Voted {
+		t.Fatalf("story estimate was not preserved: %+v", deserializedRoom.Stories[0])
+	}
 
 	// Verify client count
 	if deserializedRoom.Clients.Count() != originalRoom.Clients.Count() {
@@ -103,5 +117,13 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 	}
 	if deserializedClient2.CurrentVote == nil || *deserializedClient2.CurrentVote != "5" {
 		t.Errorf("Expected client 2 vote to be 5, got %v", lo.FromPtr(deserializedClient2.CurrentVote))
+	}
+}
+
+func TestDeserializeRoomRejectsStoryWithoutID(t *testing.T) {
+	data := []byte(`{"id":"room-legacy","backlogMode":true,"stories":[{"name":"Legacy story","mostAppearingVotes":[],"voted":false}]}`)
+
+	if _, err := DeserializeRoom(data, clientcollection.New()); err == nil {
+		t.Fatal("DeserializeRoom accepted a story without an ID")
 	}
 }

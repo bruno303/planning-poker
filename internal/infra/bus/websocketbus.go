@@ -52,7 +52,14 @@ type (
 		Story string `json:"story"`
 	}
 	RemoveStoryPayload struct {
-		StoryIndex int `json:"storyIndex"`
+		StoryID string `json:"storyId"`
+	}
+	SelectStoryPayload struct {
+		StoryID string `json:"storyId"`
+	}
+	ReorderStoryPayload struct {
+		StoryID     string `json:"storyId"`
+		TargetIndex int    `json:"targetIndex"`
 	}
 	useCaseCall func(context.Context, WebSocketMessage) error
 
@@ -344,12 +351,6 @@ func mapUsecases(usecases usecase.UseCasesFacade, clientID, roomID string) map[s
 				})
 			})
 		},
-		"new-voting": func(ctx context.Context, msg WebSocketMessage) error {
-			return usecases.NewVoting.Execute(ctx, usecase.NewVotingCommand{
-				RoomID:   roomID,
-				SenderID: clientID,
-			})
-		},
 		"vote-again": func(ctx context.Context, msg WebSocketMessage) error {
 			return usecases.VoteAgain.Execute(ctx, usecase.VoteAgainCommand{
 				RoomID:   roomID,
@@ -374,9 +375,9 @@ func mapUsecases(usecases usecase.UseCasesFacade, clientID, roomID string) map[s
 		"remove-story": func(ctx context.Context, msg WebSocketMessage) error {
 			return withPayload(msg.Payload, func(payload RemoveStoryPayload) error {
 				return usecases.RemoveStory.Execute(ctx, usecase.RemoveStoryCommand{
-					RoomID:     roomID,
-					SenderID:   clientID,
-					StoryIndex: payload.StoryIndex,
+					RoomID:   roomID,
+					SenderID: clientID,
+					StoryID:  payload.StoryID,
 				})
 			})
 		},
@@ -390,6 +391,25 @@ func mapUsecases(usecases usecase.UseCasesFacade, clientID, roomID string) map[s
 			return usecases.PrevStory.Execute(ctx, usecase.PrevStoryCommand{
 				RoomID:   roomID,
 				SenderID: clientID,
+			})
+		},
+		"select-story": func(ctx context.Context, msg WebSocketMessage) error {
+			return withPayload(msg.Payload, func(payload SelectStoryPayload) error {
+				return usecases.SelectStory.Execute(ctx, usecase.SelectStoryCommand{
+					RoomID:   roomID,
+					SenderID: clientID,
+					StoryID:  payload.StoryID,
+				})
+			})
+		},
+		"reorder-story": func(ctx context.Context, msg WebSocketMessage) error {
+			return withPayload(msg.Payload, func(payload ReorderStoryPayload) error {
+				return usecases.ReorderStory.Execute(ctx, usecase.ReorderStoryCommand{
+					RoomID:      roomID,
+					SenderID:    clientID,
+					StoryID:     payload.StoryID,
+					TargetIndex: payload.TargetIndex,
+				})
 			})
 		},
 	}

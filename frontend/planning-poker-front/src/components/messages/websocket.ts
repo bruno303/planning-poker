@@ -3,7 +3,6 @@
 export type WebSocketMessageType =
   | 'vote'
   | 'reveal-votes'
-  | 'new-voting'
   | 'toggle-spectator'
   | 'toggle-owner'
   | 'vote-again'
@@ -14,7 +13,9 @@ export type WebSocketMessageType =
   | 'add-story'
   | 'remove-story'
   | 'advance-story'
-  | 'prev-story';
+  | 'prev-story'
+  | 'select-story'
+  | 'reorder-story';
 
 export interface WebSocketMessage<T = any> {
   type: WebSocketMessageType;
@@ -48,10 +49,20 @@ export interface AddStoryPayload {
 }
 
 export interface RemoveStoryPayload {
-  storyIndex: number;
+  storyId: string;
+}
+
+export interface SelectStoryPayload {
+  storyId: string;
+}
+
+export interface ReorderStoryPayload {
+  storyId: string;
+  targetIndex: number;
 }
 
 export interface Story {
+  id: string;
   name: string;
   result?: number;
   mostAppearingVotes: number[];

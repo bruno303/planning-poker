@@ -9,7 +9,6 @@ type (
 		ToggleSpectator   UseCase[ToggleSpectatorCommand]
 		ToggleOwner       UseCase[ToggleOwnerCommand]
 		UpdateStory       UseCase[UpdateStoryCommand]
-		NewVoting         UseCase[NewVotingCommand]
 		VoteAgain         UseCase[VoteAgainCommand]
 		LeaveRoom         UseCase[LeaveRoomCommand]
 		JoinRoom          UseCaseR[JoinRoomCommand, *JoinRoomOutput]
@@ -20,5 +19,7 @@ type (
 		RemoveStory       UseCase[RemoveStoryCommand]
 		AdvanceStory      UseCase[AdvanceStoryCommand]
 		PrevStory         UseCase[PrevStoryCommand]
+		SelectStory       UseCase[SelectStoryCommand]
+		ReorderStory      UseCase[ReorderStoryCommand]
 	}
 )

@@ -183,7 +183,7 @@ test('backlog: adding, navigating, and voting on multiple stories', async ({ bro
   }
 });
 
-test('backlog: disable and re-enable backlog mode', async ({ browser, baseURL }) => {
+test('backlog: does not expose a disable backlog control', async ({ browser, baseURL }) => {
   test.setTimeout(60_000);
 
   const ownerContext = await browser.newContext();
@@ -198,33 +198,12 @@ test('backlog: disable and re-enable backlog mode', async ({ browser, baseURL })
     // Open backlog button should be visible by default
     await expect(ownerPage.getByRole('button', { name: 'Open backlog' })).toBeVisible();
 
-    // Open the modal to reach the Disable Backlog button
+    // Backlog is always enabled for new rooms.
     await openBacklogModal(ownerPage);
 
-    // Disable Backlog button should be present inside the dialog
+    // The modal must not expose a way to disable backlog mode.
     const disableButton = ownerPage.getByRole('button', { name: 'Disable Backlog' });
-    await expect(disableButton).toBeVisible();
-
-    // Click Disable Backlog - should show confirmation dialog
-    await disableButton.click();
-
-    // Confirmation dialog should appear
-    await expect(ownerPage.getByText('This will remove the story backlog and keep only the current story. Are you sure?')).toBeVisible();
-
-    // Click Cancel - the dialog should remain visible
-    await ownerPage.getByRole('button', { name: 'Cancel' }).click();
-    await expect(backlogDialog(ownerPage)).toBeVisible();
-
-    // Click Disable Backlog again and confirm
-    await disableButton.click();
-    await ownerPage.getByRole('button', { name: 'Disable', exact: true }).click();
-
-    // The dialog should be closed and the Open backlog button hidden
-    await expect(backlogDialog(ownerPage)).not.toBeVisible();
-    await expect(ownerPage.getByRole('button', { name: 'Open backlog' })).not.toBeVisible();
-
-    // Enable Backlog button should appear
-    await expect(ownerPage.getByRole('button', { name: 'Enable Backlog' })).toBeVisible();
+    await expect(disableButton).toHaveCount(0);
   } finally {
     await Promise.allSettled([ownerContext.close()]);
   }

@@ -4,8 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Story } from '@/components/messages/websocket';
 import BacklogModal from './backlogModal';
 
-const CONFIRM_TEXT = 'This will remove the story backlog and keep only the current story. Are you sure?';
-
 const renderBacklogModal = (overrides: Partial<{
   stories: Story[];
   currentStoryIndex: number;
@@ -13,7 +11,8 @@ const renderBacklogModal = (overrides: Partial<{
   onClose: ReturnType<typeof vi.fn>;
   onAddStory: ReturnType<typeof vi.fn>;
   onRemoveStory: ReturnType<typeof vi.fn>;
-  onDisableBacklog: ReturnType<typeof vi.fn>;
+  onSelectStory: ReturnType<typeof vi.fn>;
+  onReorderStory: ReturnType<typeof vi.fn>;
 }> = {}) => {
   const props = {
     stories: [] as Story[],
@@ -22,7 +21,8 @@ const renderBacklogModal = (overrides: Partial<{
     onClose: vi.fn(),
     onAddStory: vi.fn(),
     onRemoveStory: vi.fn(),
-    onDisableBacklog: vi.fn(),
+    onSelectStory: vi.fn(),
+    onReorderStory: vi.fn(),
     ...overrides,
   };
 
@@ -34,7 +34,8 @@ const renderBacklogModal = (overrides: Partial<{
       onClose={props.onClose}
       onAddStory={props.onAddStory}
       onRemoveStory={props.onRemoveStory}
-      onDisableBacklog={props.onDisableBacklog}
+      onSelectStory={props.onSelectStory}
+      onReorderStory={props.onReorderStory}
     />,
   );
 
@@ -49,9 +50,9 @@ describe('BacklogModal', () => {
 
   it('renders story list with status tags', () => {
     const stories: Story[] = [
-      { name: 'Story one', mostAppearingVotes: [], voted: false },
-      { name: 'Story two', result: 6.5, mostAppearingVotes: [6, 7], voted: true },
-      { name: 'Story three', mostAppearingVotes: [], voted: false },
+      { id: 'story-1', name: 'Story one', mostAppearingVotes: [], voted: false },
+      { id: 'story-2', name: 'Story two', result: 6.5, mostAppearingVotes: [6, 7], voted: true },
+      { id: 'story-3', name: 'Story three', mostAppearingVotes: [], voted: false },
     ];
 
     renderBacklogModal({ stories, currentStoryIndex: 0 });
@@ -60,22 +61,27 @@ describe('BacklogModal', () => {
     expect(screen.getByText('Story two')).not.toBeNull();
     expect(screen.getByText('Story three')).not.toBeNull();
     expect(screen.getByText('Current')).not.toBeNull();
+    expect(screen.getByText('Pending')).not.toBeNull();
+    expect(screen.getByText('Estimated')).not.toBeNull();
     expect(screen.getByText('Avg: 6.5')).not.toBeNull();
   });
 
   it('renders admin controls when amIAdmin is true', () => {
     const stories: Story[] = [
-      { name: 'Current story', mostAppearingVotes: [], voted: false },
-      { name: 'Voted story', result: 3, mostAppearingVotes: [], voted: true },
-      { name: 'Pending story', mostAppearingVotes: [], voted: false },
+      { id: 'story-1', name: 'Current story', mostAppearingVotes: [], voted: false },
+      { id: 'story-2', name: 'Voted story', result: 3, mostAppearingVotes: [], voted: true },
+      { id: 'story-3', name: 'Pending story', mostAppearingVotes: [], voted: false },
     ];
 
     renderBacklogModal({ stories, currentStoryIndex: 0, amIAdmin: true });
 
     expect(screen.getByPlaceholderText('Enter story name...')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Add' })).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Disable Backlog' })).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Disable Backlog' })).toBeNull();
     expect(screen.getAllByTitle('Remove story')).toHaveLength(1);
+    expect(screen.getAllByTitle('Select story')).toHaveLength(1);
+    expect(screen.getAllByTitle('Move up')).toHaveLength(3);
+    expect(screen.getAllByTitle('Move down')).toHaveLength(3);
   });
 
   it('focuses the story input when opened by an administrator', () => {
@@ -86,9 +92,9 @@ describe('BacklogModal', () => {
 
   it('hides admin controls when amIAdmin is false', () => {
     const stories: Story[] = [
-      { name: 'Current story', mostAppearingVotes: [], voted: false },
-      { name: 'Voted story', result: 3, mostAppearingVotes: [], voted: true },
-      { name: 'Pending story', mostAppearingVotes: [], voted: false },
+      { id: 'story-1', name: 'Current story', mostAppearingVotes: [], voted: false },
+      { id: 'story-2', name: 'Voted story', result: 3, mostAppearingVotes: [], voted: true },
+      { id: 'story-3', name: 'Pending story', mostAppearingVotes: [], voted: false },
     ];
 
     renderBacklogModal({ stories, currentStoryIndex: 0, amIAdmin: false });
@@ -97,6 +103,8 @@ describe('BacklogModal', () => {
     expect(screen.queryByRole('button', { name: 'Add' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Disable Backlog' })).toBeNull();
     expect(screen.queryAllByTitle('Remove story')).toHaveLength(0);
+    expect(screen.queryAllByTitle('Select story')).toHaveLength(0);
+    expect(screen.queryAllByTitle('Move up')).toHaveLength(0);
   });
 
   it('calls onAddStory with trimmed story on Add click and clears input', () => {
@@ -133,33 +141,63 @@ describe('BacklogModal', () => {
     expect(onAddStory).not.toHaveBeenCalled();
   });
 
-  it('calls onRemoveStory with correct index', () => {
+  it('calls onRemoveStory with stable id', () => {
     const stories: Story[] = [
-      { name: 'Current story', mostAppearingVotes: [], voted: false },
-      { name: 'Voted story', result: 3, mostAppearingVotes: [], voted: true },
-      { name: 'Pending story', mostAppearingVotes: [], voted: false },
+      { id: 'story-1', name: 'Current story', mostAppearingVotes: [], voted: false },
+      { id: 'story-2', name: 'Voted story', result: 3, mostAppearingVotes: [], voted: true },
+      { id: 'story-3', name: 'Pending story', mostAppearingVotes: [], voted: false },
     ];
 
     const { onRemoveStory } = renderBacklogModal({ stories, currentStoryIndex: 0, amIAdmin: true });
 
     fireEvent.click(screen.getAllByTitle('Remove story')[0]);
 
-    expect(onRemoveStory).toHaveBeenCalledWith(2);
+    expect(onRemoveStory).toHaveBeenCalledWith('story-3');
   });
 
-  it('handles disable backlog confirm flow', () => {
-    const { onDisableBacklog } = renderBacklogModal({ amIAdmin: true });
+  it('selects pending stories by stable id', () => {
+    const stories: Story[] = [
+      { id: 'story-1', name: 'Current story', mostAppearingVotes: [], voted: false },
+      { id: 'story-2', name: 'Pending story', mostAppearingVotes: [], voted: false },
+    ];
+    const { onSelectStory } = renderBacklogModal({ stories, amIAdmin: true });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Disable Backlog' }));
-    expect(screen.getByText(CONFIRM_TEXT)).not.toBeNull();
+    fireEvent.click(screen.getByTitle('Select story'));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(screen.queryByText(CONFIRM_TEXT)).toBeNull();
-    expect(onDisableBacklog).not.toHaveBeenCalled();
+    expect(onSelectStory).toHaveBeenCalledWith('story-2');
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Disable Backlog' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Disable' }));
-    expect(onDisableBacklog).toHaveBeenCalledOnce();
+  it('sends move button commands with stable id and target index', () => {
+    const stories: Story[] = [
+      { id: 'story-1', name: 'Current story', mostAppearingVotes: [], voted: false },
+      { id: 'story-2', name: 'Pending story', mostAppearingVotes: [], voted: false },
+    ];
+    const { onReorderStory } = renderBacklogModal({ stories, amIAdmin: true });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move Pending story up' }));
+
+    expect(onReorderStory).toHaveBeenCalledWith('story-2', 0);
+  });
+
+  it('supports native drag and drop with stable id and target index', () => {
+    const stories: Story[] = [
+      { id: 'story-1', name: 'Current story', mostAppearingVotes: [], voted: false },
+      { id: 'story-2', name: 'Pending story', mostAppearingVotes: [], voted: false },
+    ];
+    const { onReorderStory } = renderBacklogModal({ stories, amIAdmin: true });
+    const currentRow = screen.getByText('Current story').parentElement?.parentElement as HTMLElement;
+    const pendingRow = screen.getByText('Pending story').parentElement?.parentElement as HTMLElement;
+    const dataTransfer = {
+      effectAllowed: '',
+      dropEffect: '',
+      setData: vi.fn(),
+      getData: vi.fn().mockReturnValue('story-2'),
+    };
+
+    fireEvent.dragStart(pendingRow, { dataTransfer });
+    fireEvent.drop(currentRow, { dataTransfer });
+
+    expect(onReorderStory).toHaveBeenCalledWith('story-2', 0);
   });
 
   it('closes via close button', () => {

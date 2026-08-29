@@ -85,26 +85,6 @@ func (r *Room) RemoveClient(ctx context.Context, clientID string) error {
 	return nil
 }
 
-func (r *Room) NewVoting(ctx context.Context, clientID string) error {
-	client, ok := r.FindClient(clientID)
-	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
-	}
-	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can start a new voting")
-	}
-
-	if !r.BacklogMode {
-		r.CurrentStory = ""
-	}
-	r.reveal(false)
-	r.Clients.ForEach(func(c *Client) {
-		c.Vote(ctx, nil)
-	})
-
-	return nil
-}
-
 func (r *Room) ToggleBacklogMode(ctx context.Context, clientID string) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
@@ -117,7 +97,7 @@ func (r *Room) ToggleBacklogMode(ctx context.Context, clientID string) error {
 	if !r.BacklogMode {
 		r.BacklogMode = true
 		if r.CurrentStory != "" {
-			r.Stories = []Story{{Name: r.CurrentStory}}
+			r.Stories = []Story{{ID: uuid.NewString(), Name: r.CurrentStory}}
 			r.CurrentStoryIndex = 0
 		}
 	} else {
@@ -145,7 +125,7 @@ func (r *Room) AddStory(ctx context.Context, clientID string, name string) error
 		r.BacklogMode = true
 	}
 
-	r.Stories = append(r.Stories, Story{Name: name})
+	r.Stories = append(r.Stories, Story{ID: uuid.NewString(), Name: name})
 	if len(r.Stories) == 1 {
 		r.CurrentStoryIndex = 0
 	}
@@ -153,7 +133,7 @@ func (r *Room) AddStory(ctx context.Context, clientID string, name string) error
 	return nil
 }
 
-func (r *Room) RemoveStory(ctx context.Context, clientID string, index int) error {
+func (r *Room) RemoveStory(ctx context.Context, clientID string, storyID string) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
@@ -161,9 +141,12 @@ func (r *Room) RemoveStory(ctx context.Context, clientID string, index int) erro
 	if !client.IsOwner {
 		return fmt.Errorf("only the room owner can remove a story")
 	}
-
-	if index < 0 || index >= len(r.Stories) {
-		return fmt.Errorf("story index %d out of range", index)
+	if storyID == "" {
+		return fmt.Errorf("story ID cannot be empty")
+	}
+	index := r.storyIndexByID(storyID)
+	if index == -1 {
+		return fmt.Errorf("story %s not found in room %s", storyID, r.ID)
 	}
 
 	if index == r.CurrentStoryIndex {
@@ -185,6 +168,115 @@ func (r *Room) RemoveStory(ctx context.Context, clientID string, index int) erro
 	r.Stories = append(r.Stories[:index], r.Stories[index+1:]...)
 
 	return nil
+}
+
+// SelectStory selects a pending story and starts a fresh voting round.
+func (r *Room) SelectStory(ctx context.Context, clientID string, storyID string) error {
+	client, ok := r.FindClient(clientID)
+	if !ok {
+		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+	}
+	if !client.IsOwner {
+		return fmt.Errorf("only the room owner can select a story")
+	}
+	if storyID == "" {
+		return fmt.Errorf("story ID cannot be empty")
+	}
+
+	index := r.storyIndexByID(storyID)
+	if index == -1 {
+		return fmt.Errorf("story %s not found in room %s", storyID, r.ID)
+	}
+	if index == r.CurrentStoryIndex {
+		return fmt.Errorf("story %s is already the current story", storyID)
+	}
+	if r.Stories[index].Voted {
+		return fmt.Errorf("estimated story %s cannot be selected", storyID)
+	}
+
+	r.CurrentStoryIndex = index
+	r.reveal(false)
+	r.Clients.ForEach(func(c *Client) {
+		c.Vote(ctx, nil)
+	})
+
+	return nil
+}
+
+// ReorderStory moves a story to targetIndex. The current story remains
+// identified by its stable ID.
+func (r *Room) ReorderStory(ctx context.Context, clientID string, storyID string, targetIndex int) error {
+	storyIndex, err := r.validateReorderStory(clientID, storyID, targetIndex)
+	if err != nil {
+		return err
+	}
+	if storyIndex == targetIndex {
+		return nil
+	}
+
+	currentStoryID := r.currentStoryID()
+	story := r.Stories[storyIndex]
+	r.Stories = append(r.Stories[:storyIndex], r.Stories[storyIndex+1:]...)
+	r.Stories = slices.Insert(r.Stories, targetIndex, story)
+	r.updateCurrentStoryIndex(storyIndex, targetIndex, currentStoryID)
+
+	return nil
+}
+
+func (r *Room) validateReorderStory(clientID string, storyID string, targetIndex int) (int, error) {
+	client, ok := r.FindClient(clientID)
+	if !ok {
+		return 0, fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+	}
+	if !client.IsOwner {
+		return 0, fmt.Errorf("only the room owner can reorder stories")
+	}
+	if storyID == "" {
+		return 0, fmt.Errorf("story ID cannot be empty")
+	}
+	if targetIndex < 0 || targetIndex >= len(r.Stories) {
+		return 0, fmt.Errorf("target story index %d out of range", targetIndex)
+	}
+
+	storyIndex := r.storyIndexByID(storyID)
+	if storyIndex == -1 {
+		return 0, fmt.Errorf("story %s not found in room %s", storyID, r.ID)
+	}
+
+	return storyIndex, nil
+}
+
+func (r *Room) currentStoryID() string {
+	if r.CurrentStoryIndex < 0 || r.CurrentStoryIndex >= len(r.Stories) {
+		return ""
+	}
+	return r.Stories[r.CurrentStoryIndex].ID
+}
+
+func (r *Room) updateCurrentStoryIndex(storyIndex, targetIndex int, currentStoryID string) {
+	if currentStoryID != "" {
+		r.CurrentStoryIndex = r.storyIndexByID(currentStoryID)
+		return
+	}
+	if r.CurrentStoryIndex == storyIndex {
+		r.CurrentStoryIndex = targetIndex
+		return
+	}
+	if storyIndex < r.CurrentStoryIndex {
+		r.CurrentStoryIndex--
+	}
+	if targetIndex <= r.CurrentStoryIndex {
+		r.CurrentStoryIndex++
+	}
+}
+
+func (r *Room) storyIndexByID(storyID string) int {
+	for index, story := range r.Stories {
+		if story.ID == storyID {
+			return index
+		}
+	}
+	return -1
 }
 
 func (r *Room) AdvanceToNextStory(ctx context.Context, clientID string) error {
@@ -247,7 +339,7 @@ func (r *Room) ResetVoting(ctx context.Context, clientID string) error {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
 	}
 	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can start a new voting")
+		return fmt.Errorf("only the room owner can reset voting")
 	}
 
 	r.reveal(false)
@@ -381,16 +473,14 @@ func (r *Room) ToggleReveal(ctx context.Context, clientID string) error {
 
 	r.reveal(!r.Reveal)
 
-	if r.Reveal && r.BacklogMode && r.CurrentStoryIndex >= 0 && r.CurrentStoryIndex < len(r.Stories) {
-		r.Stories[r.CurrentStoryIndex].Result = r.Result
-		r.Stories[r.CurrentStoryIndex].MostAppearingVotes = r.MostAppearingVotes
-		r.Stories[r.CurrentStoryIndex].Voted = true
-	}
-
 	return nil
 }
 
 func (r *Room) reveal(reveal bool) {
+	if reveal && r.Reveal {
+		return
+	}
+
 	r.Reveal = reveal
 
 	if !reveal {
@@ -409,6 +499,11 @@ func (r *Room) reveal(reveal bool) {
 
 	r.Consensus, r.LowestVote, r.HighestVote, r.VoteRange, r.VoteSpread = calculateConsensus(metrics.values)
 	r.NonNumericVoteCount = metrics.nonNumericCount
+	if r.BacklogMode && r.CurrentStoryIndex >= 0 && r.CurrentStoryIndex < len(r.Stories) {
+		r.Stories[r.CurrentStoryIndex].Result = r.Result
+		r.Stories[r.CurrentStoryIndex].MostAppearingVotes = r.MostAppearingVotes
+		r.Stories[r.CurrentStoryIndex].Voted = true
+	}
 }
 
 type voteMetrics struct {

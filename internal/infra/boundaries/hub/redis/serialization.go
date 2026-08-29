@@ -2,13 +2,16 @@ package redis
 
 import (
 	"encoding/json"
-	"planning-poker/internal/domain/entity"
+	"fmt"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
+
+	"planning-poker/internal/domain/entity"
 )
 
 type (
 	SerializedStory struct {
+		ID                 string   `json:"id,omitempty"`
 		Name               string   `json:"name"`
 		Result             *float32 `json:"result,omitempty"`
 		MostAppearingVotes []int    `json:"mostAppearingVotes"`
@@ -94,6 +97,7 @@ func serializeStories(stories []entity.Story) []SerializedStory {
 	result := make([]SerializedStory, len(stories))
 	for i, s := range stories {
 		result[i] = SerializedStory{
+			ID:                 s.ID,
 			Name:               s.Name,
 			Result:             s.Result,
 			MostAppearingVotes: s.MostAppearingVotes,
@@ -106,6 +110,10 @@ func serializeStories(stories []entity.Story) []SerializedStory {
 func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*entity.Room, error) {
 	var serialized SerializedRoom
 	if err := json.Unmarshal(data, &serialized); err != nil {
+		return nil, err
+	}
+	stories, err := deserializeStories(serialized.Stories)
+	if err != nil {
 		return nil, err
 	}
 
@@ -123,7 +131,7 @@ func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 		VoteSpread:          serialized.VoteSpread,
 		NonNumericVoteCount: serialized.NonNumericVoteCount,
 		BacklogMode:         serialized.BacklogMode,
-		Stories:             deserializeStories(serialized.Stories),
+		Stories:             stories,
 		CurrentStoryIndex:   serialized.CurrentStoryIndex,
 	}
 
@@ -135,15 +143,19 @@ func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 	return room, nil
 }
 
-func deserializeStories(stories []SerializedStory) []entity.Story {
+func deserializeStories(stories []SerializedStory) ([]entity.Story, error) {
 	result := make([]entity.Story, len(stories))
 	for i, s := range stories {
+		if s.ID == "" {
+			return nil, fmt.Errorf("story at index %d is missing an ID", i)
+		}
 		result[i] = entity.Story{
+			ID:                 s.ID,
 			Name:               s.Name,
 			Result:             s.Result,
 			MostAppearingVotes: s.MostAppearingVotes,
 			Voted:              s.Voted,
 		}
 	}
-	return result
+	return result, nil
 }

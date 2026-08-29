@@ -55,6 +55,34 @@ func TestRedisHub_NewRoom_SaveRoom_LoadRoom(t *testing.T) {
 	assert.Equal(t, room.ID, gotRoom.ID)
 }
 
+func TestRedisHub_LoadRoomRejectsStoryWithoutID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	roomID := "legacy-room"
+	mockRedis := NewMockRedisClient(ctrl)
+
+	mockRedis.EXPECT().Get(gomock.Any(), roomKeyPrefix+roomID).DoAndReturn(func(context.Context, string) *redis.StringCmd {
+		cmd := redis.NewStringCmd(context.Background())
+		cmd.SetVal(`{"id":"legacy-room","backlogMode":true,"stories":[{"name":"Legacy story","mostAppearingVotes":[],"voted":false}]}`)
+		return cmd
+	})
+
+	hub := &RedisHub{
+		client:           mockRedis,
+		logger:           log.NewLogger("test"),
+		buses:            make(map[string]domain.Bus),
+		closeCh:          make(chan struct{}),
+		roomClientCounts: make(map[string]int),
+	}
+
+	_, err := hub.LoadRoom(context.Background(), roomID)
+	if err == nil {
+		t.Fatal("LoadRoom accepted a story without an ID")
+	}
+	assert.Contains(t, err.Error(), "story at index 0 is missing an ID")
+}
+
 func TestRedisHub_NewRoomWithID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockRedis := NewMockRedisClient(ctrl)

@@ -2,50 +2,43 @@ package usecase
 
 import (
 	"context"
+
 	"planning-poker/internal/application/lock"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
 	"planning-poker/internal/domain"
 )
 
 type (
-	NewVotingCommand struct {
+	SelectStoryCommand struct {
 		RoomID   string
 		SenderID string
+		StoryID  string
 	}
-	NewVotingUseCase struct {
+	SelectStoryUseCase struct {
 		hub         domain.Hub
 		lockManager lock.LockManager
 	}
 )
 
-var _ UseCase[NewVotingCommand] = (*NewVotingUseCase)(nil)
+var _ UseCase[SelectStoryCommand] = (*SelectStoryUseCase)(nil)
 
-func NewNewVotingUseCase(hub domain.Hub, lockManager lock.LockManager) NewVotingUseCase {
-	return NewVotingUseCase{
-		hub:         hub,
-		lockManager: lockManager,
-	}
+func NewSelectStoryUseCase(hub domain.Hub, lockManager lock.LockManager) SelectStoryUseCase {
+	return SelectStoryUseCase{hub: hub, lockManager: lockManager}
 }
 
-func (uc NewVotingUseCase) Execute(ctx context.Context, cmd NewVotingCommand) error {
+func (uc SelectStoryUseCase) Execute(ctx context.Context, cmd SelectStoryCommand) error {
 	return uc.lockManager.ExecuteWithLock(ctx, cmd.RoomID, func(ctx context.Context) error {
 		room, err := uc.hub.LoadRoom(ctx, cmd.RoomID)
 		if err != nil {
 			return err
 		}
 
-		if err := room.NewVoting(ctx, cmd.SenderID); err != nil {
+		if err := room.SelectStory(ctx, cmd.SenderID, cmd.StoryID); err != nil {
 			return err
 		}
-
 		if err := uc.hub.SaveRoom(ctx, room); err != nil {
 			return err
 		}
-
-		if err := uc.hub.BroadcastToRoom(ctx, room.ID, dto.NewRoomStateCommand(room)); err != nil {
-			return err
-		}
-
-		return nil
+		return uc.hub.BroadcastToRoom(ctx, room.ID, dto.NewRoomStateCommand(room))
 	})
 }

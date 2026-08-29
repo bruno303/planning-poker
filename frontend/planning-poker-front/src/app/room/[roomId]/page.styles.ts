@@ -224,10 +224,6 @@ export const styles = {
     cursor: 'not-allowed',
     transform: 'none'
   },
-  successButton: {
-    backgroundColor: '#10b981',
-    color: 'white'
-  },
   warningButton: {
     backgroundColor: '#eab308',
     color: 'white'

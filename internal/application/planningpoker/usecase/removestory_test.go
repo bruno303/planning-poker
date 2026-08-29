@@ -43,7 +43,7 @@ func TestRemoveStoryUseCase_Execute_Success(t *testing.T) {
 
 	client := room.NewClient(clientID)
 	client.IsOwner = true
-	room.Stories = []entity.Story{{Name: "Story 1"}}
+	room.Stories = []entity.Story{{ID: "story-1", Name: "Story 1"}}
 
 	mockLockManager.EXPECT().
 		ExecuteWithLock(gomock.Any(), roomID, gomock.Any()).
@@ -57,9 +57,9 @@ func TestRemoveStoryUseCase_Execute_Success(t *testing.T) {
 
 	uc := NewRemoveStoryUseCase(mockHub, mockLockManager)
 	cmd := RemoveStoryCommand{
-		RoomID:     roomID,
-		SenderID:   "client123",
-		StoryIndex: 0,
+		RoomID:   roomID,
+		SenderID: "client123",
+		StoryID:  "story-1",
 	}
 
 	err := uc.Execute(ctx, cmd)
@@ -86,7 +86,7 @@ func TestRemoveStoryUseCase_Execute_SaveRoomError(t *testing.T) {
 
 	client := room.NewClient(senderID)
 	client.IsOwner = true
-	room.Stories = []entity.Story{{Name: "Story 1"}}
+	room.Stories = []entity.Story{{ID: "story-1", Name: "Story 1"}}
 	expectedError := errors.New("failed to save room")
 
 	mockLockManager.EXPECT().
@@ -100,9 +100,9 @@ func TestRemoveStoryUseCase_Execute_SaveRoomError(t *testing.T) {
 
 	uc := NewRemoveStoryUseCase(mockHub, mockLockManager)
 	cmd := RemoveStoryCommand{
-		RoomID:     roomID,
-		SenderID:   senderID,
-		StoryIndex: 0,
+		RoomID:   roomID,
+		SenderID: senderID,
+		StoryID:  "story-1",
 	}
 
 	err := uc.Execute(ctx, cmd)
@@ -135,9 +135,9 @@ func TestRemoveStoryUseCase_Execute_RoomNotFound(t *testing.T) {
 
 	uc := NewRemoveStoryUseCase(mockHub, mockLockManager)
 	cmd := RemoveStoryCommand{
-		RoomID:     roomID,
-		SenderID:   "client123",
-		StoryIndex: 0,
+		RoomID:   roomID,
+		SenderID: "client123",
+		StoryID:  "story-1",
 	}
 
 	err := uc.Execute(ctx, cmd)
@@ -167,7 +167,7 @@ func TestRemoveStoryUseCase_Execute_BroadcastError(t *testing.T) {
 
 	client := room.NewClient(clientID)
 	client.IsOwner = true
-	room.Stories = []entity.Story{{Name: "Story 1"}}
+	room.Stories = []entity.Story{{ID: "story-1", Name: "Story 1"}}
 	expectedError := errors.New("broadcast failed")
 
 	mockLockManager.EXPECT().
@@ -182,9 +182,9 @@ func TestRemoveStoryUseCase_Execute_BroadcastError(t *testing.T) {
 
 	uc := NewRemoveStoryUseCase(mockHub, mockLockManager)
 	cmd := RemoveStoryCommand{
-		RoomID:     roomID,
-		SenderID:   "client123",
-		StoryIndex: 0,
+		RoomID:   roomID,
+		SenderID: "client123",
+		StoryID:  "story-1",
 	}
 
 	err := uc.Execute(ctx, cmd)
