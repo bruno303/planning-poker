@@ -42,14 +42,16 @@ func TestRoomStoryCreationAssignsStableIDs(t *testing.T) {
 	}
 }
 
+type reorderStoryTestCase struct {
+	name          string
+	storyID       string
+	targetIndex   int
+	wantOrder     []string
+	wantCurrentID string
+}
+
 func TestRoomReorderStory(t *testing.T) {
-	tests := []struct {
-		name          string
-		storyID       string
-		targetIndex   int
-		wantOrder     []string
-		wantCurrentID string
-	}{
+	tests := []reorderStoryTestCase{
 		{
 			name:          "first to last",
 			storyID:       "a",
@@ -86,28 +88,41 @@ func TestRoomReorderStory(t *testing.T) {
 				t.Fatalf("ReorderStory returned error: %v", err)
 			}
 
-			gotOrder := make([]string, len(room.Stories))
-			for i, story := range room.Stories {
-				gotOrder[i] = story.ID
-			}
-			if !reflect.DeepEqual(gotOrder, tt.wantOrder) {
-				t.Fatalf("story order = %v, want %v", gotOrder, tt.wantOrder)
-			}
-			if room.Stories[room.CurrentStoryIndex].ID != tt.wantCurrentID {
-				t.Fatalf("current story = %q, want %q", room.Stories[room.CurrentStoryIndex].ID, tt.wantCurrentID)
-			}
-			var estimated *entity.Story
-			for i := range room.Stories {
-				if room.Stories[i].ID == "b" {
-					estimated = &room.Stories[i]
-					break
-				}
-			}
-			if estimated == nil || estimated.Result == nil || *estimated.Result != 5 || !reflect.DeepEqual(estimated.MostAppearingVotes, []int{5}) || !estimated.Voted {
-				t.Fatal("estimated result was not preserved during reorder")
-			}
+			assertReorderedStory(t, room, tt)
 		})
 	}
+}
+
+func assertReorderedStory(t *testing.T, room *entity.Room, testCase reorderStoryTestCase) {
+	t.Helper()
+
+	gotOrder := make([]string, len(room.Stories))
+	for i, story := range room.Stories {
+		gotOrder[i] = story.ID
+	}
+	if !reflect.DeepEqual(gotOrder, testCase.wantOrder) {
+		t.Fatalf("story order = %v, want %v", gotOrder, testCase.wantOrder)
+	}
+	if room.Stories[room.CurrentStoryIndex].ID != testCase.wantCurrentID {
+		t.Fatalf("current story = %q, want %q", room.Stories[room.CurrentStoryIndex].ID, testCase.wantCurrentID)
+	}
+	assertEstimatedStory(t, room)
+}
+
+func assertEstimatedStory(t *testing.T, room *entity.Room) {
+	t.Helper()
+
+	for i := range room.Stories {
+		if room.Stories[i].ID != "b" {
+			continue
+		}
+		story := room.Stories[i]
+		if story.Result == nil || *story.Result != 5 || !reflect.DeepEqual(story.MostAppearingVotes, []int{5}) || !story.Voted {
+			t.Fatal("estimated result was not preserved during reorder")
+		}
+		return
+	}
+	t.Fatal("estimated story was not found after reorder")
 }
 
 func TestRoomReorderStoryRejectsInvalidCommandsWithoutMutation(t *testing.T) {

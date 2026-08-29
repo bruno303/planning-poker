@@ -226,53 +226,68 @@ func (r *Room) SelectStory(ctx context.Context, clientID string, storyID string)
 // ReorderStory moves a story to targetIndex. The current story remains
 // identified by its stable ID.
 func (r *Room) ReorderStory(ctx context.Context, clientID string, storyID string, targetIndex int) error {
-	client, ok := r.FindClient(clientID)
-	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
-	}
-	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can reorder stories")
-	}
-	if storyID == "" {
-		return fmt.Errorf("story ID cannot be empty")
-	}
-	if targetIndex < 0 || targetIndex >= len(r.Stories) {
-		return fmt.Errorf("target story index %d out of range", targetIndex)
-	}
-
-	storyIndex := r.storyIndexByID(storyID)
-	if storyIndex == -1 {
-		return fmt.Errorf("story %s not found in room %s", storyID, r.ID)
+	storyIndex, err := r.validateReorderStory(clientID, storyID, targetIndex)
+	if err != nil {
+		return err
 	}
 	if storyIndex == targetIndex {
 		return nil
 	}
 
-	currentStoryIndex := r.CurrentStoryIndex
-	currentStoryID := ""
-	if currentStoryIndex >= 0 && currentStoryIndex < len(r.Stories) {
-		currentStoryID = r.Stories[currentStoryIndex].ID
-	}
-
+	currentStoryID := r.currentStoryID()
 	story := r.Stories[storyIndex]
 	r.Stories = append(r.Stories[:storyIndex], r.Stories[storyIndex+1:]...)
 	r.Stories = slices.Insert(r.Stories, targetIndex, story)
+	r.updateCurrentStoryIndex(storyIndex, targetIndex, currentStoryID)
+
+	return nil
+}
+
+func (r *Room) validateReorderStory(clientID string, storyID string, targetIndex int) (int, error) {
+	client, ok := r.FindClient(clientID)
+	if !ok {
+		return 0, fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+	}
+	if !client.IsOwner {
+		return 0, fmt.Errorf("only the room owner can reorder stories")
+	}
+	if storyID == "" {
+		return 0, fmt.Errorf("story ID cannot be empty")
+	}
+	if targetIndex < 0 || targetIndex >= len(r.Stories) {
+		return 0, fmt.Errorf("target story index %d out of range", targetIndex)
+	}
+
+	storyIndex := r.storyIndexByID(storyID)
+	if storyIndex == -1 {
+		return 0, fmt.Errorf("story %s not found in room %s", storyID, r.ID)
+	}
+
+	return storyIndex, nil
+}
+
+func (r *Room) currentStoryID() string {
+	if r.CurrentStoryIndex < 0 || r.CurrentStoryIndex >= len(r.Stories) {
+		return ""
+	}
+	return r.Stories[r.CurrentStoryIndex].ID
+}
+
+func (r *Room) updateCurrentStoryIndex(storyIndex, targetIndex int, currentStoryID string) {
 	if currentStoryID != "" {
 		r.CurrentStoryIndex = r.storyIndexByID(currentStoryID)
-	} else {
-		if currentStoryIndex == storyIndex {
-			currentStoryIndex = targetIndex
-		} else {
-			if storyIndex < currentStoryIndex {
-				currentStoryIndex--
-			}
-			if targetIndex <= currentStoryIndex {
-				currentStoryIndex++
-			}
-		}
-		r.CurrentStoryIndex = currentStoryIndex
+		return
 	}
-	return nil
+	if r.CurrentStoryIndex == storyIndex {
+		r.CurrentStoryIndex = targetIndex
+		return
+	}
+	if storyIndex < r.CurrentStoryIndex {
+		r.CurrentStoryIndex--
+	}
+	if targetIndex <= r.CurrentStoryIndex {
+		r.CurrentStoryIndex++
+	}
 }
 
 func (r *Room) storyIndexByID(storyID string) int {
