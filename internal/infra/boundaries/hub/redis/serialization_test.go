@@ -1,12 +1,12 @@
 package redis
 
 import (
-	"planning-poker/internal/domain/entity"
-	"planning-poker/internal/infra/boundaries/hub/clientcollection"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/samber/lo"
+
+	"planning-poker/internal/domain/entity"
+	"planning-poker/internal/infra/boundaries/hub/clientcollection"
 )
 
 func TestSerializeDeserializeRoom(t *testing.T) {
@@ -124,20 +124,10 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 	}
 }
 
-func TestDeserializeRoomBackfillsLegacyStoryIDs(t *testing.T) {
+func TestDeserializeRoomRejectsStoryWithoutID(t *testing.T) {
 	data := []byte(`{"id":"room-legacy","backlogMode":true,"stories":[{"name":"Legacy story","mostAppearingVotes":[],"voted":false}]}`)
 
-	room, err := DeserializeRoom(data, clientcollection.New())
-	if err != nil {
-		t.Fatalf("DeserializeRoom returned error: %v", err)
-	}
-	if room.BacklogVersion != 0 {
-		t.Fatalf("legacy backlog version = %d, want 0", room.BacklogVersion)
-	}
-	if len(room.Stories) != 1 || room.Stories[0].ID == "" {
-		t.Fatalf("legacy story ID was not backfilled: %+v", room.Stories)
-	}
-	if _, err := uuid.Parse(room.Stories[0].ID); err != nil {
-		t.Fatalf("backfilled story ID is not a UUID: %v", err)
+	if _, err := DeserializeRoom(data, clientcollection.New()); err == nil {
+		t.Fatal("DeserializeRoom accepted a story without an ID")
 	}
 }

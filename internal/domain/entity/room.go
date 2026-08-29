@@ -499,6 +499,10 @@ func (r *Room) ToggleReveal(ctx context.Context, clientID string) error {
 }
 
 func (r *Room) reveal(reveal bool) {
+	if reveal && r.Reveal {
+		return
+	}
+
 	r.Reveal = reveal
 
 	if !reveal {

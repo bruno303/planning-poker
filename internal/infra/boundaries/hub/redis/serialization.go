@@ -2,10 +2,11 @@ package redis
 
 import (
 	"encoding/json"
-	"planning-poker/internal/domain/entity"
+	"fmt"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
-	"github.com/google/uuid"
+
+	"planning-poker/internal/domain/entity"
 )
 
 type (
@@ -109,16 +110,14 @@ func serializeStories(stories []entity.Story) []SerializedStory {
 }
 
 func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*entity.Room, error) {
-	room, _, err := deserializeRoom(data, clientCollection)
-	return room, err
-}
-
-func deserializeRoom(data []byte, clientCollection entity.ClientCollection) (*entity.Room, bool, error) {
 	var serialized SerializedRoom
 	if err := json.Unmarshal(data, &serialized); err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	stories, storyIDsBackfilled := deserializeStories(serialized.Stories)
+	stories, err := deserializeStories(serialized.Stories)
+	if err != nil {
+		return nil, err
+	}
 
 	room := &entity.Room{
 		ID:                  serialized.ID,
@@ -144,25 +143,22 @@ func deserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 		room.Clients.Add(client)
 	}
 
-	return room, storyIDsBackfilled, nil
+	return room, nil
 }
 
-func deserializeStories(stories []SerializedStory) ([]entity.Story, bool) {
+func deserializeStories(stories []SerializedStory) ([]entity.Story, error) {
 	result := make([]entity.Story, len(stories))
-	backfilled := false
 	for i, s := range stories {
-		id := s.ID
-		if id == "" {
-			id = uuid.NewString()
-			backfilled = true
+		if s.ID == "" {
+			return nil, fmt.Errorf("story at index %d is missing an ID", i)
 		}
 		result[i] = entity.Story{
-			ID:                 id,
+			ID:                 s.ID,
 			Name:               s.Name,
 			Result:             s.Result,
 			MostAppearingVotes: s.MostAppearingVotes,
 			Voted:              s.Voted,
 		}
 	}
-	return result, backfilled
+	return result, nil
 }

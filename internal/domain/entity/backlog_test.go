@@ -229,6 +229,53 @@ func TestRoomAutomaticRevealRecordsCurrentStoryEstimate(t *testing.T) {
 	}
 }
 
+func TestRoomAutomaticRevealEstimateIsStableAfterParticipantChange(t *testing.T) {
+	tests := []struct {
+		name   string
+		action func(context.Context, *entity.Room, *entity.Client, *entity.Client) error
+	}{
+		{
+			name: "participant leaves",
+			action: func(ctx context.Context, room *entity.Room, _, participant *entity.Client) error {
+				return room.RemoveClient(ctx, participant.ID)
+			},
+		},
+		{
+			name: "participant becomes spectator",
+			action: func(ctx context.Context, room *entity.Room, owner, participant *entity.Client) error {
+				return room.ToggleSpectator(ctx, owner.ID, participant.ID)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			room, owner, participant := newBacklogRoom([]entity.Story{{ID: "current", Name: "Current"}}, 0, 0)
+			if err := room.Vote(context.Background(), owner.ID, lo.ToPtr("5")); err != nil {
+				t.Fatalf("owner Vote returned error: %v", err)
+			}
+			if err := room.Vote(context.Background(), participant.ID, lo.ToPtr("8")); err != nil {
+				t.Fatalf("participant Vote returned error: %v", err)
+			}
+
+			if room.Result == nil || *room.Result != 6.5 || room.Stories[0].Result == nil || *room.Stories[0].Result != 6.5 {
+				t.Fatalf("automatic reveal result = %v, story result = %v, want 6.5", room.Result, room.Stories[0].Result)
+			}
+
+			if err := tt.action(context.Background(), room, owner, participant); err != nil {
+				t.Fatalf("participant change returned error: %v", err)
+			}
+
+			if !room.Reveal || room.Result == nil || *room.Result != 6.5 {
+				t.Fatalf("room result changed after participant change: %+v", room)
+			}
+			if room.Stories[0].Result == nil || *room.Stories[0].Result != 6.5 || !room.Stories[0].Voted {
+				t.Fatalf("story estimate changed after participant change: %+v", room.Stories[0])
+			}
+		})
+	}
+}
+
 func TestRoomSelectStoryRejectsCurrentEstimatedAndNonOwner(t *testing.T) {
 	tests := []struct {
 		name     string

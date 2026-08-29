@@ -400,14 +400,9 @@ func (h *RedisHub) loadRoom(ctx context.Context, roomID string) (*entity.Room, e
 		return nil, err
 	}
 
-	room, storyIDsBackfilled, err := deserializeRoom(data, clientcollection.New())
+	room, err := DeserializeRoom(data, clientcollection.New())
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize room: %w", err)
-	}
-	if storyIDsBackfilled {
-		if err := h.saveRoom(ctx, room); err != nil {
-			return nil, fmt.Errorf("failed to persist migrated room %s: %w", roomID, err)
-		}
 	}
 
 	return room, nil
