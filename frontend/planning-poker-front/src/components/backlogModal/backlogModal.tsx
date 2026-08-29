@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type DragEvent, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent, type MouseEvent } from 'react';
 import { ChevronDown, ChevronUp, GripVertical, Plus, Trash2, X } from 'lucide-react';
 import type { Story } from '@/components/messages/websocket';
 import { styles } from './backlogModal.styles';
@@ -33,6 +33,13 @@ export default function BacklogModal({
   const [newStoryInput, setNewStoryInput] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
   const [draggedStoryId, setDraggedStoryId] = useState<string | null>(null);
+  const newStoryInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (amIAdmin) {
+      newStoryInputRef.current?.focus();
+    }
+  }, [amIAdmin]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -54,6 +61,7 @@ export default function BacklogModal({
     }
     onAddStory(trimmed);
     setNewStoryInput('');
+    newStoryInputRef.current?.focus();
   };
 
   const handleDisableBacklog = () => {
@@ -228,6 +236,7 @@ export default function BacklogModal({
               <div style={styles.backlogAddForm}>
                 <input
                   type="text"
+                  ref={newStoryInputRef}
                   value={newStoryInput}
                   onChange={(e) => setNewStoryInput(e.target.value)}
                   onKeyDown={(e) => {
