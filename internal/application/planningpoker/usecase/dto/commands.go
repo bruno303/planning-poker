@@ -33,7 +33,6 @@ type (
 		BacklogMode         bool          `json:"backlogMode"`
 		Stories             []Story       `json:"stories"`
 		CurrentStoryIndex   int           `json:"currentStoryIndex"`
-		BacklogVersion      int           `json:"backlogVersion"`
 	}
 	Participant struct {
 		ID          string  `json:"id"`
@@ -71,7 +70,6 @@ func NewRoomStateCommand(room *entity.Room) RoomState {
 		BacklogMode:         room.BacklogMode,
 		Stories:             mapStories(room.Stories),
 		CurrentStoryIndex:   room.CurrentStoryIndex,
-		BacklogVersion:      room.BacklogVersion,
 	}
 }
 

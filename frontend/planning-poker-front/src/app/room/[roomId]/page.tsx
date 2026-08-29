@@ -81,7 +81,6 @@ export default function PlanningPoker() {
   const [backlogMode, setBacklogMode] = useState(false);
   const [stories, setStories] = useState<Story[]>([]);
   const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
-  const [backlogVersion, setBacklogVersion] = useState(0);
   const [showBacklogModal, setShowBacklogModal] = useState(false);
   const deliberateDisconnect = useRef(false);
   const editingStoryRef = useRef('');
@@ -211,8 +210,8 @@ export default function PlanningPoker() {
     sendMessage<AddStoryPayload>({ type: 'add-story', payload });
   };
 
-  const handleRemoveStory = (storyId: string, expectedBacklogVersion: number) => {
-    const payload: RemoveStoryPayload = { storyId, expectedBacklogVersion };
+  const handleRemoveStory = (storyId: string) => {
+    const payload: RemoveStoryPayload = { storyId };
     sendMessage<RemoveStoryPayload>({ type: 'remove-story', payload });
   };
 
@@ -221,8 +220,8 @@ export default function PlanningPoker() {
     sendMessage<SelectStoryPayload>({ type: 'select-story', payload });
   };
 
-  const handleReorderStory = (storyId: string, targetIndex: number, expectedBacklogVersion: number) => {
-    const payload: ReorderStoryPayload = { storyId, targetIndex, expectedBacklogVersion };
+  const handleReorderStory = (storyId: string, targetIndex: number) => {
+    const payload: ReorderStoryPayload = { storyId, targetIndex };
     sendMessage<ReorderStoryPayload>({ type: 'reorder-story', payload });
   };
 
@@ -246,7 +245,7 @@ export default function PlanningPoker() {
       }
       const currentStoryToRemove = stories[currentStoryIndex];
       if (currentStoryToRemove) {
-        handleRemoveStory(currentStoryToRemove.id, backlogVersion);
+        handleRemoveStory(currentStoryToRemove.id);
       }
     } else {
       const payload: UpdateStoryPayload = { story: trimmedStory };
@@ -336,7 +335,6 @@ export default function PlanningPoker() {
           setBacklogMode(roomState.backlogMode ?? false);
           setStories(roomState.stories ?? []);
           setCurrentStoryIndex(roomState.currentStoryIndex ?? 0);
-          setBacklogVersion(roomState.backlogVersion ?? 0);
 
         } else if (data.type === 'update-client-id') {
           setClientId(data.clientId);
@@ -794,7 +792,6 @@ export default function PlanningPoker() {
             <BacklogModal
               stories={stories}
               currentStoryIndex={currentStoryIndex}
-              backlogVersion={backlogVersion}
               amIAdmin={amIAdmin}
               onClose={() => setShowBacklogModal(false)}
               onAddStory={handleAddStory}

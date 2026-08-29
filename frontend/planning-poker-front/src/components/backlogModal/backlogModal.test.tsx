@@ -9,7 +9,6 @@ const CONFIRM_TEXT = 'This will remove the story backlog and keep only the curre
 const renderBacklogModal = (overrides: Partial<{
   stories: Story[];
   currentStoryIndex: number;
-  backlogVersion: number;
   amIAdmin: boolean;
   onClose: ReturnType<typeof vi.fn>;
   onAddStory: ReturnType<typeof vi.fn>;
@@ -21,7 +20,6 @@ const renderBacklogModal = (overrides: Partial<{
   const props = {
     stories: [] as Story[],
     currentStoryIndex: 0,
-    backlogVersion: 0,
     amIAdmin: false,
     onClose: vi.fn(),
     onAddStory: vi.fn(),
@@ -36,7 +34,6 @@ const renderBacklogModal = (overrides: Partial<{
     <BacklogModal
       stories={props.stories}
       currentStoryIndex={props.currentStoryIndex}
-      backlogVersion={props.backlogVersion}
       amIAdmin={props.amIAdmin}
       onClose={props.onClose}
       onAddStory={props.onAddStory}
@@ -149,7 +146,7 @@ describe('BacklogModal', () => {
     expect(onAddStory).not.toHaveBeenCalled();
   });
 
-  it('calls onRemoveStory with stable id and current backlog version', () => {
+  it('calls onRemoveStory with stable id', () => {
     const stories: Story[] = [
       { id: 'story-1', name: 'Current story', mostAppearingVotes: [], voted: false },
       { id: 'story-2', name: 'Voted story', result: 3, mostAppearingVotes: [], voted: true },
@@ -160,7 +157,7 @@ describe('BacklogModal', () => {
 
     fireEvent.click(screen.getAllByTitle('Remove story')[0]);
 
-    expect(onRemoveStory).toHaveBeenCalledWith('story-3', 0);
+    expect(onRemoveStory).toHaveBeenCalledWith('story-3');
   });
 
   it('selects pending stories by stable id', () => {
@@ -175,24 +172,24 @@ describe('BacklogModal', () => {
     expect(onSelectStory).toHaveBeenCalledWith('story-2');
   });
 
-  it('sends move button commands with the current backlog version', () => {
+  it('sends move button commands with stable id and target index', () => {
     const stories: Story[] = [
       { id: 'story-1', name: 'Current story', mostAppearingVotes: [], voted: false },
       { id: 'story-2', name: 'Pending story', mostAppearingVotes: [], voted: false },
     ];
-    const { onReorderStory } = renderBacklogModal({ stories, amIAdmin: true, backlogVersion: 4 });
+    const { onReorderStory } = renderBacklogModal({ stories, amIAdmin: true });
 
     fireEvent.click(screen.getByRole('button', { name: 'Move Pending story up' }));
 
-    expect(onReorderStory).toHaveBeenCalledWith('story-2', 0, 4);
+    expect(onReorderStory).toHaveBeenCalledWith('story-2', 0);
   });
 
-  it('supports native drag and drop with the current backlog version', () => {
+  it('supports native drag and drop with stable id and target index', () => {
     const stories: Story[] = [
       { id: 'story-1', name: 'Current story', mostAppearingVotes: [], voted: false },
       { id: 'story-2', name: 'Pending story', mostAppearingVotes: [], voted: false },
     ];
-    const { onReorderStory } = renderBacklogModal({ stories, amIAdmin: true, backlogVersion: 7 });
+    const { onReorderStory } = renderBacklogModal({ stories, amIAdmin: true });
     const currentRow = screen.getByText('Current story').parentElement?.parentElement as HTMLElement;
     const pendingRow = screen.getByText('Pending story').parentElement?.parentElement as HTMLElement;
     const dataTransfer = {
@@ -205,7 +202,7 @@ describe('BacklogModal', () => {
     fireEvent.dragStart(pendingRow, { dataTransfer });
     fireEvent.drop(currentRow, { dataTransfer });
 
-    expect(onReorderStory).toHaveBeenCalledWith('story-2', 0, 7);
+    expect(onReorderStory).toHaveBeenCalledWith('story-2', 0);
   });
 
   it('handles disable backlog confirm flow', () => {

@@ -1253,7 +1253,7 @@ func testRemoveStoryAtIndex(t *testing.T) {
 	defer ctrl.Finish()
 	room := newRoomWithOwnerAndStories(ctrl, &Client{ID: "client1", IsOwner: true}, []Story{{ID: "a", Name: "A"}, {ID: "b", Name: "B"}, {ID: "c", Name: "C"}}, 0)
 
-	if err := room.RemoveStory(context.Background(), "client1", "c", 0); err != nil {
+	if err := room.RemoveStory(context.Background(), "client1", "c"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(room.Stories) != 2 {
@@ -1266,7 +1266,7 @@ func testRemoveStoryBeforeCurrent(t *testing.T) {
 	defer ctrl.Finish()
 	room := newRoomWithOwnerAndStories(ctrl, &Client{ID: "client1", IsOwner: true}, []Story{{ID: "a", Name: "A"}, {ID: "b", Name: "B"}, {ID: "c", Name: "C"}}, 1)
 
-	if err := room.RemoveStory(context.Background(), "client1", "a", 0); err != nil {
+	if err := room.RemoveStory(context.Background(), "client1", "a"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if room.CurrentStoryIndex != 0 {
@@ -1281,7 +1281,7 @@ func testRemoveCurrentStoryResetsVotes(t *testing.T) {
 	room := newRoomWithOwnerAndStories(ctrl, owner, []Story{{ID: "a", Name: "A"}, {ID: "b", Name: "B"}}, 0)
 	room.Reveal = true
 
-	if err := room.RemoveStory(context.Background(), "client1", "a", 0); err != nil {
+	if err := room.RemoveStory(context.Background(), "client1", "a"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if room.Reveal || owner.HasVoted {
@@ -1294,7 +1294,7 @@ func testRemoveLastStory(t *testing.T) {
 	defer ctrl.Finish()
 	room := newRoomWithOwnerAndStories(ctrl, &Client{ID: "client1", IsOwner: true}, []Story{{ID: "only", Name: "Only"}}, 0)
 
-	if err := room.RemoveStory(context.Background(), "client1", "only", 0); err != nil {
+	if err := room.RemoveStory(context.Background(), "client1", "only"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(room.Stories) != 0 {
@@ -1307,7 +1307,7 @@ func testRemoveStoryInvalidIndex(t *testing.T) {
 	defer ctrl.Finish()
 	room := newRoomWithOwnerAndStories(ctrl, &Client{ID: "client1", IsOwner: true}, []Story{{ID: "a", Name: "A"}}, 0)
 
-	if err := room.RemoveStory(context.Background(), "client1", "missing", 0); err == nil {
+	if err := room.RemoveStory(context.Background(), "client1", "missing"); err == nil {
 		t.Error("expected error, got nil")
 	}
 }
@@ -1317,7 +1317,7 @@ func testRemoveStoryNonOwner(t *testing.T) {
 	defer ctrl.Finish()
 	room := newRoomWithOwnerAndStories(ctrl, &Client{ID: "client2"}, []Story{{ID: "a", Name: "A"}}, 0)
 
-	if err := room.RemoveStory(context.Background(), "client2", "a", 0); err == nil {
+	if err := room.RemoveStory(context.Background(), "client2", "a"); err == nil {
 		t.Error("expected error, got nil")
 	}
 }

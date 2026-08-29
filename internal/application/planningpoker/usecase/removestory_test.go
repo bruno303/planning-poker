@@ -57,57 +57,15 @@ func TestRemoveStoryUseCase_Execute_Success(t *testing.T) {
 
 	uc := NewRemoveStoryUseCase(mockHub, mockLockManager)
 	cmd := RemoveStoryCommand{
-		RoomID:                 roomID,
-		SenderID:               "client123",
-		StoryID:                "story-1",
-		ExpectedBacklogVersion: 0,
+		RoomID:   roomID,
+		SenderID: "client123",
+		StoryID:  "story-1",
 	}
 
 	err := uc.Execute(ctx, cmd)
 
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
-	}
-}
-
-func TestRemoveStoryUseCase_Execute_StaleVersionDoesNotSave(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	ctx := context.Background()
-	mockHub := domain.NewMockHub(ctrl)
-	mockLockManager := lock.NewMockLockManager(ctrl)
-	roomID := "room123"
-	senderID := "client123"
-	room := &entity.Room{
-		ID:             roomID,
-		Clients:        clientcollection.New(),
-		Stories:        []entity.Story{{ID: "story-1", Name: "Story 1"}},
-		BacklogVersion: 1,
-	}
-	client := room.NewClient(senderID)
-	client.IsOwner = true
-
-	mockLockManager.EXPECT().
-		ExecuteWithLock(gomock.Any(), roomID, gomock.Any()).
-		DoAndReturn(func(ctx context.Context, key string, fn func(context.Context) error) error {
-			return fn(ctx)
-		})
-	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-
-	uc := NewRemoveStoryUseCase(mockHub, mockLockManager)
-	err := uc.Execute(ctx, RemoveStoryCommand{
-		RoomID:                 roomID,
-		SenderID:               senderID,
-		StoryID:                "story-1",
-		ExpectedBacklogVersion: 0,
-	})
-
-	if err == nil {
-		t.Fatal("expected stale removal to fail")
-	}
-	if len(room.Stories) != 1 || room.Stories[0].ID != "story-1" || room.BacklogVersion != 1 {
-		t.Fatalf("stale removal mutated room: %+v", room)
 	}
 }
 
@@ -142,10 +100,9 @@ func TestRemoveStoryUseCase_Execute_SaveRoomError(t *testing.T) {
 
 	uc := NewRemoveStoryUseCase(mockHub, mockLockManager)
 	cmd := RemoveStoryCommand{
-		RoomID:                 roomID,
-		SenderID:               senderID,
-		StoryID:                "story-1",
-		ExpectedBacklogVersion: 0,
+		RoomID:   roomID,
+		SenderID: senderID,
+		StoryID:  "story-1",
 	}
 
 	err := uc.Execute(ctx, cmd)
@@ -178,10 +135,9 @@ func TestRemoveStoryUseCase_Execute_RoomNotFound(t *testing.T) {
 
 	uc := NewRemoveStoryUseCase(mockHub, mockLockManager)
 	cmd := RemoveStoryCommand{
-		RoomID:                 roomID,
-		SenderID:               "client123",
-		StoryID:                "story-1",
-		ExpectedBacklogVersion: 0,
+		RoomID:   roomID,
+		SenderID: "client123",
+		StoryID:  "story-1",
 	}
 
 	err := uc.Execute(ctx, cmd)
@@ -226,10 +182,9 @@ func TestRemoveStoryUseCase_Execute_BroadcastError(t *testing.T) {
 
 	uc := NewRemoveStoryUseCase(mockHub, mockLockManager)
 	cmd := RemoveStoryCommand{
-		RoomID:                 roomID,
-		SenderID:               "client123",
-		StoryID:                "story-1",
-		ExpectedBacklogVersion: 0,
+		RoomID:   roomID,
+		SenderID: "client123",
+		StoryID:  "story-1",
 	}
 
 	err := uc.Execute(ctx, cmd)

@@ -41,7 +41,6 @@ type (
 		BacklogMode         bool
 		Stories             []Story
 		CurrentStoryIndex   int
-		BacklogVersion      int
 	}
 )
 
@@ -120,15 +119,11 @@ func (r *Room) ToggleBacklogMode(ctx context.Context, clientID string) error {
 		if r.CurrentStory != "" {
 			r.Stories = []Story{{ID: uuid.NewString(), Name: r.CurrentStory}}
 			r.CurrentStoryIndex = 0
-			r.BacklogVersion++
 		}
 	} else {
 		r.BacklogMode = false
 		if name := r.getCurrentStoryName(); name != "" {
 			r.CurrentStory = name
-		}
-		if len(r.Stories) > 0 {
-			r.BacklogVersion++
 		}
 		r.Stories = nil
 		r.CurrentStoryIndex = 0
@@ -151,7 +146,6 @@ func (r *Room) AddStory(ctx context.Context, clientID string, name string) error
 	}
 
 	r.Stories = append(r.Stories, Story{ID: uuid.NewString(), Name: name})
-	r.BacklogVersion++
 	if len(r.Stories) == 1 {
 		r.CurrentStoryIndex = 0
 	}
@@ -159,7 +153,7 @@ func (r *Room) AddStory(ctx context.Context, clientID string, name string) error
 	return nil
 }
 
-func (r *Room) RemoveStory(ctx context.Context, clientID string, storyID string, expectedBacklogVersion int) error {
+func (r *Room) RemoveStory(ctx context.Context, clientID string, storyID string) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
@@ -170,16 +164,10 @@ func (r *Room) RemoveStory(ctx context.Context, clientID string, storyID string,
 	if storyID == "" {
 		return fmt.Errorf("story ID cannot be empty")
 	}
-	if expectedBacklogVersion != r.BacklogVersion {
-		return fmt.Errorf("stale backlog version %d, current version is %d", expectedBacklogVersion, r.BacklogVersion)
-	}
-
 	index := r.storyIndexByID(storyID)
 	if index == -1 {
 		return fmt.Errorf("story %s not found in room %s", storyID, r.ID)
 	}
-
-	r.BacklogVersion++
 
 	if index == r.CurrentStoryIndex {
 		if len(r.Stories) == 1 {
@@ -235,9 +223,9 @@ func (r *Room) SelectStory(ctx context.Context, clientID string, storyID string)
 	return nil
 }
 
-// ReorderStory moves a story to targetIndex when the caller has the current
-// backlog version. The current story remains identified by its stable ID.
-func (r *Room) ReorderStory(ctx context.Context, clientID string, storyID string, targetIndex int, expectedBacklogVersion int) error {
+// ReorderStory moves a story to targetIndex. The current story remains
+// identified by its stable ID.
+func (r *Room) ReorderStory(ctx context.Context, clientID string, storyID string, targetIndex int) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
@@ -247,9 +235,6 @@ func (r *Room) ReorderStory(ctx context.Context, clientID string, storyID string
 	}
 	if storyID == "" {
 		return fmt.Errorf("story ID cannot be empty")
-	}
-	if expectedBacklogVersion != r.BacklogVersion {
-		return fmt.Errorf("stale backlog version %d, current version is %d", expectedBacklogVersion, r.BacklogVersion)
 	}
 	if targetIndex < 0 || targetIndex >= len(r.Stories) {
 		return fmt.Errorf("target story index %d out of range", targetIndex)
@@ -287,8 +272,6 @@ func (r *Room) ReorderStory(ctx context.Context, clientID string, storyID string
 		}
 		r.CurrentStoryIndex = currentStoryIndex
 	}
-	r.BacklogVersion++
-
 	return nil
 }
 

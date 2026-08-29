@@ -33,7 +33,6 @@ type (
 		BacklogMode         bool               `json:"backlogMode"`
 		Stories             []SerializedStory  `json:"stories,omitempty"`
 		CurrentStoryIndex   int                `json:"currentStoryIndex"`
-		BacklogVersion      int                `json:"backlogVersion"`
 	}
 	SerializedClient struct {
 		ID          string  `json:"id"`
@@ -89,7 +88,6 @@ func SerializeRoom(room *entity.Room) ([]byte, error) {
 		BacklogMode:         room.BacklogMode,
 		Stories:             serializeStories(room.Stories),
 		CurrentStoryIndex:   room.CurrentStoryIndex,
-		BacklogVersion:      room.BacklogVersion,
 	}
 
 	return json.Marshal(serialized)
@@ -135,7 +133,6 @@ func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 		BacklogMode:         serialized.BacklogMode,
 		Stories:             stories,
 		CurrentStoryIndex:   serialized.CurrentStoryIndex,
-		BacklogVersion:      serialized.BacklogVersion,
 	}
 
 	for _, sc := range serialized.Clients {

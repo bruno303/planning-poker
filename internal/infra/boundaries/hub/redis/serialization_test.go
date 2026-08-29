@@ -21,7 +21,6 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 	originalRoom.VoteRange = lo.ToPtr(5)
 	originalRoom.VoteSpread = lo.ToPtr(2)
 	originalRoom.NonNumericVoteCount = 1
-	originalRoom.BacklogVersion = 6
 	originalRoom.Stories = []entity.Story{{
 		ID:                 "story-1",
 		Name:               "Backlog story",
@@ -77,9 +76,6 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 	}
 	if deserializedRoom.NonNumericVoteCount != originalRoom.NonNumericVoteCount {
 		t.Errorf("Expected non-numeric vote count %d, got %d", originalRoom.NonNumericVoteCount, deserializedRoom.NonNumericVoteCount)
-	}
-	if deserializedRoom.BacklogVersion != originalRoom.BacklogVersion {
-		t.Errorf("Expected backlog version %d, got %d", originalRoom.BacklogVersion, deserializedRoom.BacklogVersion)
 	}
 	if len(deserializedRoom.Stories) != 1 || deserializedRoom.Stories[0].ID != "story-1" {
 		t.Fatalf("story ID was not preserved: %+v", deserializedRoom.Stories)

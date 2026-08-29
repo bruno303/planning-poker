@@ -51,7 +51,6 @@ export interface AddStoryPayload {
 
 export interface RemoveStoryPayload {
   storyId: string;
-  expectedBacklogVersion: number;
 }
 
 export interface SelectStoryPayload {
@@ -61,7 +60,6 @@ export interface SelectStoryPayload {
 export interface ReorderStoryPayload {
   storyId: string;
   targetIndex: number;
-  expectedBacklogVersion: number;
 }
 
 export interface Story {
@@ -95,5 +93,4 @@ export interface RoomState {
   backlogMode?: boolean;
   stories?: Story[];
   currentStoryIndex?: number;
-  backlogVersion?: number;
 }

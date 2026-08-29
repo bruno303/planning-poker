@@ -8,20 +8,18 @@ import { styles } from './backlogModal.styles';
 type BacklogModalProps = {
   stories: Story[];
   currentStoryIndex: number;
-  backlogVersion: number;
   amIAdmin: boolean;
   onClose: () => void;
   onAddStory: (story: string) => void;
-  onRemoveStory: (storyId: string, expectedBacklogVersion: number) => void;
+  onRemoveStory: (storyId: string) => void;
   onSelectStory: (storyId: string) => void;
-  onReorderStory: (storyId: string, targetIndex: number, expectedBacklogVersion: number) => void;
+  onReorderStory: (storyId: string, targetIndex: number) => void;
   onDisableBacklog: () => void;
 };
 
 export default function BacklogModal({
   stories,
   currentStoryIndex,
-  backlogVersion,
   amIAdmin,
   onClose,
   onAddStory,
@@ -92,13 +90,13 @@ export default function BacklogModal({
 
     const storyId = event.dataTransfer.getData('text/plain') || draggedStoryId;
     if (storyId) {
-      onReorderStory(storyId, targetIndex, backlogVersion);
+      onReorderStory(storyId, targetIndex);
     }
     setDraggedStoryId(null);
   };
 
   const handleMove = (storyId: string, targetIndex: number) => {
-    onReorderStory(storyId, targetIndex, backlogVersion);
+    onReorderStory(storyId, targetIndex);
   };
 
   return (
@@ -219,7 +217,7 @@ export default function BacklogModal({
                         {!story.voted && index !== currentStoryIndex && (
                           <button
                             style={{ ...styles.button, ...styles.dangerSmallButton }}
-                            onClick={() => onRemoveStory(story.id, backlogVersion)}
+                            onClick={() => onRemoveStory(story.id)}
                             title="Remove story"
                           >
                             <Trash2 size={14} />

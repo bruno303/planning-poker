@@ -75,12 +75,12 @@ func TestReorderStoryUseCaseExecute(t *testing.T) {
 	hub.EXPECT().BroadcastToRoom(ctx, room.ID, gomock.Any()).Return(nil)
 
 	err := NewReorderStoryUseCase(hub, lockManager).Execute(ctx, ReorderStoryCommand{
-		RoomID: room.ID, SenderID: "owner", StoryID: "pending", TargetIndex: 0, ExpectedBacklogVersion: 3,
+		RoomID: room.ID, SenderID: "owner", StoryID: "pending", TargetIndex: 0,
 	})
 	if err != nil {
 		t.Fatalf("Execute returned error: %v", err)
 	}
-	if room.Stories[0].ID != "pending" || room.BacklogVersion != 4 {
+	if room.Stories[0].ID != "pending" {
 		t.Fatalf("unexpected reordered room: %+v", room)
 	}
 }
@@ -111,7 +111,6 @@ func backlogUseCaseRoom() *entity.Room {
 		BacklogMode:       true,
 		Stories:           []entity.Story{{ID: "current", Name: "Current"}, {ID: "pending", Name: "Pending"}},
 		CurrentStoryIndex: 0,
-		BacklogVersion:    3,
 	}
 	owner := room.NewClient("owner")
 	owner.IsOwner = true
