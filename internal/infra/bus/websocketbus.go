@@ -208,12 +208,60 @@ func (c *WebsocketBus) process(ctx context.Context, msg WebSocketMessage) {
 		c.logger.Error(ctx, fmt.Sprintf("Unknown event type '%v' for client %v", msg.Type, c.ID), errors.New("unknown event type"))
 		return
 	}
+	if guardedCommand(msg.Type) {
+		expected, ok := expectedRoomVersion(msg.Payload)
+		if !ok {
+			_ = c.Send(ctx, map[string]any{"type": "stale-command"})
+			return
+		}
+		room, err := c.hub.LoadRoom(ctx, c.roomID)
+		if err != nil || room.ValidateRoomVersion(&expected) != nil {
+			version := uint64(0)
+			if room != nil {
+				version = room.RoomVersion
+			}
+			_ = c.Send(ctx, map[string]any{"type": "stale-command", "roomVersion": version})
+			return
+		}
+	}
 
 	err := usecaseCall(ctx, msg)
 	if err != nil {
+		if errors.Is(err, domain.ErrStaleRoomVersion) {
+			room, loadErr := c.hub.LoadRoom(ctx, c.roomID)
+			version := uint64(0)
+			if loadErr == nil {
+				version = room.RoomVersion
+			}
+			_ = c.Send(ctx, map[string]any{"type": "stale-command", "roomVersion": version})
+			return
+		}
 		c.logger.Error(ctx, fmt.Sprintf("Error handling event for client %v", c.ID), err)
 		return
 	}
+}
+
+func guardedCommand(commandType string) bool {
+	switch commandType {
+	case "reset", "reveal-votes", "toggle-spectator", "toggle-owner", "update-story", "new-voting", "vote-again", "toggle-backlog-mode", "remove-story", "select-story", "reorder-story", "advance-story", "prev-story":
+		return true
+	default:
+		return false
+	}
+}
+
+func expectedRoomVersion(payload any) (uint64, bool) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return 0, false
+	}
+	var value struct {
+		ExpectedRoomVersion *uint64 `json:"expectedRoomVersion"`
+	}
+	if json.Unmarshal(data, &value) != nil || value.ExpectedRoomVersion == nil {
+		return 0, false
+	}
+	return *value.ExpectedRoomVersion, true
 }
 
 func (c *WebsocketBus) handleReceiveError(ctx context.Context, err error) {

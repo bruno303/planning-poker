@@ -26,27 +26,49 @@ type (
 	}
 
 	Room struct {
-		ID                  string
-		Clients             ClientCollection
-		CurrentStory        string
-		Reveal              bool
-		Result              *float32
-		MostAppearingVotes  []int
-		Consensus           string
-		LowestVote          *int
-		HighestVote         *int
-		VoteRange           *int
-		VoteSpread          *int
-		NonNumericVoteCount int
-		BacklogMode         bool
-		Stories             []Story
-		CurrentStoryIndex   int
+		ID                   string
+		Clients              ClientCollection
+		CurrentStory         string
+		Reveal               bool
+		Result               *float32
+		MostAppearingVotes   []int
+		Consensus            string
+		LowestVote           *int
+		HighestVote          *int
+		VoteRange            *int
+		VoteSpread           *int
+		NonNumericVoteCount  int
+		BacklogMode          bool
+		Stories              []Story
+		CurrentStoryIndex    int
+		RoomVersion          uint64
+		persistedRoomVersion uint64
 	}
 )
 
 func NewRoom(clients ClientCollection) *Room {
 	return NewRoomWithID(uuid.NewString(), clients)
 }
+
+// ValidateRoomVersion rejects a command based on a room state that has since changed.
+func (r *Room) ValidateRoomVersion(expected *uint64) error {
+	if expected == nil || *expected != r.RoomVersion {
+		return domainerror.ErrStaleRoomVersion
+	}
+	return nil
+}
+
+// IncrementRoomVersion marks a room-wide state transition.
+func (r *Room) IncrementRoomVersion() { r.RoomVersion++ }
+
+// ExpectedPersistedRoomVersion is the revision read from storage before this mutation.
+func (r *Room) ExpectedPersistedRoomVersion() uint64 { return r.persistedRoomVersion }
+
+// MarkRoomSaved records the revision successfully persisted by the hub.
+func (r *Room) MarkRoomSaved() { r.persistedRoomVersion = r.RoomVersion }
+
+// SetPersistedRoomVersion initializes the storage revision after deserialization.
+func (r *Room) SetPersistedRoomVersion(version uint64) { r.persistedRoomVersion = version }
 
 func NewRoomWithID(id string, clients ClientCollection) *Room {
 	return &Room{
@@ -85,6 +107,26 @@ func (r *Room) RemoveClient(ctx context.Context, clientID string) error {
 	return nil
 }
 
+func (r *Room) NewVoting(ctx context.Context, clientID string) error {
+	client, ok := r.FindClient(clientID)
+	if !ok {
+		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+	}
+	if !client.IsOwner {
+		return fmt.Errorf("only the room owner can start a new voting")
+	}
+
+	if !r.BacklogMode {
+		r.CurrentStory = ""
+	}
+	r.reveal(false)
+	r.Clients.ForEach(func(c *Client) {
+		c.Vote(ctx, nil)
+	})
+	r.IncrementRoomVersion()
+
+	return nil
+}
 func (r *Room) ToggleBacklogMode(ctx context.Context, clientID string) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
@@ -108,6 +150,7 @@ func (r *Room) ToggleBacklogMode(ctx context.Context, clientID string) error {
 		r.Stories = nil
 		r.CurrentStoryIndex = 0
 	}
+	r.IncrementRoomVersion()
 
 	return nil
 }
@@ -129,6 +172,7 @@ func (r *Room) AddStory(ctx context.Context, clientID string, name string) error
 	if len(r.Stories) == 1 {
 		r.CurrentStoryIndex = 0
 	}
+	r.IncrementRoomVersion()
 
 	return nil
 }
@@ -153,6 +197,7 @@ func (r *Room) RemoveStory(ctx context.Context, clientID string, storyID string)
 		if len(r.Stories) == 1 {
 			r.CurrentStoryIndex = 0
 			r.Stories = nil
+			r.IncrementRoomVersion()
 			return nil
 		} else if index == len(r.Stories)-1 {
 			r.CurrentStoryIndex--
@@ -166,6 +211,7 @@ func (r *Room) RemoveStory(ctx context.Context, clientID string, storyID string)
 	}
 
 	r.Stories = append(r.Stories[:index], r.Stories[index+1:]...)
+	r.IncrementRoomVersion()
 
 	return nil
 }
@@ -199,6 +245,7 @@ func (r *Room) SelectStory(ctx context.Context, clientID string, storyID string)
 	r.Clients.ForEach(func(c *Client) {
 		c.Vote(ctx, nil)
 	})
+	r.IncrementRoomVersion()
 
 	return nil
 }
@@ -219,6 +266,7 @@ func (r *Room) ReorderStory(ctx context.Context, clientID string, storyID string
 	r.Stories = append(r.Stories[:storyIndex], r.Stories[storyIndex+1:]...)
 	r.Stories = slices.Insert(r.Stories, targetIndex, story)
 	r.updateCurrentStoryIndex(storyIndex, targetIndex, currentStoryID)
+	r.IncrementRoomVersion()
 
 	return nil
 }
@@ -295,6 +343,7 @@ func (r *Room) AdvanceToNextStory(ctx context.Context, clientID string) error {
 			c.Vote(ctx, nil)
 		})
 	}
+	r.IncrementRoomVersion()
 
 	return nil
 }
@@ -315,6 +364,7 @@ func (r *Room) PrevStory(ctx context.Context, clientID string) error {
 			c.Vote(ctx, nil)
 		})
 	}
+	r.IncrementRoomVersion()
 
 	return nil
 }
@@ -347,6 +397,7 @@ func (r *Room) ResetVoting(ctx context.Context, clientID string) error {
 	r.Clients.ForEach(func(c *Client) {
 		c.Vote(ctx, nil)
 	})
+	r.IncrementRoomVersion()
 
 	return nil
 }
@@ -385,6 +436,7 @@ func (r *Room) ToggleSpectator(ctx context.Context, clientID string, targetClien
 	} else {
 		return fmt.Errorf("target client %s not found in room %s", targetClientID, r.ID)
 	}
+	r.IncrementRoomVersion()
 
 	return nil
 }
@@ -416,6 +468,7 @@ func (r *Room) ToggleOwner(ctx context.Context, clientID string, targetClientID 
 	} else {
 		return fmt.Errorf("target client %s not found in room %s", targetClientID, r.ID)
 	}
+	r.IncrementRoomVersion()
 
 	return nil
 }
@@ -459,6 +512,7 @@ func (r *Room) SetCurrentStory(ctx context.Context, clientID string, story strin
 	} else {
 		r.CurrentStory = story
 	}
+	r.IncrementRoomVersion()
 	return nil
 }
 
@@ -472,7 +526,8 @@ func (r *Room) ToggleReveal(ctx context.Context, clientID string) error {
 	}
 
 	r.reveal(!r.Reveal)
-
+	r.IncrementRoomVersion()
+	r.IncrementRoomVersion()
 	return nil
 }
 

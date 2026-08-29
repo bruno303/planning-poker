@@ -24,6 +24,7 @@ type RedisClient interface {
 	Subscribe(ctx context.Context, channels ...string) *redis.PubSub
 	Scan(ctx context.Context, count uint64, match string, cursor int64) *redis.ScanCmd
 	Keys(ctx context.Context, pattern string) *redis.StringSliceCmd
+	Eval(ctx context.Context, script string, keys []string, args ...interface{}) *redis.Cmd
 }
 
 const (
@@ -375,8 +376,14 @@ func (h *RedisHub) GetRooms() []*entity.Room {
 	return rooms
 }
 
-func (h *RedisHub) SaveRoom(ctx context.Context, room *entity.Room) error {
-	return h.saveRoom(ctx, room)
+func (h *RedisHub) SaveRoom(ctx context.Context, room *entity.Room, expectedVersion ...uint64) error {
+	if len(expectedVersion) == 0 {
+		if room.RoomVersion == room.ExpectedPersistedRoomVersion() {
+			return h.saveRoom(ctx, room)
+		}
+		return h.saveRoomConditionally(ctx, room, room.ExpectedPersistedRoomVersion())
+	}
+	return h.saveRoomConditionally(ctx, room, expectedVersion[0])
 }
 
 func (h *RedisHub) saveRoom(ctx context.Context, room *entity.Room) error {
@@ -389,7 +396,41 @@ func (h *RedisHub) saveRoom(ctx context.Context, room *entity.Room) error {
 	if err := h.client.Set(ctx, key, data, twentyFourHours).Err(); err != nil {
 		return fmt.Errorf("failed to save room to Redis: %w", err)
 	}
+	room.MarkRoomSaved()
 
+	return nil
+}
+
+const compareAndSaveRoomScript = `
+local stored = redis.call('GET', KEYS[1])
+if not stored then return {-1} end
+local room = cjson.decode(stored)
+if room.roomVersion ~= tonumber(ARGV[1]) then return {0, room.roomVersion} end
+redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
+return {1}
+`
+
+func (h *RedisHub) saveRoomConditionally(ctx context.Context, room *entity.Room, expectedVersion uint64) error {
+	data, err := SerializeRoom(room)
+	if err != nil {
+		return fmt.Errorf("failed to serialize room: %w", err)
+	}
+	result, err := h.client.Eval(ctx, compareAndSaveRoomScript, []string{roomKeyPrefix + room.ID}, expectedVersion, data, twentyFourHours.Milliseconds()).Result()
+	if err != nil {
+		return fmt.Errorf("failed to conditionally save room to Redis: %w", err)
+	}
+	values, ok := result.([]interface{})
+	if !ok || len(values) == 0 {
+		return fmt.Errorf("unexpected conditional save response")
+	}
+	status, ok := values[0].(int64)
+	if !ok {
+		return fmt.Errorf("unexpected conditional save status")
+	}
+	if status != 1 {
+		return domain.ErrStaleRoomVersion
+	}
+	room.MarkRoomSaved()
 	return nil
 }
 
