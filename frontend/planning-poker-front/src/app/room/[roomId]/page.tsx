@@ -798,10 +798,6 @@ export default function PlanningPoker() {
               onRemoveStory={handleRemoveStory}
               onSelectStory={handleSelectStory}
               onReorderStory={handleReorderStory}
-              onDisableBacklog={() => {
-                setShowBacklogModal(false);
-                handleToggleBacklogMode();
-              }}
             />
           )}
         </div>

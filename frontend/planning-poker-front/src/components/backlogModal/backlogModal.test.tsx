@@ -4,8 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Story } from '@/components/messages/websocket';
 import BacklogModal from './backlogModal';
 
-const CONFIRM_TEXT = 'This will remove the story backlog and keep only the current story. Are you sure?';
-
 const renderBacklogModal = (overrides: Partial<{
   stories: Story[];
   currentStoryIndex: number;
@@ -15,7 +13,6 @@ const renderBacklogModal = (overrides: Partial<{
   onRemoveStory: ReturnType<typeof vi.fn>;
   onSelectStory: ReturnType<typeof vi.fn>;
   onReorderStory: ReturnType<typeof vi.fn>;
-  onDisableBacklog: ReturnType<typeof vi.fn>;
 }> = {}) => {
   const props = {
     stories: [] as Story[],
@@ -26,7 +23,6 @@ const renderBacklogModal = (overrides: Partial<{
     onRemoveStory: vi.fn(),
     onSelectStory: vi.fn(),
     onReorderStory: vi.fn(),
-    onDisableBacklog: vi.fn(),
     ...overrides,
   };
 
@@ -40,7 +36,6 @@ const renderBacklogModal = (overrides: Partial<{
       onRemoveStory={props.onRemoveStory}
       onSelectStory={props.onSelectStory}
       onReorderStory={props.onReorderStory}
-      onDisableBacklog={props.onDisableBacklog}
     />,
   );
 
@@ -82,7 +77,7 @@ describe('BacklogModal', () => {
 
     expect(screen.getByPlaceholderText('Enter story name...')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Add' })).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Disable Backlog' })).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Disable Backlog' })).toBeNull();
     expect(screen.getAllByTitle('Remove story')).toHaveLength(1);
     expect(screen.getAllByTitle('Select story')).toHaveLength(1);
     expect(screen.getAllByTitle('Move up')).toHaveLength(3);
@@ -203,21 +198,6 @@ describe('BacklogModal', () => {
     fireEvent.drop(currentRow, { dataTransfer });
 
     expect(onReorderStory).toHaveBeenCalledWith('story-2', 0);
-  });
-
-  it('handles disable backlog confirm flow', () => {
-    const { onDisableBacklog } = renderBacklogModal({ amIAdmin: true });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Disable Backlog' }));
-    expect(screen.getByText(CONFIRM_TEXT)).not.toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(screen.queryByText(CONFIRM_TEXT)).toBeNull();
-    expect(onDisableBacklog).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Disable Backlog' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Disable' }));
-    expect(onDisableBacklog).toHaveBeenCalledOnce();
   });
 
   it('closes via close button', () => {
