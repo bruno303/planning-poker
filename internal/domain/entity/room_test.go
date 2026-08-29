@@ -246,28 +246,37 @@ func TestCalculateConsensus(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			consensus, lowest, highest, voteRange, voteSpread := calculateConsensus(tt.votes)
-			assertConsensus(t, consensus, lowest, highest, voteRange, voteSpread, tt.consensus, tt.lowest, tt.highest, tt.voteRange, tt.voteSpread)
+			assertConsensus(t,
+				consensusResult{consensus, lowest, highest, voteRange, voteSpread},
+				consensusResult{tt.consensus, tt.lowest, tt.highest, tt.voteRange, tt.voteSpread},
+			)
 		})
 	}
 }
 
-func assertConsensus(t *testing.T, consensus string, lowest, highest, voteRange, voteSpread *int, wantConsensus string, wantLowest, wantHighest, wantVoteRange, wantVoteSpread *int) {
+type consensusResult struct {
+	consensus                  string
+	lowest, highest, voteRange *int
+	voteSpread                 *int
+}
+
+func assertConsensus(t *testing.T, got, want consensusResult) {
 	t.Helper()
 
-	if consensus != wantConsensus {
-		t.Errorf("consensus = %q, want %q", consensus, wantConsensus)
+	if got.consensus != want.consensus {
+		t.Errorf("consensus = %q, want %q", got.consensus, want.consensus)
 	}
-	if !reflect.DeepEqual(lowest, wantLowest) {
-		t.Errorf("lowest = %v, want %v", lowest, wantLowest)
+	if !reflect.DeepEqual(got.lowest, want.lowest) {
+		t.Errorf("lowest = %v, want %v", got.lowest, want.lowest)
 	}
-	if !reflect.DeepEqual(highest, wantHighest) {
-		t.Errorf("highest = %v, want %v", highest, wantHighest)
+	if !reflect.DeepEqual(got.highest, want.highest) {
+		t.Errorf("highest = %v, want %v", got.highest, want.highest)
 	}
-	if !reflect.DeepEqual(voteRange, wantVoteRange) {
-		t.Errorf("vote range = %v, want %v", voteRange, wantVoteRange)
+	if !reflect.DeepEqual(got.voteRange, want.voteRange) {
+		t.Errorf("vote range = %v, want %v", got.voteRange, want.voteRange)
 	}
-	if !reflect.DeepEqual(voteSpread, wantVoteSpread) {
-		t.Errorf("vote spread = %v, want %v", voteSpread, wantVoteSpread)
+	if !reflect.DeepEqual(got.voteSpread, want.voteSpread) {
+		t.Errorf("vote spread = %v, want %v", got.voteSpread, want.voteSpread)
 	}
 }
 
