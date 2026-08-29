@@ -9,9 +9,10 @@ import (
 
 type (
 	RemoveStoryCommand struct {
-		RoomID     string
-		SenderID   string
-		StoryIndex int
+		RoomID                 string
+		SenderID               string
+		StoryID                string
+		ExpectedBacklogVersion int
 	}
 	RemoveStoryUseCase struct {
 		hub         domain.Hub
@@ -35,7 +36,7 @@ func (uc RemoveStoryUseCase) Execute(ctx context.Context, cmd RemoveStoryCommand
 			return err
 		}
 
-		if err := room.RemoveStory(ctx, cmd.SenderID, cmd.StoryIndex); err != nil {
+		if err := room.RemoveStory(ctx, cmd.SenderID, cmd.StoryID, cmd.ExpectedBacklogVersion); err != nil {
 			return err
 		}
 

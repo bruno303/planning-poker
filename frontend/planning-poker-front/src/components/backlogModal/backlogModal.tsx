@@ -12,7 +12,7 @@ type BacklogModalProps = {
   amIAdmin: boolean;
   onClose: () => void;
   onAddStory: (story: string) => void;
-  onRemoveStory: (index: number) => void;
+  onRemoveStory: (storyId: string, expectedBacklogVersion: number) => void;
   onSelectStory: (storyId: string) => void;
   onReorderStory: (storyId: string, targetIndex: number, expectedBacklogVersion: number) => void;
   onDisableBacklog: () => void;
@@ -219,7 +219,7 @@ export default function BacklogModal({
                         {!story.voted && index !== currentStoryIndex && (
                           <button
                             style={{ ...styles.button, ...styles.dangerSmallButton }}
-                            onClick={() => onRemoveStory(index)}
+                            onClick={() => onRemoveStory(story.id, backlogVersion)}
                             title="Remove story"
                           >
                             <Trash2 size={14} />

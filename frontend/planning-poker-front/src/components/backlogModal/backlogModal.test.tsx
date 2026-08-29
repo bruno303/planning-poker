@@ -149,7 +149,7 @@ describe('BacklogModal', () => {
     expect(onAddStory).not.toHaveBeenCalled();
   });
 
-  it('calls onRemoveStory with correct index', () => {
+  it('calls onRemoveStory with stable id and current backlog version', () => {
     const stories: Story[] = [
       { id: 'story-1', name: 'Current story', mostAppearingVotes: [], voted: false },
       { id: 'story-2', name: 'Voted story', result: 3, mostAppearingVotes: [], voted: true },
@@ -160,7 +160,7 @@ describe('BacklogModal', () => {
 
     fireEvent.click(screen.getAllByTitle('Remove story')[0]);
 
-    expect(onRemoveStory).toHaveBeenCalledWith(2);
+    expect(onRemoveStory).toHaveBeenCalledWith('story-3', 0);
   });
 
   it('selects pending stories by stable id', () => {

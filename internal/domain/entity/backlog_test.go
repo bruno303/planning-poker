@@ -42,11 +42,26 @@ func TestRoomStoryCreationAssignsStableIDsAndIncrementsVersion(t *testing.T) {
 		t.Fatalf("backlog version after adds = %d, want 2", room.BacklogVersion)
 	}
 
-	if err := room.RemoveStory(context.Background(), owner.ID, 1); err != nil {
+	if err := room.RemoveStory(context.Background(), owner.ID, room.Stories[1].ID, 2); err != nil {
 		t.Fatalf("RemoveStory returned error: %v", err)
 	}
 	if room.BacklogVersion != 3 {
 		t.Fatalf("backlog version after remove = %d, want 3", room.BacklogVersion)
+	}
+}
+
+func TestRoomRemoveStoryRejectsStaleCommandWithoutMutation(t *testing.T) {
+	room, owner, _ := newBacklogRoom([]entity.Story{
+		{ID: "first", Name: "First"},
+		{ID: "second", Name: "Second"},
+	}, 0, 1)
+	before := append([]entity.Story(nil), room.Stories...)
+
+	if err := room.RemoveStory(context.Background(), owner.ID, "second", 0); err == nil {
+		t.Fatal("expected stale RemoveStory to fail")
+	}
+	if !reflect.DeepEqual(room.Stories, before) || room.CurrentStoryIndex != 0 || room.BacklogVersion != 1 {
+		t.Fatalf("stale remove mutated room: %+v", room)
 	}
 }
 

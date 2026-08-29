@@ -109,10 +109,16 @@ func serializeStories(stories []entity.Story) []SerializedStory {
 }
 
 func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*entity.Room, error) {
+	room, _, err := deserializeRoom(data, clientCollection)
+	return room, err
+}
+
+func deserializeRoom(data []byte, clientCollection entity.ClientCollection) (*entity.Room, bool, error) {
 	var serialized SerializedRoom
 	if err := json.Unmarshal(data, &serialized); err != nil {
-		return nil, err
+		return nil, false, err
 	}
+	stories, storyIDsBackfilled := deserializeStories(serialized.Stories)
 
 	room := &entity.Room{
 		ID:                  serialized.ID,
@@ -128,7 +134,7 @@ func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 		VoteSpread:          serialized.VoteSpread,
 		NonNumericVoteCount: serialized.NonNumericVoteCount,
 		BacklogMode:         serialized.BacklogMode,
-		Stories:             deserializeStories(serialized.Stories),
+		Stories:             stories,
 		CurrentStoryIndex:   serialized.CurrentStoryIndex,
 		BacklogVersion:      serialized.BacklogVersion,
 	}
@@ -138,26 +144,25 @@ func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 		room.Clients.Add(client)
 	}
 
-	return room, nil
+	return room, storyIDsBackfilled, nil
 }
 
-func deserializeStories(stories []SerializedStory) []entity.Story {
+func deserializeStories(stories []SerializedStory) ([]entity.Story, bool) {
 	result := make([]entity.Story, len(stories))
+	backfilled := false
 	for i, s := range stories {
+		id := s.ID
+		if id == "" {
+			id = uuid.NewString()
+			backfilled = true
+		}
 		result[i] = entity.Story{
-			ID:                 storyID(s.ID),
+			ID:                 id,
 			Name:               s.Name,
 			Result:             s.Result,
 			MostAppearingVotes: s.MostAppearingVotes,
 			Voted:              s.Voted,
 		}
 	}
-	return result
-}
-
-func storyID(id string) string {
-	if id != "" {
-		return id
-	}
-	return uuid.NewString()
+	return result, backfilled
 }

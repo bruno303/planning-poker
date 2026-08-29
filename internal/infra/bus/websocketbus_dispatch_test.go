@@ -130,9 +130,11 @@ func TestMapUsecases_DispatchesSupportedCommands(t *testing.T) {
 		},
 		{
 			name: "remove-story",
-			msg:  WebSocketMessage{Type: "remove-story", Payload: RemoveStoryPayload{StoryIndex: 2}},
+			msg:  WebSocketMessage{Type: "remove-story", Payload: RemoveStoryPayload{StoryID: "story-3", ExpectedBacklogVersion: 4}},
 			set: func() {
-				removeStory.EXPECT().Execute(gomock.Any(), usecase.RemoveStoryCommand{RoomID: roomID, SenderID: clientID, StoryIndex: 2}).Return(nil)
+				removeStory.EXPECT().Execute(gomock.Any(), usecase.RemoveStoryCommand{
+					RoomID: roomID, SenderID: clientID, StoryID: "story-3", ExpectedBacklogVersion: 4,
+				}).Return(nil)
 			},
 		},
 		{

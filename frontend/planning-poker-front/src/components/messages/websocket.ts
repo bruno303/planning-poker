@@ -50,7 +50,8 @@ export interface AddStoryPayload {
 }
 
 export interface RemoveStoryPayload {
-  storyIndex: number;
+  storyId: string;
+  expectedBacklogVersion: number;
 }
 
 export interface SelectStoryPayload {

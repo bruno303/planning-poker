@@ -52,7 +52,8 @@ type (
 		Story string `json:"story"`
 	}
 	RemoveStoryPayload struct {
-		StoryIndex int `json:"storyIndex"`
+		StoryID                string `json:"storyId"`
+		ExpectedBacklogVersion int    `json:"expectedBacklogVersion"`
 	}
 	SelectStoryPayload struct {
 		StoryID string `json:"storyId"`
@@ -382,9 +383,10 @@ func mapUsecases(usecases usecase.UseCasesFacade, clientID, roomID string) map[s
 		"remove-story": func(ctx context.Context, msg WebSocketMessage) error {
 			return withPayload(msg.Payload, func(payload RemoveStoryPayload) error {
 				return usecases.RemoveStory.Execute(ctx, usecase.RemoveStoryCommand{
-					RoomID:     roomID,
-					SenderID:   clientID,
-					StoryIndex: payload.StoryIndex,
+					RoomID:                 roomID,
+					SenderID:               clientID,
+					StoryID:                payload.StoryID,
+					ExpectedBacklogVersion: payload.ExpectedBacklogVersion,
 				})
 			})
 		},

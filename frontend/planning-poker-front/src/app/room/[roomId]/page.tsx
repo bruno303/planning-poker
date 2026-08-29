@@ -211,8 +211,8 @@ export default function PlanningPoker() {
     sendMessage<AddStoryPayload>({ type: 'add-story', payload });
   };
 
-  const handleRemoveStory = (index: number) => {
-    const payload: RemoveStoryPayload = { storyIndex: index };
+  const handleRemoveStory = (storyId: string, expectedBacklogVersion: number) => {
+    const payload: RemoveStoryPayload = { storyId, expectedBacklogVersion };
     sendMessage<RemoveStoryPayload>({ type: 'remove-story', payload });
   };
 
@@ -244,7 +244,10 @@ export default function PlanningPoker() {
       if (!shouldRemoveStory) {
         return;
       }
-      handleRemoveStory(currentStoryIndex);
+      const currentStoryToRemove = stories[currentStoryIndex];
+      if (currentStoryToRemove) {
+        handleRemoveStory(currentStoryToRemove.id, backlogVersion);
+      }
     } else {
       const payload: UpdateStoryPayload = { story: trimmedStory };
       sendMessage<UpdateStoryPayload>({ type: 'update-story', payload });

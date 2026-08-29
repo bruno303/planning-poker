@@ -55,6 +55,56 @@ func TestRedisHub_NewRoom_SaveRoom_LoadRoom(t *testing.T) {
 	assert.Equal(t, room.ID, gotRoom.ID)
 }
 
+func TestRedisHub_LoadRoomPersistsBackfilledStoryIDs(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	roomID := "legacy-room"
+	storedData := []byte(`{"id":"legacy-room","backlogMode":true,"stories":[{"name":"Legacy story","mostAppearingVotes":[],"voted":false}]}`)
+	mockRedis := NewMockRedisClient(ctrl)
+
+	mockRedis.EXPECT().Get(gomock.Any(), roomKeyPrefix+roomID).DoAndReturn(func(context.Context, string) *redis.StringCmd {
+		cmd := redis.NewStringCmd(context.Background())
+		cmd.SetVal(string(storedData))
+		return cmd
+	}).Times(2)
+	mockRedis.EXPECT().Set(gomock.Any(), roomKeyPrefix+roomID, gomock.Any(), twentyFourHours).DoAndReturn(
+		func(_ context.Context, _ string, value any, _ time.Duration) *redis.StatusCmd {
+			data, ok := value.([]byte)
+			if !ok {
+				t.Fatalf("migrated room was saved as %T, want []byte", value)
+			}
+			storedData = append([]byte(nil), data...)
+			cmd := redis.NewStatusCmd(context.Background())
+			cmd.SetVal("OK")
+			return cmd
+		}).Times(1)
+
+	hub := &RedisHub{
+		client:           mockRedis,
+		logger:           log.NewLogger("test"),
+		buses:            make(map[string]domain.Bus),
+		closeCh:          make(chan struct{}),
+		roomClientCounts: make(map[string]int),
+	}
+
+	firstRoom, err := hub.LoadRoom(context.Background(), roomID)
+	if err != nil {
+		t.Fatalf("first LoadRoom returned error: %v", err)
+	}
+	secondRoom, err := hub.LoadRoom(context.Background(), roomID)
+	if err != nil {
+		t.Fatalf("second LoadRoom returned error: %v", err)
+	}
+
+	if firstRoom.Stories[0].ID == "" {
+		t.Fatal("first load did not backfill story ID")
+	}
+	if secondRoom.Stories[0].ID != firstRoom.Stories[0].ID {
+		t.Fatalf("story ID changed between loads: first=%q second=%q", firstRoom.Stories[0].ID, secondRoom.Stories[0].ID)
+	}
+}
+
 func TestRedisHub_NewRoomWithID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockRedis := NewMockRedisClient(ctrl)

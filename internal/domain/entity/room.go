@@ -159,7 +159,7 @@ func (r *Room) AddStory(ctx context.Context, clientID string, name string) error
 	return nil
 }
 
-func (r *Room) RemoveStory(ctx context.Context, clientID string, index int) error {
+func (r *Room) RemoveStory(ctx context.Context, clientID string, storyID string, expectedBacklogVersion int) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
@@ -167,9 +167,16 @@ func (r *Room) RemoveStory(ctx context.Context, clientID string, index int) erro
 	if !client.IsOwner {
 		return fmt.Errorf("only the room owner can remove a story")
 	}
+	if storyID == "" {
+		return fmt.Errorf("story ID cannot be empty")
+	}
+	if expectedBacklogVersion != r.BacklogVersion {
+		return fmt.Errorf("stale backlog version %d, current version is %d", expectedBacklogVersion, r.BacklogVersion)
+	}
 
-	if index < 0 || index >= len(r.Stories) {
-		return fmt.Errorf("story index %d out of range", index)
+	index := r.storyIndexByID(storyID)
+	if index == -1 {
+		return fmt.Errorf("story %s not found in room %s", storyID, r.ID)
 	}
 
 	r.BacklogVersion++
