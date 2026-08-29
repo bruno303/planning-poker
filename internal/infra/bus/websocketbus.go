@@ -351,12 +351,6 @@ func mapUsecases(usecases usecase.UseCasesFacade, clientID, roomID string) map[s
 				})
 			})
 		},
-		"new-voting": func(ctx context.Context, msg WebSocketMessage) error {
-			return usecases.NewVoting.Execute(ctx, usecase.NewVotingCommand{
-				RoomID:   roomID,
-				SenderID: clientID,
-			})
-		},
 		"vote-again": func(ctx context.Context, msg WebSocketMessage) error {
 			return usecases.VoteAgain.Execute(ctx, usecase.VoteAgainCommand{
 				RoomID:   roomID,

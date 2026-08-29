@@ -3,7 +3,6 @@
 export type WebSocketMessageType =
   | 'vote'
   | 'reveal-votes'
-  | 'new-voting'
   | 'toggle-spectator'
   | 'toggle-owner'
   | 'vote-again'

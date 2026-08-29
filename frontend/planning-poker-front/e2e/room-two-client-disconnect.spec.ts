@@ -69,7 +69,6 @@ const joinRoom = async (page: Page, roomId: string, userName: string) => {
 
 const expectAdminControlsVisible = async (page: Page) => {
   await expect(page.getByRole('button', { name: 'Reveal Votes' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'New Voting' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Vote Again' })).toBeVisible();
 };
 

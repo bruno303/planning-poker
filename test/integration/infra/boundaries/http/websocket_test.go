@@ -421,67 +421,6 @@ func TestWebSocketUpdateStory(t *testing.T) {
 	})
 }
 
-func TestWebSocketNewVoting(t *testing.T) {
-	ts := integration.NewTestServer(t)
-	defer ts.Close()
-
-	roomID := createRoom(t, ts)
-	conn := connectWebSocket(t, ts, roomID)
-
-	defer closeAndWait(conn)
-
-	_ = getClientID(t, conn)
-
-	t.Run("owner can start new voting", func(t *testing.T) {
-		// Vote first
-		send(t, conn, bus.WebSocketMessage{
-			Type: "vote",
-			Payload: bus.VotePayload{
-				Vote: "5",
-			},
-		})
-		consumeMessages(t, conn) // consume room-state
-
-		// Disable backlog mode so NewVoting clears the story
-		send(t, conn, bus.WebSocketMessage{
-			Type: "toggle-backlog-mode",
-		})
-		consumeMessages(t, conn)
-
-		// Set story
-		send(t, conn, bus.WebSocketMessage{
-			Type: "update-story",
-			Payload: bus.UpdateStoryPayload{
-				Story: "Old story",
-			},
-		})
-		consumeMessages(t, conn) // consume room-state
-
-		// Start new voting
-		send(t, conn, bus.WebSocketMessage{
-			Type: "new-voting",
-		})
-
-		msg := readMessages(t, conn)[0]
-
-		// Story should be cleared
-		if msg["currentStory"] != "" {
-			t.Errorf("expected currentStory to be empty, got '%v'", msg["currentStory"])
-		}
-
-		// Votes should be cleared
-		if msg["reveal"] != false {
-			t.Error("votes should not be revealed after new voting")
-		}
-
-		participants := msg["participants"].([]any)
-		participant := participants[0].(map[string]any)
-		if participant["hasVoted"] != false {
-			t.Error("participant should not have voted after new voting")
-		}
-	})
-}
-
 func TestWebSocketVoteAgain(t *testing.T) {
 	ts := integration.NewTestServer(t)
 	defer ts.Close()

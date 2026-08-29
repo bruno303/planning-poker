@@ -30,7 +30,6 @@ func TestMapUsecases_DispatchesSupportedCommands(t *testing.T) {
 	toggleSpectator := usecase.NewMockUseCase[usecase.ToggleSpectatorCommand](ctrl)
 	toggleOwner := usecase.NewMockUseCase[usecase.ToggleOwnerCommand](ctrl)
 	updateStory := usecase.NewMockUseCase[usecase.UpdateStoryCommand](ctrl)
-	newVoting := usecase.NewMockUseCase[usecase.NewVotingCommand](ctrl)
 	voteAgain := usecase.NewMockUseCase[usecase.VoteAgainCommand](ctrl)
 	toggleBacklogMode := usecase.NewMockUseCase[usecase.ToggleBacklogModeCommand](ctrl)
 	addStory := usecase.NewMockUseCase[usecase.AddStoryCommand](ctrl)
@@ -98,13 +97,6 @@ func TestMapUsecases_DispatchesSupportedCommands(t *testing.T) {
 			msg:  WebSocketMessage{Type: "update-story", Payload: UpdateStoryPayload{Story: "Current story"}},
 			set: func() {
 				updateStory.EXPECT().Execute(gomock.Any(), usecase.UpdateStoryCommand{RoomID: roomID, SenderID: clientID, Story: "Current story"}).Return(nil)
-			},
-		},
-		{
-			name: "new-voting",
-			msg:  WebSocketMessage{Type: "new-voting"},
-			set: func() {
-				newVoting.EXPECT().Execute(gomock.Any(), usecase.NewVotingCommand{RoomID: roomID, SenderID: clientID}).Return(nil)
 			},
 		},
 		{
@@ -179,7 +171,6 @@ func TestMapUsecases_DispatchesSupportedCommands(t *testing.T) {
 		ToggleSpectator:   toggleSpectator,
 		ToggleOwner:       toggleOwner,
 		UpdateStory:       updateStory,
-		NewVoting:         newVoting,
 		VoteAgain:         voteAgain,
 		ToggleBacklogMode: toggleBacklogMode,
 		AddStory:          addStory,

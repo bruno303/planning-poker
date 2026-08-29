@@ -25,7 +25,7 @@ import ParticipantIdBadge from '@/components/participantIdBadge/participantIdBad
 import { useLogger } from '@/context/logger/loggerContext';
 import { useRoom } from '@/context/room/roomContext';
 import { useToast } from '@/context/toast/toastContext';
-import { ChevronLeft, ChevronRight, Eye, EyeOff, List, Repeat, RotateCcw, Shield, Users, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye, EyeOff, List, Repeat, Shield, Users, X } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import Header from './page.header';
@@ -176,11 +176,6 @@ export default function PlanningPoker() {
   const handleRevealVotes = () => {
     const payload: any = null;
     sendMessage<any>({ type: 'reveal-votes', payload });
-  };
-
-  const handleNewVoting = () => {
-    const payload: any = null;
-    sendMessage<any>({ type: 'new-voting', payload });
   };
 
   const handleToggleSpectator = (participantId: string) => {
@@ -642,15 +637,6 @@ export default function PlanningPoker() {
                   >
                     {isRevealed ? <EyeOff size={20} /> : <Eye size={20} />}
                     {isRevealed ? 'Hide Votes' : 'Reveal Votes'}
-                  </button>
-                  <button
-                    onClick={handleNewVoting}
-                    style={{ ...styles.button, ...styles.successButton }}
-                    onMouseEnter={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#059669'}
-                    onMouseLeave={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#10b981'}
-                  >
-                    <RotateCcw size={20} />
-                    New Voting
                   </button>
                   <button
                     onClick={handleVoteAgain}

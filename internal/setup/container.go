@@ -137,7 +137,6 @@ func newUsecases(hub domain.Hub, lockManager lock.LockManager, metric metric.Pla
 	toggleSpectatorUseCase := usecase.NewToggleSpectatorUseCase(hub, lockManager)
 	toggleOwnerUseCase := usecase.NewToggleOwnerUseCase(hub, lockManager)
 	updateStoryUseCase := usecase.NewUpdateStoryUseCase(hub, lockManager)
-	newVotingUseCase := usecase.NewNewVotingUseCase(hub, lockManager)
 	voteAgainUseCase := usecase.NewVoteAgainUseCase(hub, lockManager)
 	leaveRoomUseCase := usecase.NewLeaveRoomUseCase(hub, lockManager, metric)
 	joinRoomUseCase := usecase.NewJoinRoomUseCase(hub, lockManager, metric)
@@ -159,7 +158,6 @@ func newUsecases(hub domain.Hub, lockManager lock.LockManager, metric metric.Pla
 		ToggleSpectator:   usecasedecorators.NewTraceableUseCase(toggleSpectatorUseCase, "ToggleSpectatorUseCase", "ToggleSpectator"),
 		ToggleOwner:       usecasedecorators.NewTraceableUseCase(toggleOwnerUseCase, "ToggleOwnerUseCase", "ToggleOwner"),
 		UpdateStory:       usecasedecorators.NewTraceableUseCase(updateStoryUseCase, "UpdateStoryUseCase", "UpdateStory"),
-		NewVoting:         usecasedecorators.NewTraceableUseCase(newVotingUseCase, "NewVotingUseCase", "NewVoting"),
 		VoteAgain:         usecasedecorators.NewTraceableUseCase(voteAgainUseCase, "VoteAgainUseCase", "VoteAgain"),
 		LeaveRoom:         usecasedecorators.NewTraceableUseCase(leaveRoomUseCase, "LeaveRoomUseCase", "LeaveRoom"),
 		JoinRoom:          usecasedecorators.NewTraceableUseCaseR(joinRoomUseCase, "JoinRoomUseCase", "JoinRoom"),
