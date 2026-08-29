@@ -109,17 +109,57 @@ jobs:
           commit-message: "chore(staging/frontend): deploy ${{ steps.source.outputs.short_sha }}"
           delete-branch: true
 
-      - name: Enable native squash auto-merge
+      - name: Merge deployment pull request
+        id: merge
         if: steps.change.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.PLANNING_POKER_PAT }}
         run: |
           test -n "${{ steps.pull-request.outputs.pull-request-url }}"
-          gh pr merge "${{ steps.pull-request.outputs.pull-request-url }}" \
+
+          set +e
+          AUTO_MERGE_OUTPUT="$(gh pr merge "${{ steps.pull-request.outputs.pull-request-url }}" \
             --repo "$DEPLOYMENT_REPOSITORY" \
             --auto \
             --squash \
+            --delete-branch 2>&1)"
+          AUTO_MERGE_STATUS=$?
+          set -e
+          echo "$AUTO_MERGE_OUTPUT"
+
+          if [ "$AUTO_MERGE_STATUS" -eq 0 ]; then
+            echo "mode=native-auto-merge" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if ! grep -Fq "Protected branch rules not configured for this branch" <<< "$AUTO_MERGE_OUTPUT"; then
+            echo "Native auto-merge failed for an unexpected reason." >&2
+            exit "$AUTO_MERGE_STATUS"
+          fi
+
+          echo "Native auto-merge is unavailable because the deployment branch has no protection rules."
+          set +e
+          CHECK_OUTPUT="$(gh pr checks "${{ steps.pull-request.outputs.pull-request-url }}" \
+            --repo "$DEPLOYMENT_REPOSITORY" \
+            --json bucket,name 2>&1)"
+          set -e
+
+          if grep -Fq "no checks reported" <<< "$CHECK_OUTPUT"; then
+            echo "No deployment checks are configured; continuing with the explicit merge."
+          else
+            echo "$CHECK_OUTPUT"
+            timeout 15m gh pr checks "${{ steps.pull-request.outputs.pull-request-url }}" \
+              --repo "$DEPLOYMENT_REPOSITORY" \
+              --watch \
+              --fail-fast \
+              --interval 10
+          fi
+
+          gh pr merge "${{ steps.pull-request.outputs.pull-request-url }}" \
+            --repo "$DEPLOYMENT_REPOSITORY" \
+            --squash \
             --delete-branch
+          echo "mode=explicit-squash-merge" >> "$GITHUB_OUTPUT"
 
       - name: Summary
         if: always()
@@ -132,7 +172,7 @@ jobs:
             echo "- Image: `${{ env.DOCKER_REPO }}:${{ steps.source.outputs.sha }}`"
             if [ "${{ steps.change.outputs.changed }}" = "true" ]; then
               echo "- Deployment PR: ${{ steps.pull-request.outputs.pull-request-url }}"
-              echo "- Auto-merge: requested"
+              echo "- Merge: ${{ steps.merge.outputs.mode }}"
             else
               echo "- Deployment PR: not needed; image already deployed"
             fi
