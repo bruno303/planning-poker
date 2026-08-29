@@ -111,9 +111,25 @@ jobs:
           GH_TOKEN: ${{ secrets.PLANNING_POKER_PAT }}
         run: |
           test -n "${{ steps.pull-request.outputs.pull-request-url }}"
-          gh pr merge "${{ steps.pull-request.outputs.pull-request-url }}" \
+          merge_status=0
+          merge_output="$(gh pr merge "${{ steps.pull-request.outputs.pull-request-url }}" \
             --repo "$DEPLOYMENT_REPOSITORY" \
             --auto \
+            --squash \
+            --delete-branch 2>&1)" || merge_status=$?
+          printf '%s\n' "$merge_output"
+
+          if [ "$merge_status" -eq 0 ]; then
+            exit 0
+          fi
+
+          if ! grep -Fq "Pull request is in clean status" <<< "$merge_output"; then
+            exit "$merge_status"
+          fi
+
+          echo "Pull request is already clean; merging immediately."
+          gh pr merge "${{ steps.pull-request.outputs.pull-request-url }}" \
+            --repo "$DEPLOYMENT_REPOSITORY" \
             --squash \
             --delete-branch
 
