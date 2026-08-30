@@ -7,6 +7,7 @@ import (
 	"planning-poker/internal/domain"
 	"planning-poker/internal/domain/entity"
 	"planning-poker/internal/infra/boundaries/hub/clientcollection"
+	"sync"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
 	"github.com/bruno303/go-toolkit/pkg/trace"
@@ -18,6 +19,8 @@ type InMemoryHub struct {
 	Clients map[string]*entity.Client
 	Buses   map[string]domain.Bus
 	logger  log.Logger
+	roomMu  sync.Mutex
+	saved   map[string]*entity.Room
 }
 
 var _ domain.Hub = (*InMemoryHub)(nil)
@@ -27,6 +30,7 @@ func NewHub() *InMemoryHub {
 		Rooms:   make(map[string]*entity.Room),
 		Clients: make(map[string]*entity.Client),
 		Buses:   make(map[string]domain.Bus),
+		saved:   make(map[string]*entity.Room),
 		logger:  log.NewLogger("inmemory.hub"),
 	}
 }
@@ -35,6 +39,7 @@ func (h *InMemoryHub) NewRoom(ctx context.Context) (*entity.Room, error) {
 	room, _ := trace.Trace(ctx, trace.NameConfig("InMemoryHub", "NewRoom"), func(ctx context.Context) (any, error) {
 		room := entity.NewRoom(clientcollection.New())
 		h.Rooms[room.ID] = room
+		h.saved[room.ID] = cloneRoom(room)
 		return room, nil
 	})
 
@@ -45,6 +50,7 @@ func (h *InMemoryHub) NewRoomWithID(ctx context.Context, roomID string) (*entity
 	room, _ := trace.Trace(ctx, trace.NameConfig("InMemoryHub", "NewRoomWithID"), func(ctx context.Context) (any, error) {
 		room := entity.NewRoomWithID(roomID, clientcollection.New())
 		h.Rooms[room.ID] = room
+		h.saved[room.ID] = cloneRoom(room)
 		return room, nil
 	})
 
@@ -115,12 +121,91 @@ func (h *InMemoryHub) RemoveClient(ctx context.Context, clientID string, roomID 
 	return err
 }
 
-func (h *InMemoryHub) SaveRoom(_ context.Context, room *entity.Room, expectedVersion *uint64) error {
-	if expectedVersion == nil || (room.RoomVersion != *expectedVersion && room.RoomVersion != *expectedVersion+1) {
+func (h *InMemoryHub) SaveRoom(_ context.Context, room *entity.Room) error {
+	// Preserve pointer-backed in-memory behavior while recording the last save.
+	h.roomMu.Lock()
+	defer h.roomMu.Unlock()
+	room.MarkRoomSaved()
+	h.saved[room.ID] = cloneRoom(room)
+	return nil
+}
+
+func (h *InMemoryHub) SaveRoomIfVersion(_ context.Context, room *entity.Room, expectedVersion *uint64) error {
+	h.roomMu.Lock()
+	defer h.roomMu.Unlock()
+
+	persistedVersion := room.ExpectedPersistedRoomVersion()
+	if saved, ok := h.saved[room.ID]; ok {
+		persistedVersion = saved.RoomVersion
+	}
+	if expectedVersion == nil || persistedVersion != *expectedVersion {
+		if saved, ok := h.saved[room.ID]; ok && h.Rooms[room.ID] == room {
+			h.Rooms[room.ID] = cloneRoom(saved)
+		}
 		return domain.ErrStaleRoomVersion
 	}
-	// In-memory hub doesn't need to persist
+	room.MarkRoomSaved()
+	h.Rooms[room.ID] = room
+	h.saved[room.ID] = cloneRoom(room)
 	return nil
+}
+
+func cloneRoom(room *entity.Room) *entity.Room {
+	clone := entity.NewRoomWithID(room.ID, clientcollection.New())
+	clone.CurrentStory = room.CurrentStory
+	clone.Reveal = room.Reveal
+	clone.Result = cloneFloat32(room.Result)
+	clone.MostAppearingVotes = append([]int(nil), room.MostAppearingVotes...)
+	clone.Consensus = room.Consensus
+	clone.LowestVote = cloneInt(room.LowestVote)
+	clone.HighestVote = cloneInt(room.HighestVote)
+	clone.VoteRange = cloneInt(room.VoteRange)
+	clone.VoteSpread = cloneInt(room.VoteSpread)
+	clone.NonNumericVoteCount = room.NonNumericVoteCount
+	clone.BacklogMode = room.BacklogMode
+	clone.Stories = append([]entity.Story(nil), room.Stories...)
+	for i := range clone.Stories {
+		clone.Stories[i].Result = cloneFloat32(room.Stories[i].Result)
+		clone.Stories[i].MostAppearingVotes = append([]int(nil), room.Stories[i].MostAppearingVotes...)
+	}
+	clone.CurrentStoryIndex = room.CurrentStoryIndex
+	clone.RoomVersion = room.RoomVersion
+	clone.SetPersistedRoomVersion(room.ExpectedPersistedRoomVersion())
+	if room.Clients != nil {
+		for _, client := range room.Clients.Values() {
+			copied := clone.NewClient(client.ID)
+			copied.Name = client.Name
+			copied.CurrentVote = cloneString(client.CurrentVote)
+			copied.HasVoted = client.HasVoted
+			copied.IsSpectator = client.IsSpectator
+			copied.IsOwner = client.IsOwner
+		}
+	}
+	return clone
+}
+
+func cloneString(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	return &copy
+}
+
+func cloneInt(value *int) *int {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	return &copy
+}
+
+func cloneFloat32(value *float32) *float32 {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	return &copy
 }
 
 func (h *InMemoryHub) BroadcastToRoom(ctx context.Context, roomID string, message any) error {

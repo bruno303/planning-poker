@@ -39,8 +39,7 @@ func (uc AddStoryUseCase) Execute(ctx context.Context, cmd AddStoryCommand) erro
 			return err
 		}
 
-		expectedVersion := room.ExpectedPersistedRoomVersion()
-		if err := uc.hub.SaveRoom(ctx, room, &expectedVersion); err != nil {
+		if err := uc.hub.SaveRoom(ctx, room); err != nil {
 			return err
 		}
 

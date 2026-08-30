@@ -23,7 +23,7 @@ func TestSelectStoryUseCaseExecute(t *testing.T) {
 		func(ctx context.Context, _ string, fn func(context.Context) error) error { return fn(ctx) },
 	)
 	hub.EXPECT().LoadRoom(ctx, room.ID).Return(room, nil)
-	hub.EXPECT().SaveRoom(ctx, room, gomock.Any()).Return(nil)
+	hub.EXPECT().SaveRoomIfVersion(ctx, room, gomock.Any()).Return(nil)
 	hub.EXPECT().BroadcastToRoom(ctx, room.ID, gomock.Any()).Return(nil)
 
 	err := NewSelectStoryUseCase(hub, lockManager).Execute(ctx, SelectStoryCommand{
@@ -48,7 +48,7 @@ func TestSelectStoryUseCaseExecuteValidationFailureDoesNotPersist(t *testing.T) 
 		func(ctx context.Context, _ string, fn func(context.Context) error) error { return fn(ctx) },
 	)
 	hub.EXPECT().LoadRoom(ctx, room.ID).Return(room, nil)
-	hub.EXPECT().SaveRoom(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+	hub.EXPECT().SaveRoomIfVersion(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 	hub.EXPECT().BroadcastToRoom(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 
 	err := NewSelectStoryUseCase(hub, lockManager).Execute(ctx, SelectStoryCommand{

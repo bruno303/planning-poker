@@ -51,7 +51,7 @@ func TestVoteAgainUseCase_Execute_Success(t *testing.T) {
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().SaveRoom(ctx, room, gomock.Any()).Return(nil)
+	mockHub.EXPECT().SaveRoomIfVersion(ctx, room, gomock.Any()).Return(nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(nil)
 
 	uc := NewVoteAgainUseCase(mockHub, mockLockManager)
@@ -93,7 +93,7 @@ func TestVoteAgainUseCase_Execute_SaveRoomError(t *testing.T) {
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().SaveRoom(ctx, room, gomock.Any()).Return(expectedError)
+	mockHub.EXPECT().SaveRoomIfVersion(ctx, room, gomock.Any()).Return(expectedError)
 
 	uc := NewVoteAgainUseCase(mockHub, mockLockManager)
 	cmd := VoteAgainCommand{
@@ -171,7 +171,7 @@ func TestVoteAgainUseCase_Execute_BroadcastError(t *testing.T) {
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().SaveRoom(ctx, room, gomock.Any()).Return(nil)
+	mockHub.EXPECT().SaveRoomIfVersion(ctx, room, gomock.Any()).Return(nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(expectedError)
 
 	uc := NewVoteAgainUseCase(mockHub, mockLockManager)

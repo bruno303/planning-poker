@@ -209,6 +209,28 @@ func TestGuardedCommandAndExpectedRoomVersion(t *testing.T) {
 	}
 }
 
+func TestMapUsecases_ForwardsClientRevisionToGuardedCommand(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	reset := usecase.NewMockUseCase[usecase.ResetCommand](ctrl)
+	reset.EXPECT().Execute(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, cmd usecase.ResetCommand) error {
+		if cmd.ExpectedRoomVersion == nil {
+			t.Fatal("expected client revision to be forwarded")
+		}
+		if *cmd.ExpectedRoomVersion != 7 {
+			t.Fatalf("expected client revision 7, got %d", *cmd.ExpectedRoomVersion)
+		}
+		return nil
+	})
+
+	calls := mapUsecases(usecase.UseCasesFacade{Reset: reset}, "client-1", "room-1")
+	if err := calls["reset"](context.Background(), WebSocketMessage{
+		Type:    "reset",
+		Payload: map[string]uint64{"expectedRoomVersion": 7},
+	}); err != nil {
+		t.Fatalf("dispatch returned error: %v", err)
+	}
+}
+
 func TestMapUsecases_InvalidPayloadReturnsError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	updateName := usecase.NewMockUseCase[usecase.UpdateNameCommand](ctrl)

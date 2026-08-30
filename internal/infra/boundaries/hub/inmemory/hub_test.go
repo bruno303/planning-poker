@@ -5,6 +5,7 @@ import (
 	"errors"
 	"planning-poker/internal/domain"
 	"planning-poker/internal/domain/entity"
+	"sync"
 	"testing"
 
 	"go.uber.org/mock/gomock"
@@ -451,8 +452,7 @@ func TestSaveRoom(t *testing.T) {
 
 	// Change some state in the room
 	room.Reveal = true
-	expectedVersion := room.ExpectedPersistedRoomVersion()
-	err = hub.SaveRoom(ctx, room, &expectedVersion)
+	err = hub.SaveRoom(ctx, room)
 	if err != nil {
 		t.Fatalf("expected no error from SaveRoom, got %v", err)
 	}
@@ -465,6 +465,9 @@ func TestSaveRoom(t *testing.T) {
 	if !got.Reveal {
 		t.Errorf("expected room.Reveal to be true, got false")
 	}
+	if got.ExpectedPersistedRoomVersion() != got.RoomVersion {
+		t.Errorf("expected SaveRoom to record persisted version %d, got %d", got.RoomVersion, got.ExpectedPersistedRoomVersion())
+	}
 }
 
 func TestSaveRoom_RejectsStaleVersion(t *testing.T) {
@@ -472,9 +475,90 @@ func TestSaveRoom_RejectsStaleVersion(t *testing.T) {
 	room := entity.NewRoom(nil)
 	room.RoomVersion = 2
 
-	expectedVersion := uint64(0)
-	err := hub.SaveRoom(context.Background(), room, &expectedVersion)
+	expectedVersion := uint64(1)
+	err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion)
 	if !errors.Is(err, domain.ErrStaleRoomVersion) {
 		t.Fatalf("expected stale room version error, got %v", err)
+	}
+}
+
+func TestSaveRoomIfVersion_StaleMutationDoesNotChangeStoredRoom(t *testing.T) {
+	hub := NewHub()
+	room, err := hub.NewRoom(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedVersion := uint64(0)
+	room.RoomVersion = 1
+	if err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion); err != nil {
+		t.Fatal(err)
+	}
+
+	room.Reveal = true
+	room.RoomVersion = 2
+	expectedVersion = 0
+	if err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion); !errors.Is(err, domain.ErrStaleRoomVersion) {
+		t.Fatalf("expected stale error, got %v", err)
+	}
+	stored, err := hub.LoadRoom(context.Background(), room.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Reveal || stored.RoomVersion != 1 {
+		t.Fatalf("stale mutation changed stored room: reveal=%v version=%d", stored.Reveal, stored.RoomVersion)
+	}
+}
+
+func TestSaveRoomIfVersion_SerializesConcurrentSaves(t *testing.T) {
+	hub := NewHub()
+	baseline, _ := hub.NewRoomWithID(context.Background(), "room")
+	var wg sync.WaitGroup
+	results := make(chan error, 2)
+	for i := 0; i < 2; i++ {
+		candidate := entity.NewRoomWithID(baseline.ID, nil)
+		candidate.RoomVersion = 1
+		expectedVersion := uint64(0)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			results <- hub.SaveRoomIfVersion(context.Background(), candidate, &expectedVersion)
+		}()
+	}
+	wg.Wait()
+	close(results)
+
+	successes := 0
+	for err := range results {
+		if err == nil {
+			successes++
+		} else if !errors.Is(err, domain.ErrStaleRoomVersion) {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+	if successes != 1 {
+		t.Fatalf("expected exactly one successful save, got %d", successes)
+	}
+}
+
+func TestSaveRoomIfVersion_RejectsStaleNoOpAndTracksSuccessfulSave(t *testing.T) {
+	hub := NewHub()
+	room := entity.NewRoom(nil)
+	room.RoomVersion = 1
+
+	expectedVersion := uint64(0)
+	if err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion); err != nil {
+		t.Fatalf("expected initial conditional save to succeed, got %v", err)
+	}
+	if got := room.ExpectedPersistedRoomVersion(); got != 1 {
+		t.Fatalf("expected persisted version 1 after save, got %d", got)
+	}
+
+	if err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion); !errors.Is(err, domain.ErrStaleRoomVersion) {
+		t.Fatalf("expected stale no-op to be rejected, got %v", err)
+	}
+
+	expectedVersion = 1
+	if err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion); err != nil {
+		t.Fatalf("expected subsequent conditional save to succeed, got %v", err)
 	}
 }

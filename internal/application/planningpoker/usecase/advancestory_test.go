@@ -51,7 +51,7 @@ func TestAdvanceStoryUseCase_Execute_Success(t *testing.T) {
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().SaveRoom(ctx, room, gomock.Any()).Return(nil)
+	mockHub.EXPECT().SaveRoomIfVersion(ctx, room, gomock.Any()).Return(nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(nil)
 
 	uc := NewAdvanceStoryUseCase(mockHub, mockLockManager)
@@ -93,7 +93,7 @@ func TestAdvanceStoryUseCase_Execute_SaveRoomError(t *testing.T) {
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().SaveRoom(ctx, room, gomock.Any()).Return(expectedError)
+	mockHub.EXPECT().SaveRoomIfVersion(ctx, room, gomock.Any()).Return(expectedError)
 
 	uc := NewAdvanceStoryUseCase(mockHub, mockLockManager)
 	cmd := AdvanceStoryCommand{
@@ -171,7 +171,7 @@ func TestAdvanceStoryUseCase_Execute_BroadcastError(t *testing.T) {
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().SaveRoom(ctx, room, gomock.Any()).Return(nil)
+	mockHub.EXPECT().SaveRoomIfVersion(ctx, room, gomock.Any()).Return(nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(expectedError)
 
 	uc := NewAdvanceStoryUseCase(mockHub, mockLockManager)

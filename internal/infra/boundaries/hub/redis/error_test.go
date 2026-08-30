@@ -96,7 +96,7 @@ func TestRedisHub_SaveRoom_WhenRedisFailsWrapsError(t *testing.T) {
 	hub := newErrorTestHub(mockRedis)
 	room := &entity.Room{ID: "room-1", Clients: clientcollection.New()}
 	expectedVersion := room.ExpectedPersistedRoomVersion()
-	err := hub.SaveRoom(context.Background(), room, &expectedVersion)
+	err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion)
 
 	assert.ErrorIs(t, err, wantErr)
 	assert.EqualError(t, err, "failed to conditionally save room to Redis: write failed")

@@ -24,7 +24,7 @@ func TestReorderStoryUseCaseExecute(t *testing.T) {
 		func(ctx context.Context, _ string, fn func(context.Context) error) error { return fn(ctx) },
 	)
 	hub.EXPECT().LoadRoom(ctx, room.ID).Return(room, nil)
-	hub.EXPECT().SaveRoom(ctx, room, gomock.Any()).Return(nil)
+	hub.EXPECT().SaveRoomIfVersion(ctx, room, gomock.Any()).Return(nil)
 	hub.EXPECT().BroadcastToRoom(ctx, room.ID, gomock.Any()).Return(nil)
 
 	err := NewReorderStoryUseCase(hub, lockManager).Execute(ctx, ReorderStoryCommand{

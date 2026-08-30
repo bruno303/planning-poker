@@ -37,7 +37,7 @@ func (uc SelectStoryUseCase) Execute(ctx context.Context, cmd SelectStoryCommand
 		if err := room.SelectStory(ctx, cmd.SenderID, cmd.StoryID); err != nil {
 			return err
 		}
-		if err := uc.hub.SaveRoom(ctx, room, cmd.ExpectedRoomVersion); err != nil {
+		if err := uc.hub.SaveRoomIfVersion(ctx, room, cmd.ExpectedRoomVersion); err != nil {
 			return err
 		}
 		return uc.hub.BroadcastToRoom(ctx, room.ID, dto.NewRoomStateCommand(room))
