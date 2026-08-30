@@ -451,7 +451,7 @@ func TestSaveRoom(t *testing.T) {
 
 	// Change some state in the room
 	room.Reveal = true
-	err = hub.SaveRoom(ctx, room)
+	err = hub.SaveRoom(ctx, room, room.ExpectedPersistedRoomVersion())
 	if err != nil {
 		t.Fatalf("expected no error from SaveRoom, got %v", err)
 	}

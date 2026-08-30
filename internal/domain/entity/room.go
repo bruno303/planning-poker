@@ -50,7 +50,6 @@ func NewRoom(clients ClientCollection) *Room {
 	return NewRoomWithID(uuid.NewString(), clients)
 }
 
-// ValidateRoomVersion rejects a command based on a room state that has since changed.
 func (r *Room) ValidateRoomVersion(expected *uint64) error {
 	if expected == nil || *expected != r.RoomVersion {
 		return domainerror.ErrStaleRoomVersion
@@ -58,16 +57,13 @@ func (r *Room) ValidateRoomVersion(expected *uint64) error {
 	return nil
 }
 
-// IncrementRoomVersion marks a room-wide state transition.
 func (r *Room) IncrementRoomVersion() { r.RoomVersion++ }
 
-// ExpectedPersistedRoomVersion is the revision read from storage before this mutation.
 func (r *Room) ExpectedPersistedRoomVersion() uint64 { return r.persistedRoomVersion }
 
 // MarkRoomSaved records the revision successfully persisted by the hub.
 func (r *Room) MarkRoomSaved() { r.persistedRoomVersion = r.RoomVersion }
 
-// SetPersistedRoomVersion initializes the storage revision after deserialization.
 func (r *Room) SetPersistedRoomVersion(version uint64) { r.persistedRoomVersion = version }
 
 func NewRoomWithID(id string, clients ClientCollection) *Room {

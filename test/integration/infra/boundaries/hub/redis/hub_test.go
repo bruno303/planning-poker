@@ -324,7 +324,7 @@ func TestIntegration_SaveRoom(t *testing.T) {
 	room.Result = &result
 
 	// Save the room
-	err = hub.SaveRoom(context.Background(), room)
+	err = hub.SaveRoom(context.Background(), room, room.ExpectedPersistedRoomVersion())
 	assert.NoError(t, err)
 
 	// Retrieve and verify the changes were persisted

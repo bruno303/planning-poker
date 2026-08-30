@@ -40,7 +40,7 @@ func (uc UpdateStoryUseCase) Execute(ctx context.Context, cmd UpdateStoryCommand
 			return err
 		}
 
-		if err := uc.hub.SaveRoom(ctx, room); err != nil {
+		if err := uc.hub.SaveRoom(ctx, room, room.ExpectedPersistedRoomVersion()); err != nil {
 			return err
 		}
 

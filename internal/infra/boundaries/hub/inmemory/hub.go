@@ -115,8 +115,8 @@ func (h *InMemoryHub) RemoveClient(ctx context.Context, clientID string, roomID 
 	return err
 }
 
-func (h *InMemoryHub) SaveRoom(_ context.Context, room *entity.Room, expectedVersion ...uint64) error {
-	if len(expectedVersion) > 0 && room.RoomVersion != expectedVersion[0]+1 {
+func (h *InMemoryHub) SaveRoom(_ context.Context, room *entity.Room, expectedVersion uint64) error {
+	if room.RoomVersion != expectedVersion && room.RoomVersion != expectedVersion+1 {
 		return domain.ErrStaleRoomVersion
 	}
 	// In-memory hub doesn't need to persist

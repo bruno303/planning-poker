@@ -376,14 +376,8 @@ func (h *RedisHub) GetRooms() []*entity.Room {
 	return rooms
 }
 
-func (h *RedisHub) SaveRoom(ctx context.Context, room *entity.Room, expectedVersion ...uint64) error {
-	if len(expectedVersion) == 0 {
-		if room.RoomVersion == room.ExpectedPersistedRoomVersion() {
-			return h.saveRoom(ctx, room)
-		}
-		return h.saveRoomConditionally(ctx, room, room.ExpectedPersistedRoomVersion())
-	}
-	return h.saveRoomConditionally(ctx, room, expectedVersion[0])
+func (h *RedisHub) SaveRoom(ctx context.Context, room *entity.Room, expectedVersion uint64) error {
+	return h.saveRoomConditionally(ctx, room, expectedVersion)
 }
 
 func (h *RedisHub) saveRoom(ctx context.Context, room *entity.Room) error {

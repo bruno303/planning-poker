@@ -38,7 +38,7 @@ func (uc RevealUseCase) Execute(ctx context.Context, cmd RevealCommand) error {
 			return err
 		}
 
-		if err := uc.hub.SaveRoom(ctx, room); err != nil {
+		if err := uc.hub.SaveRoom(ctx, room, room.ExpectedPersistedRoomVersion()); err != nil {
 			return err
 		}
 

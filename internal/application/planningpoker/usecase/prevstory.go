@@ -38,7 +38,7 @@ func (uc PrevStoryUseCase) Execute(ctx context.Context, cmd PrevStoryCommand) er
 			return err
 		}
 
-		if err := uc.hub.SaveRoom(ctx, room); err != nil {
+		if err := uc.hub.SaveRoom(ctx, room, room.ExpectedPersistedRoomVersion()); err != nil {
 			return err
 		}
 

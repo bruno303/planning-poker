@@ -89,15 +89,16 @@ func TestRedisHub_SaveRoom_WhenRedisFailsWrapsError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockRedis := NewMockRedisClient(ctrl)
 	wantErr := errors.New("write failed")
-	statusCmd := redis.NewStatusCmd(context.Background())
-	statusCmd.SetErr(wantErr)
-	mockRedis.EXPECT().Set(gomock.Any(), "planning-poker:room:room-1", gomock.Any(), twentyFourHours).Return(statusCmd)
+	evalCmd := redis.NewCmd(context.Background())
+	evalCmd.SetErr(wantErr)
+	mockRedis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{"planning-poker:room:room-1"}, gomock.Any(), gomock.Any(), gomock.Any()).Return(evalCmd)
 
 	hub := newErrorTestHub(mockRedis)
-	err := hub.SaveRoom(context.Background(), &entity.Room{ID: "room-1", Clients: clientcollection.New()})
+	room := &entity.Room{ID: "room-1", Clients: clientcollection.New()}
+	err := hub.SaveRoom(context.Background(), room, room.ExpectedPersistedRoomVersion())
 
 	assert.ErrorIs(t, err, wantErr)
-	assert.EqualError(t, err, "failed to save room to Redis: write failed")
+	assert.EqualError(t, err, "failed to conditionally save room to Redis: write failed")
 }
 
 func TestRedisHub_BroadcastToRoom_WhenMessageCannotBeMarshaledReturnsError(t *testing.T) {

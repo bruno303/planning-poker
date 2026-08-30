@@ -459,22 +459,17 @@ func (c *MockHubRemoveRoomCall) DoAndReturn(f func(string)) *MockHubRemoveRoomCa
 }
 
 // SaveRoom mocks base method.
-func (m *MockHub) SaveRoom(ctx context.Context, room *entity.Room, expectedVersion ...uint64) error {
+func (m *MockHub) SaveRoom(ctx context.Context, room *entity.Room, expectedVersion uint64) error {
 	m.ctrl.T.Helper()
-	varargs := []any{ctx, room}
-	for _, a := range expectedVersion {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "SaveRoom", varargs...)
+	ret := m.ctrl.Call(m, "SaveRoom", ctx, room, expectedVersion)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SaveRoom indicates an expected call of SaveRoom.
-func (mr *MockHubMockRecorder) SaveRoom(ctx, room any, expectedVersion ...any) *MockHubSaveRoomCall {
+func (mr *MockHubMockRecorder) SaveRoom(ctx, room, expectedVersion any) *MockHubSaveRoomCall {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, room}, expectedVersion...)
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveRoom", reflect.TypeOf((*MockHub)(nil).SaveRoom), varargs...)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveRoom", reflect.TypeOf((*MockHub)(nil).SaveRoom), ctx, room, expectedVersion)
 	return &MockHubSaveRoomCall{Call: call}
 }
 
@@ -490,13 +485,13 @@ func (c *MockHubSaveRoomCall) Return(arg0 error) *MockHubSaveRoomCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHubSaveRoomCall) Do(f func(context.Context, *entity.Room, ...uint64) error) *MockHubSaveRoomCall {
+func (c *MockHubSaveRoomCall) Do(f func(context.Context, *entity.Room, uint64) error) *MockHubSaveRoomCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHubSaveRoomCall) DoAndReturn(f func(context.Context, *entity.Room, ...uint64) error) *MockHubSaveRoomCall {
+func (c *MockHubSaveRoomCall) DoAndReturn(f func(context.Context, *entity.Room, uint64) error) *MockHubSaveRoomCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

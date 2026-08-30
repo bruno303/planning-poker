@@ -51,7 +51,7 @@ func TestAddStoryUseCase_Execute_Success(t *testing.T) {
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().SaveRoom(ctx, room).Return(nil)
+	mockHub.EXPECT().SaveRoom(ctx, room, gomock.Any()).Return(nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(nil)
 
 	uc := NewAddStoryUseCase(mockHub, mockLockManager)
@@ -94,7 +94,7 @@ func TestAddStoryUseCase_Execute_SaveRoomError(t *testing.T) {
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().SaveRoom(ctx, room).Return(expectedError)
+	mockHub.EXPECT().SaveRoom(ctx, room, gomock.Any()).Return(expectedError)
 
 	uc := NewAddStoryUseCase(mockHub, mockLockManager)
 	cmd := AddStoryCommand{
@@ -174,7 +174,7 @@ func TestAddStoryUseCase_Execute_BroadcastError(t *testing.T) {
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().SaveRoom(ctx, room).Return(nil)
+	mockHub.EXPECT().SaveRoom(ctx, room, gomock.Any()).Return(nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(expectedError)
 
 	uc := NewAddStoryUseCase(mockHub, mockLockManager)

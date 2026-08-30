@@ -26,12 +26,12 @@ func TestRedisHub_NewRoom_SaveRoom_LoadRoom(t *testing.T) {
 
 	// Serialize room for mock return
 	roomBytes, _ := SerializeRoom(room)
-	statusCmd := redis.NewStatusCmd(context.Background())
-	statusCmd.SetVal("OK")
+	evalCmd := redis.NewCmd(context.Background())
+	evalCmd.SetVal([]interface{}{int64(1)})
 	stringCmd := redis.NewStringCmd(context.Background())
 	stringCmd.SetVal(string(roomBytes))
 
-	mockRedis.EXPECT().Set(gomock.Any(), "planning-poker:room:room1", gomock.Any(), time.Duration(24*time.Hour)).Return(statusCmd)
+	mockRedis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{"planning-poker:room:room1"}, gomock.Any(), gomock.Any(), gomock.Any()).Return(evalCmd)
 	mockRedis.EXPECT().Get(gomock.Any(), "planning-poker:room:room1").Return(stringCmd)
 
 	hub := &RedisHub{
@@ -46,7 +46,7 @@ func TestRedisHub_NewRoom_SaveRoom_LoadRoom(t *testing.T) {
 	mockRedis.EXPECT().Get(gomock.Any(), "planning-poker:room:room1").Return(stringCmd).AnyTimes()
 
 	// SaveRoom
-	err := hub.SaveRoom(context.Background(), room)
+	err := hub.SaveRoom(context.Background(), room, room.ExpectedPersistedRoomVersion())
 	assert.NoError(t, err)
 
 	// LoadRoom
