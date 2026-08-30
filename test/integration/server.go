@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"planning-poker/internal/config"
+	"planning-poker/internal/infra/boundaries/hub/inmemory"
 	"planning-poker/internal/infra/boundaries/hub/redis"
+	infralock "planning-poker/internal/infra/lock"
 	"planning-poker/internal/setup"
 	"testing"
 	"time"
@@ -23,11 +25,25 @@ type TestServer struct {
 }
 
 func NewTestServer(t *testing.T) *TestServer {
+	return newTestServer(t, func(cfg *config.Config) *setup.Container {
+		return setup.NewContainer(cfg)
+	})
+}
+
+// NewInMemoryTestServer creates a full-stack test server without external services.
+func NewInMemoryTestServer(t *testing.T) *TestServer {
+	return newTestServer(t, func(cfg *config.Config) *setup.Container {
+		hub := inmemory.NewHub()
+		return setup.NewContainerWithDependencies(cfg, hub, hub, infralock.NewInMemoryLockManager())
+	})
+}
+
+func newTestServer(t *testing.T, newContainer func(*config.Config) *setup.Container) *TestServer {
 	t.Helper()
 	cfg := getTestConfig()
 	setup.ConfigureLogging(cfg)
 
-	container := setup.NewContainer(cfg)
+	container := newContainer(cfg)
 
 	r := mux.NewRouter()
 	setup.ConfigureAPIs(r, container)
@@ -47,8 +63,10 @@ func (ts *TestServer) Close() {
 		_ = hub.Close()
 	}
 
-	ts.cleanRedis()
-	time.Sleep(100 * time.Millisecond)
+	if ts.Container.Infra.RedisClient != nil {
+		ts.cleanRedis()
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 func (ts *TestServer) cleanRedis() {

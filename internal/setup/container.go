@@ -45,6 +45,26 @@ func NewContainer(cfg *config.Config) *Container {
 	ctx := context.Background()
 
 	infra := newInfraContainer(ctx, cfg)
+	return newContainer(cfg, infra)
+}
+
+// NewContainerWithDependencies builds a container using the supplied infrastructure.
+// It is intended for tests and other callers that need to replace external dependencies.
+func NewContainerWithDependencies(
+	cfg *config.Config,
+	hub domain.Hub,
+	adminHub domain.AdminHub,
+	lockManager lock.LockManager,
+) *Container {
+	infra := &InfraContainer{
+		Hub:         hub,
+		AdminHub:    adminHub,
+		LockManager: lockManager,
+	}
+	return newContainer(cfg, infra)
+}
+
+func newContainer(cfg *config.Config, infra *InfraContainer) *Container {
 	app := newApplicationContainer(infra)
 	infra.WebsocketBusFactory = newWebsocketBusFactory(cfg, infra, app)
 	api := newAPIContainer(cfg, infra, app)
@@ -88,8 +108,9 @@ func newApplicationContainer(infra *InfraContainer) *ApplicationContainer {
 }
 
 func newAPIContainer(cfg *config.Config, infra *InfraContainer, app *ApplicationContainer) *APIContainer {
-	healthCheckers := []http.HealthChecker{
-		http.NewRedisHealthChecker(infra.RedisClient, "redis"),
+	healthCheckers := []http.HealthChecker{}
+	if infra.RedisClient != nil {
+		healthCheckers = append(healthCheckers, http.NewRedisHealthChecker(infra.RedisClient, "redis"))
 	}
 
 	adminAuthMiddleware := middleware.NewAdminMiddleware(cfg.API.Admin.APIKey)
