@@ -67,7 +67,10 @@ func (h *InMemoryHub) LoadRoom(_ context.Context, roomID string) (*entity.Room, 
 }
 
 func (h *InMemoryHub) RemoveRoom(roomID string) {
+	h.roomMu.Lock()
+	defer h.roomMu.Unlock()
 	delete(h.Rooms, roomID)
+	delete(h.saved, roomID)
 }
 
 func (h *InMemoryHub) FindClientByID(clientID string) (*entity.Client, bool) {
@@ -77,6 +80,9 @@ func (h *InMemoryHub) FindClientByID(clientID string) (*entity.Client, bool) {
 
 func (h *InMemoryHub) AddClient(c *entity.Client) {
 	h.Clients[c.ID] = c
+	if room := c.Room(); room != nil {
+		h.refreshSavedRoom(room)
+	}
 }
 
 func (h *InMemoryHub) AddBus(_ context.Context, clientID string, bus domain.Bus) error {
@@ -114,11 +120,26 @@ func (h *InMemoryHub) RemoveClient(ctx context.Context, clientID string, roomID 
 		}
 		if room.IsEmpty() {
 			h.RemoveRoom(room.ID)
+		} else {
+			h.refreshSavedRoom(room)
 		}
 		return nil, nil
 	})
 
 	return err
+}
+
+func (h *InMemoryHub) refreshSavedRoom(room *entity.Room) {
+	h.roomMu.Lock()
+	defer h.roomMu.Unlock()
+
+	saved, ok := h.saved[room.ID]
+	if !ok {
+		return
+	}
+	snapshot := cloneRoom(room)
+	snapshot.RoomVersion = saved.RoomVersion
+	h.saved[room.ID] = snapshot
 }
 
 func (h *InMemoryHub) SaveRoom(_ context.Context, room *entity.Room) error {
@@ -138,6 +159,10 @@ func (h *InMemoryHub) SaveRoom(_ context.Context, room *entity.Room) error {
 func (h *InMemoryHub) SaveRoomIfVersion(_ context.Context, room *entity.Room, expectedVersion *uint64) error {
 	h.roomMu.Lock()
 	defer h.roomMu.Unlock()
+
+	if h.Rooms[room.ID] != room {
+		return domain.ErrStaleRoomVersion
+	}
 
 	persistedVersion := uint64(0)
 	if saved, ok := h.saved[room.ID]; ok {
