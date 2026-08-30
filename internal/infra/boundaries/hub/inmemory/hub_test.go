@@ -465,8 +465,8 @@ func TestSaveRoom(t *testing.T) {
 	if !got.Reveal {
 		t.Errorf("expected room.Reveal to be true, got false")
 	}
-	if got.ExpectedPersistedRoomVersion() != got.RoomVersion {
-		t.Errorf("expected SaveRoom to record persisted version %d, got %d", got.RoomVersion, got.ExpectedPersistedRoomVersion())
+	if got.RoomVersion != 1 {
+		t.Errorf("expected SaveRoom to advance version to 1, got %d", got.RoomVersion)
 	}
 }
 
@@ -549,8 +549,8 @@ func TestSaveRoomIfVersion_RejectsStaleNoOpAndTracksSuccessfulSave(t *testing.T)
 	if err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion); err != nil {
 		t.Fatalf("expected initial conditional save to succeed, got %v", err)
 	}
-	if got := room.ExpectedPersistedRoomVersion(); got != 1 {
-		t.Fatalf("expected persisted version 1 after save, got %d", got)
+	if room.RoomVersion != 1 {
+		t.Fatalf("expected room version 1 after save, got %d", room.RoomVersion)
 	}
 
 	if err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion); !errors.Is(err, domain.ErrStaleRoomVersion) {

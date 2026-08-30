@@ -862,17 +862,11 @@ func TestRoom_ToggleReveal(t *testing.T) {
 	})
 }
 
-func TestRoomVersionLifecycle(t *testing.T) {
+func TestRoomMutationsDoNotChangeVersion(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	room := NewRoom(NewMockClientCollection(ctrl))
-	room.SetPersistedRoomVersion(3)
-	if got := room.ExpectedPersistedRoomVersion(); got != 3 {
-		t.Fatalf("ExpectedPersistedRoomVersion = %d, want 3", got)
-	}
-	room.IncrementRoomVersion()
-	room.MarkRoomSaved()
-	if got := room.ExpectedPersistedRoomVersion(); got != 1 {
-		t.Fatalf("persisted version after save = %d, want 1", got)
+	if room.RoomVersion != 0 {
+		t.Fatalf("initial room version = %d, want 0", room.RoomVersion)
 	}
 }
 

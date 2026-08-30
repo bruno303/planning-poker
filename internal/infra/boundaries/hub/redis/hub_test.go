@@ -32,6 +32,7 @@ func TestRedisHub_NewRoom_SaveRoom_LoadRoom(t *testing.T) {
 	stringCmd.SetVal(string(roomBytes))
 
 	mockRedis.EXPECT().Set(gomock.Any(), "planning-poker:room:room1", gomock.Any(), gomock.Any()).Return(setCmd).AnyTimes()
+	mockRedis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{"planning-poker:room:room1"}, gomock.Any(), gomock.Any()).Return(saveResultCmd()).AnyTimes()
 	mockRedis.EXPECT().Get(gomock.Any(), "planning-poker:room:room1").Return(stringCmd)
 
 	hub := &RedisHub{
@@ -91,11 +92,17 @@ func TestRedisHub_SaveRoomConditionally(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
-			if test.wantSaved && room.ExpectedPersistedRoomVersion() != room.RoomVersion {
-				t.Fatalf("saved room version was not recorded")
+			if test.wantSaved && room.RoomVersion != 3 {
+				t.Fatalf("saved room version was not advanced")
 			}
 		})
 	}
+}
+
+func saveResultCmd() *redis.Cmd {
+	cmd := redis.NewCmd(context.Background())
+	cmd.SetVal([]interface{}{int64(1), int64(1)})
+	return cmd
 }
 
 func TestRedisHub_LoadRoomRejectsStoryWithoutID(t *testing.T) {
@@ -162,7 +169,7 @@ func TestRedisHub_AddClient_RemoveRoom(t *testing.T) {
 	room.Clients.Add(client)
 
 	mockRedis.EXPECT().Set(gomock.Any(), "planning-poker:client:client1", room.ID, time.Duration(24*time.Hour)).Return(redis.NewStatusCmd(context.Background()))
-	mockRedis.EXPECT().Set(gomock.Any(), "planning-poker:room:room2", gomock.Any(), time.Duration(24*time.Hour)).Return(redis.NewStatusCmd(context.Background()))
+	mockRedis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{"planning-poker:room:room2"}, gomock.Any(), gomock.Any()).Return(saveResultCmd())
 
 	hub := &RedisHub{
 		client:           mockRedis,
@@ -270,7 +277,7 @@ func TestRedisHub_RemoveClient(t *testing.T) {
 
 	mockRedis.EXPECT().Del(gomock.Any(), "planning-poker:client:client3").Return(intCmd)
 	mockRedis.EXPECT().Get(gomock.Any(), "planning-poker:room:"+room.ID).Return(stringCmdRoom)
-	mockRedis.EXPECT().Set(gomock.Any(), "planning-poker:room:"+room.ID, gomock.Any(), time.Duration(24*time.Hour)).Return(statusCmd)
+	mockRedis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{"planning-poker:room:" + room.ID}, gomock.Any(), gomock.Any()).Return(saveResultCmd())
 
 	hub := &RedisHub{
 		client:           mockRedis,
@@ -339,7 +346,7 @@ func TestRedisHub_RemoveClient_ClientDeleteFailsAndRoomSavesSuccessfully_Returns
 
 	mockRedis.EXPECT().Del(gomock.Any(), "planning-poker:client:client3").Return(intCmd)
 	mockRedis.EXPECT().Get(gomock.Any(), "planning-poker:room:room4").Return(stringCmd)
-	mockRedis.EXPECT().Set(gomock.Any(), "planning-poker:room:room4", gomock.Any(), time.Duration(24*time.Hour)).Return(statusCmd)
+	mockRedis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{"planning-poker:room:room4"}, gomock.Any(), gomock.Any()).Return(saveResultCmd())
 
 	hub := &RedisHub{
 		client:           mockRedis,
@@ -381,7 +388,9 @@ func TestRedisHub_RemoveClient_SaveRoomFails_PropagatesError(t *testing.T) {
 
 	mockRedis.EXPECT().Del(gomock.Any(), "planning-poker:client:client3").Return(intCmd)
 	mockRedis.EXPECT().Get(gomock.Any(), "planning-poker:room:room4").Return(stringCmd)
-	mockRedis.EXPECT().Set(gomock.Any(), "planning-poker:room:room4", gomock.Any(), time.Duration(24*time.Hour)).Return(statusCmd)
+	failCmd := redis.NewCmd(context.Background())
+	failCmd.SetErr(saveErr)
+	mockRedis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{"planning-poker:room:room4"}, gomock.Any(), gomock.Any()).Return(failCmd)
 
 	hub := &RedisHub{
 		client:           mockRedis,

@@ -122,11 +122,16 @@ func (h *InMemoryHub) RemoveClient(ctx context.Context, clientID string, roomID 
 }
 
 func (h *InMemoryHub) SaveRoom(_ context.Context, room *entity.Room) error {
-	// Preserve pointer-backed in-memory behavior while recording the last save.
 	h.roomMu.Lock()
 	defer h.roomMu.Unlock()
-	room.MarkRoomSaved()
-	h.saved[room.ID] = cloneRoom(room)
+	next := room.RoomVersion + 1
+	if saved, ok := h.saved[room.ID]; ok {
+		next = saved.RoomVersion + 1
+	}
+	saved := cloneRoom(room)
+	saved.RoomVersion = next
+	h.saved[room.ID] = saved
+	room.RoomVersion = next
 	return nil
 }
 
@@ -134,7 +139,7 @@ func (h *InMemoryHub) SaveRoomIfVersion(_ context.Context, room *entity.Room, ex
 	h.roomMu.Lock()
 	defer h.roomMu.Unlock()
 
-	persistedVersion := room.ExpectedPersistedRoomVersion()
+	persistedVersion := uint64(0)
 	if saved, ok := h.saved[room.ID]; ok {
 		persistedVersion = saved.RoomVersion
 	}
@@ -144,9 +149,12 @@ func (h *InMemoryHub) SaveRoomIfVersion(_ context.Context, room *entity.Room, ex
 		}
 		return domain.ErrStaleRoomVersion
 	}
-	room.MarkRoomSaved()
+	next := persistedVersion + 1
+	saved := cloneRoom(room)
+	saved.RoomVersion = next
+	h.saved[room.ID] = saved
+	room.RoomVersion = next
 	h.Rooms[room.ID] = room
-	h.saved[room.ID] = cloneRoom(room)
 	return nil
 }
 
@@ -170,7 +178,6 @@ func cloneRoom(room *entity.Room) *entity.Room {
 	}
 	clone.CurrentStoryIndex = room.CurrentStoryIndex
 	clone.RoomVersion = room.RoomVersion
-	clone.SetPersistedRoomVersion(room.ExpectedPersistedRoomVersion())
 	if room.Clients != nil {
 		for _, client := range room.Clients.Values() {
 			copied := clone.NewClient(client.ID)

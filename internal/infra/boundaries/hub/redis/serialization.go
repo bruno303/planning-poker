@@ -142,8 +142,6 @@ func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 		client := sc.Client(room)
 		room.Clients.Add(client)
 	}
-	room.SetPersistedRoomVersion(room.RoomVersion)
-
 	return room, nil
 }
 

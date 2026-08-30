@@ -91,7 +91,7 @@ func (h *RedisHub) Close() error {
 func (h *RedisHub) NewRoom(ctx context.Context) (*entity.Room, error) {
 	room, err := trace.Trace(ctx, trace.NameConfig("RedisHub", "NewRoom"), func(ctx context.Context) (any, error) {
 		room := entity.NewRoom(clientcollection.New())
-		if err := h.saveRoom(ctx, room); err != nil {
+		if err := h.saveInitialRoom(ctx, room); err != nil {
 			h.logger.Error(ctx, "Failed to save new room to Redis", err)
 			return nil, err
 		}
@@ -108,7 +108,7 @@ func (h *RedisHub) NewRoom(ctx context.Context) (*entity.Room, error) {
 func (h *RedisHub) NewRoomWithID(ctx context.Context, roomID string) (*entity.Room, error) {
 	room, err := trace.Trace(ctx, trace.NameConfig("RedisHub", "NewRoomWithID"), func(ctx context.Context) (any, error) {
 		room := entity.NewRoomWithID(roomID, clientcollection.New())
-		if err := h.saveRoom(ctx, room); err != nil {
+		if err := h.saveInitialRoom(ctx, room); err != nil {
 			h.logger.Error(ctx, "Failed to save new room to Redis", err)
 			return nil, err
 		}
@@ -391,13 +391,43 @@ func (h *RedisHub) saveRoom(ctx context.Context, room *entity.Room) error {
 	}
 
 	key := roomKeyPrefix + room.ID
-	if err := h.client.Set(ctx, key, data, twentyFourHours).Err(); err != nil {
+	result, err := h.client.Eval(ctx, saveRoomScript, []string{key}, data, twentyFourHours.Milliseconds()).Result()
+	if err != nil {
 		return fmt.Errorf("failed to save room to Redis: %w", err)
 	}
-	room.MarkRoomSaved()
+	values, ok := result.([]interface{})
+	if !ok || len(values) < 2 {
+		return fmt.Errorf("unexpected save response")
+	}
+	nextVersion, ok := values[1].(int64)
+	if !ok {
+		return fmt.Errorf("unexpected save version")
+	}
+	room.RoomVersion = uint64(nextVersion)
 
 	return nil
 }
+
+func (h *RedisHub) saveInitialRoom(ctx context.Context, room *entity.Room) error {
+	data, err := SerializeRoom(room)
+	if err != nil {
+		return fmt.Errorf("failed to serialize room: %w", err)
+	}
+	if err := h.client.Set(ctx, roomKeyPrefix+room.ID, data, twentyFourHours).Err(); err != nil {
+		return fmt.Errorf("failed to save room to Redis: %w", err)
+	}
+	return nil
+}
+
+const saveRoomScript = `
+local stored = redis.call('GET', KEYS[1])
+local version = 0
+if stored then version = cjson.decode(stored).roomVersion end
+local next = version + 1
+local data = string.gsub(ARGV[1], '"roomVersion":%d+', '"roomVersion":' .. next)
+redis.call('SET', KEYS[1], data, 'PX', ARGV[2])
+return {1, next}
+`
 
 const compareAndSaveRoomScript = `
 local stored = redis.call('GET', KEYS[1])
@@ -412,7 +442,10 @@ func (h *RedisHub) saveRoomConditionally(ctx context.Context, room *entity.Room,
 	if expectedVersion == nil {
 		return domain.ErrStaleRoomVersion
 	}
-	data, err := SerializeRoom(room)
+	nextVersion := *expectedVersion + 1
+	persistedRoom := *room
+	persistedRoom.RoomVersion = nextVersion
+	data, err := SerializeRoom(&persistedRoom)
 	if err != nil {
 		return fmt.Errorf("failed to serialize room: %w", err)
 	}
@@ -431,7 +464,7 @@ func (h *RedisHub) saveRoomConditionally(ctx context.Context, room *entity.Room,
 	if status != 1 {
 		return domain.ErrStaleRoomVersion
 	}
-	room.MarkRoomSaved()
+	room.RoomVersion = nextVersion
 	return nil
 }
 
