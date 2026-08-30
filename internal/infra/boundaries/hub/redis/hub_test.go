@@ -55,6 +55,48 @@ func TestRedisHub_NewRoom_SaveRoom_LoadRoom(t *testing.T) {
 	assert.Equal(t, room.ID, gotRoom.ID)
 }
 
+func TestRedisHub_SaveRoomConditionally(t *testing.T) {
+	tests := []struct {
+		name      string
+		result    any
+		evalError error
+		wantError error
+		wantSaved bool
+	}{
+		{name: "saves when version matches", result: []interface{}{int64(1)}, wantSaved: true},
+		{name: "rejects stale version", result: []interface{}{int64(0), int64(2)}, wantError: domain.ErrStaleRoomVersion},
+		{name: "rejects empty response", result: []interface{}{}, wantError: errors.New("unexpected conditional save response")},
+		{name: "rejects invalid status", result: []interface{}{"invalid"}, wantError: errors.New("unexpected conditional save status")},
+		{name: "wraps eval error", evalError: errors.New("eval failed"), wantError: errors.New("failed to conditionally save room to Redis: eval failed")},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockRedis := NewMockRedisClient(ctrl)
+			cmd := redis.NewCmd(context.Background())
+			if test.evalError != nil {
+				cmd.SetErr(test.evalError)
+			} else {
+				cmd.SetVal(test.result)
+			}
+			mockRedis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{roomKeyPrefix + "room-conditional"}, gomock.Any(), gomock.Any(), gomock.Any()).Return(cmd)
+
+			hub := &RedisHub{client: mockRedis}
+			room := &entity.Room{ID: "room-conditional", Clients: clientcollection.New(), RoomVersion: 3}
+			err := hub.SaveRoom(context.Background(), room, 2)
+			if test.wantError != nil {
+				assert.EqualError(t, err, test.wantError.Error())
+			} else {
+				assert.NoError(t, err)
+			}
+			if test.wantSaved && room.ExpectedPersistedRoomVersion() != room.RoomVersion {
+				t.Fatalf("saved room version was not recorded")
+			}
+		})
+	}
+}
+
 func TestRedisHub_LoadRoomRejectsStoryWithoutID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

@@ -889,6 +889,58 @@ func TestRoomVersionLifecycle(t *testing.T) {
 	}
 }
 
+func TestRoom_NewVotingIncrementsVersion(t *testing.T) {
+	owner := &Client{ID: "owner", IsOwner: true, CurrentVote: lo.ToPtr("5"), HasVoted: true}
+	clients := &votingClientCollection{client: owner}
+
+	room := NewRoom(clients)
+	owner.WithRoom(room)
+	room.CurrentStory = "story"
+	room.Reveal = true
+
+	if err := room.NewVoting(context.Background(), owner.ID); err != nil {
+		t.Fatalf("NewVoting returned error: %v", err)
+	}
+	if room.RoomVersion != 1 {
+		t.Fatalf("RoomVersion = %d, want 1", room.RoomVersion)
+	}
+
+	t.Run("rejects missing client", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		clients := NewMockClientCollection(ctrl)
+		clients.EXPECT().Filter(gomock.Any()).Return(clients)
+		clients.EXPECT().First().Return(nil, false)
+		if err := NewRoom(clients).NewVoting(context.Background(), "missing"); err == nil {
+			t.Fatal("NewVoting accepted a missing client")
+		}
+	})
+
+	t.Run("rejects non-owner", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		clients := NewMockClientCollection(ctrl)
+		clients.EXPECT().Filter(gomock.Any()).Return(clients)
+		clients.EXPECT().First().Return(&Client{ID: "client"}, true)
+		if err := NewRoom(clients).NewVoting(context.Background(), "client"); err == nil {
+			t.Fatal("NewVoting accepted a non-owner")
+		}
+	})
+}
+
+type votingClientCollection struct{ client *Client }
+
+func (c *votingClientCollection) Add(*Client)             {}
+func (c *votingClientCollection) Remove(string)           {}
+func (c *votingClientCollection) Count() int              { return 1 }
+func (c *votingClientCollection) First() (*Client, bool)  { return c.client, c.client != nil }
+func (c *votingClientCollection) ForEach(f func(*Client)) { f(c.client) }
+func (c *votingClientCollection) Filter(f func(*Client) bool) ClientCollection {
+	if c.client != nil && f(c.client) {
+		return c
+	}
+	return &votingClientCollection{}
+}
+func (c *votingClientCollection) Values() []*Client { return []*Client{c.client} }
+
 func TestRoom_IsEmpty(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

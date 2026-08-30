@@ -527,7 +527,6 @@ func (r *Room) ToggleReveal(ctx context.Context, clientID string) error {
 
 	r.reveal(!r.Reveal)
 	r.IncrementRoomVersion()
-	r.IncrementRoomVersion()
 	return nil
 }
 

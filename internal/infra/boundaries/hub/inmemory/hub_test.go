@@ -465,3 +465,14 @@ func TestSaveRoom(t *testing.T) {
 		t.Errorf("expected room.Reveal to be true, got false")
 	}
 }
+
+func TestSaveRoom_RejectsStaleVersion(t *testing.T) {
+	hub := NewHub()
+	room := entity.NewRoom(nil)
+	room.RoomVersion = 2
+
+	err := hub.SaveRoom(context.Background(), room, 0)
+	if !errors.Is(err, domain.ErrStaleRoomVersion) {
+		t.Fatalf("expected stale room version error, got %v", err)
+	}
+}
