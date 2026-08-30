@@ -19,11 +19,6 @@ export default function Header({ handleBackToHome, generateShareableLink, childr
         <div style={styles.roomInfo}>
           <button
             type="button"
-            onKeyDown={e => {
-              if (e.key === 'Enter') {
-                e.currentTarget.click();
-              }
-            }}
             style={styles.roomCode}
             onMouseEnter={e => {
               (e.target as HTMLElement).style.backgroundColor = '#f3f4f6';

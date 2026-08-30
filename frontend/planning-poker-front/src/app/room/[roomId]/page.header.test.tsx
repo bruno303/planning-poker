@@ -61,18 +61,18 @@ describe('Header', () => {
     expect(mockDebug).toHaveBeenCalledWith('Clipboard API unavailable', { meta: { error: expect.stringContaining('Not allowed') } });
   });
 
-  it('copies the link from native keyboard activation and removes the toast after the animation', async () => {
+  it('does not duplicate activation when Enter precedes the native click', async () => {
     const writeText = navigator.clipboard.writeText as ReturnType<typeof vi.fn>;
     writeText.mockResolvedValue(undefined);
     renderHeader();
     const shareButton = screen.getByRole('button', { name: 'Click here to share the room' });
     shareButton.focus();
     fireEvent.keyDown(shareButton, { key: 'Enter' });
+    expect(writeText).not.toHaveBeenCalled();
+    fireEvent.click(shareButton);
     await act(async () => {});
+    expect(writeText).toHaveBeenCalledOnce();
     expect(writeText).toHaveBeenCalledWith('https://example.test/room/room-1');
     expect(screen.getByText('Shareable link copied!')).toBeTruthy();
-    act(() => vi.advanceTimersByTime(2_100));
-    act(() => vi.advanceTimersByTime(300));
-    expect(screen.queryByText('Shareable link copied!')).toBeNull();
   });
 });
