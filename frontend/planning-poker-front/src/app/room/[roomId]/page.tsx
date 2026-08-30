@@ -11,7 +11,6 @@ import {
   ConsensusLevel,
   ReorderStoryPayload,
   RemoveStoryPayload,
-  RoomState,
   SelectStoryPayload,
   Story,
   ToggleOwnerPayload,
@@ -19,7 +18,8 @@ import {
   UpdateNamePayload,
   UpdateStoryPayload,
   VotePayload,
-  WebSocketMessage
+  WebSocketMessage,
+  isRoomState
 } from '@/components/messages/websocket';
 import ParticipantIdBadge from '@/components/participantIdBadge/participantIdBadge';
 import { useLogger } from '@/context/logger/loggerContext';
@@ -49,6 +49,58 @@ type Participant = {
   hasVoted: boolean
   isSpectator: boolean
   isOwner: boolean
+}
+
+declare global {
+  interface Window {
+    __ws?: WebSocket;
+  }
+}
+
+function getErrorMessage(error: unknown): string | undefined {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  if (error !== null && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+    return error.message;
+  }
+  return undefined;
+}
+
+function isRecordWithType(value: unknown, type: string): value is { type: string; clientId?: unknown } {
+  return typeof value === 'object' && value !== null && 'type' in value && value.type === type;
+}
+
+function getParticipantStyle(participant: Participant, extremes: string[]) {
+  let voteStyle = styles.participantWaiting;
+  if (participant.isSpectator) {
+    voteStyle = styles.participantSpectator;
+  } else if (participant.hasVoted) {
+    voteStyle = styles.participantVoted;
+  }
+
+  let extremeStyle = {};
+  if (extremes.includes('lowest')) {
+    extremeStyle = styles.participantLowest;
+  } else if (extremes.includes('highest')) {
+    extremeStyle = styles.participantHighest;
+  }
+  return { ...styles.participant, ...voteStyle, ...extremeStyle };
+}
+
+function getParticipantStatus(participant: Participant): string {
+  if (participant.isSpectator) return 'Spectator';
+  if (participant.hasVoted) return 'Voted';
+  return 'Waiting...';
+}
+
+function getStatusDotStyle(participant: Participant) {
+  if (participant.isSpectator) return styles.statusSpectator;
+  if (participant.hasVoted) return styles.statusVoted;
+  return styles.statusWaiting;
 }
 
 export default function PlanningPoker() {
@@ -165,12 +217,13 @@ export default function PlanningPoker() {
 
     try {
       const payload = guardedCommands.has(message.type)
-        ? { ...(message.payload as object), expectedRoomVersion: roomVersion }
+        ? { ...(message.payload as Record<string, unknown>), expectedRoomVersion: roomVersion }
         : message.payload;
       activeSocket.send(JSON.stringify({ ...message, payload }));
-    } catch (err: any) {
-      const errorMessage = err?.message
-        ? `Failed to send message: ${err.message}`
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      const errorMessage = message
+        ? `Failed to send message: ${message}`
         : 'Failed to send message.';
       pushError(errorMessage);
     }
@@ -184,8 +237,8 @@ export default function PlanningPoker() {
   };
 
   const handleRevealVotes = () => {
-    const payload: any = null;
-    sendMessage<any>({ type: 'reveal-votes', payload });
+    const payload = null;
+    sendMessage<null>({ type: 'reveal-votes', payload });
   };
 
   const handleToggleSpectator = (participantId: string) => {
@@ -199,13 +252,13 @@ export default function PlanningPoker() {
   };
 
   const handleVoteAgain = () => {
-    const payload: any = null;
-    sendMessage<any>({ type: 'vote-again', payload });
+    const payload = null;
+    sendMessage<null>({ type: 'vote-again', payload });
   }
 
   const handleToggleBacklogMode = () => {
-    const payload: any = null;
-    sendMessage<any>({ type: 'toggle-backlog-mode', payload });
+    const payload = null;
+    sendMessage<null>({ type: 'toggle-backlog-mode', payload });
   };
 
   const handleAddStory = (story: string) => {
@@ -261,13 +314,13 @@ export default function PlanningPoker() {
   };
 
   const handleAdvanceStory = () => {
-    const payload: any = null;
-    sendMessage<any>({ type: 'advance-story', payload });
+    const payload = null;
+    sendMessage<null>({ type: 'advance-story', payload });
   };
 
   const handlePrevStory = () => {
-    const payload: any = null;
-    sendMessage<any>({ type: 'prev-story', payload });
+    const payload = null;
+    sendMessage<null>({ type: 'prev-story', payload });
   };
 
   const cancelReconnect = () => {
@@ -314,17 +367,17 @@ export default function PlanningPoker() {
     const ws = new WebSocket(wsUrl);
     socket.current = ws;
     if (process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_EXPOSE_WS_GLOBAL === 'true') {
-      (window as any).__ws = ws;
+      window.__ws = ws;
     }
     connected.current = true;
     connectedRoomIdRef.current = roomCode;
 
     ws.onmessage = (event) => {
       try {
-        const data = JSON.parse(event.data);
+        const data: unknown = JSON.parse(event.data);
 
-        if (data.type === 'room-state') {
-          const roomState = data as RoomState;
+        if (isRoomState(data)) {
+          const roomState = data;
           setParticipants(roomState.participants);
           setCurrentStory(roomState.currentStory);
           setIsRevealed(roomState.reveal);
@@ -342,17 +395,20 @@ export default function PlanningPoker() {
           setCurrentStoryIndex(roomState.currentStoryIndex ?? 0);
           setRoomVersion(roomState.roomVersion);
 
-        } else if (data.type === 'stale-command') {
+        } else if (isRecordWithType(data, 'stale-command')) {
           pushError('Room changed; review and try again.');
 
-        } else if (data.type === 'update-client-id') {
+        } else if (isRecordWithType(data, 'update-client-id')) {
+          if (typeof data.clientId !== 'string') {
+            throw new Error('Invalid client ID from websocket');
+          }
           setClientId(data.clientId);
           sessionStorage.setItem('clientId', data.clientId);
           logger.setContext({ clientId: data.clientId });
           const payload: UpdateNamePayload = { username: userName };
           sendMessage<UpdateNamePayload>({ type: 'update-name', payload });
 
-        } else if (data.type === 'kicked') {
+        } else if (isRecordWithType(data, 'kicked')) {
           deliberateDisconnect.current = true;
           cancelReconnect();
           logger.info('Kicked from room');
@@ -364,9 +420,10 @@ export default function PlanningPoker() {
         } else {
           throw new Error('Invalid message from websocket');
         }
-      } catch (err: any) {
-        logger.error('Message handling failed', { error: err?.message });
-        const message = err?.message ? `Error while handling websocket message: ${err.message}` : 'Error while handling websocket message';
+      } catch (err: unknown) {
+        const errorMessage = getErrorMessage(err);
+        logger.error('Message handling failed', { error: errorMessage });
+        const message = errorMessage ? `Error while handling websocket message: ${errorMessage}` : 'Error while handling websocket message';
         pushError(message);
       }
     };
@@ -411,7 +468,7 @@ export default function PlanningPoker() {
   const getCardColor = (card: Card) => {
     if (card === '?') return '#8b5cf6'; // purple
     if (card === '☕') return '#f59e0b'; // amber
-    const num = parseInt(card ?? '');
+    const num = Number.parseInt(card ?? '', 10);
     if (num <= 2) return '#10b981'; // green
     if (num <= 8) return '#eab308'; // yellow
     if (num <= 21) return '#f97316'; // orange
@@ -673,22 +730,12 @@ export default function PlanningPoker() {
               </div>
 
               <div style={styles.participantsList}>
-                {participants.map((participant) => (
+                {participants.map((participant) => {
+                  const extremes = getParticipantExtremes(participant);
+                  return (
                   <div
                     key={participant.id}
-                    style={{
-                      ...styles.participant,
-                      ...(participant.isSpectator
-                        ? styles.participantSpectator
-                        : participant.hasVoted
-                          ? styles.participantVoted
-                          : styles.participantWaiting),
-                      ...(getParticipantExtremes(participant).includes('lowest')
-                        ? styles.participantLowest
-                        : getParticipantExtremes(participant).includes('highest')
-                          ? styles.participantHighest
-                          : {})
-                    }}
+                    style={getParticipantStyle(participant, extremes)}
                   >
                     <div style={styles.participantContent}>
                       <div>
@@ -701,18 +748,18 @@ export default function PlanningPoker() {
                               onCopied={() => pushSuccess('Participant ID copied!')}
                             />
                           )}
-                          {getParticipantExtremes(participant).map((extreme) => (
+                           {extremes.map((extreme) => (
                             <span
                               key={extreme}
-                              style={extreme === 'lowest' ? styles.lowestVoteBadge : styles.highestVoteBadge}
-                              title={`${extreme === 'lowest' ? 'Lowest' : 'Highest'} numeric estimate`}
+                               style={extreme === 'lowest' ? styles.lowestVoteBadge : styles.highestVoteBadge}
+                               title={`${extreme === 'lowest' ? 'Lowest' : 'Highest'} numeric estimate`}
                             >
                               {extreme === 'lowest' ? 'Lowest' : 'Highest'}
                             </span>
                           ))}
                         </div>
                         <div style={styles.participantStatus}>
-                          {participant.isSpectator ? 'Spectator' : participant.hasVoted ? 'Voted' : 'Waiting...'}
+                           {getParticipantStatus(participant)}
                         </div>
                       </div>
                       <div style={styles.participantRight}>
@@ -752,16 +799,13 @@ export default function PlanningPoker() {
 
                         <div style={{
                           ...styles.statusDot,
-                          ...(participant.isSpectator
-                            ? styles.statusSpectator
-                            : participant.hasVoted
-                              ? styles.statusVoted
-                              : styles.statusWaiting)
+                           ...getStatusDotStyle(participant)
                         }} />
                       </div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Summary */}

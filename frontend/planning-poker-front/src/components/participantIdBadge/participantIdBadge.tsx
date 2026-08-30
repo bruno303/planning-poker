@@ -5,10 +5,10 @@ import { Hash } from 'lucide-react';
 import { useState } from 'react';
 import styles from './participantIdBadge.module.css';
 
-type ParticipantIdBadgeProps = {
+type ParticipantIdBadgeProps = Readonly<{
   participantId: string;
   onCopied: () => void;
-};
+}>;
 
 export default function ParticipantIdBadge({ participantId, onCopied }: ParticipantIdBadgeProps) {
   const [showTooltip, setShowTooltip] = useState(false);

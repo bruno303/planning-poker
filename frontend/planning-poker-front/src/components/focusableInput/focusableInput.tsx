@@ -1,18 +1,18 @@
 import { useEffect, useRef } from 'react';
 import { styles } from './styles';
 
-type Props = {
+type Props = Readonly<{
   currentStory: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
-};
+}>;
 
 function FocusableComponent(props: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (inputRef.current) {
-      inputRef.current?.focus();
+      inputRef.current.focus();
     }    
   }, []);
 

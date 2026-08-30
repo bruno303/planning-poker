@@ -13,7 +13,7 @@ const SOURCE_REGEX = /^[a-zA-Z0-9._-]+$/;
 const VALID_LEVELS = ["debug", "info", "warn", "error"] as const;
 
 export class RateLimiter {
-  private store = new Map<string, RateLimitEntry>();
+  private readonly store = new Map<string, RateLimitEntry>();
 
   isAllowed(ip: string): boolean {
     const now = Date.now();
@@ -70,13 +70,8 @@ export function sanitizeLogEntry(entry: unknown): LogEntry | null {
     return null;
   }
 
-  const sanitizedLevel =
-    typeof level === "string" && (VALID_LEVELS as readonly string[]).includes(level)
-      ? (level as LogEntry["level"])
-      : "info";
-
-  const sanitizedTimestamp =
-    typeof timestamp === "string" ? timestamp : String(Date.now());
+  const sanitizedLevel = getLogLevel(level);
+  const sanitizedTimestamp = getTimestamp(timestamp);
 
   const result: LogEntry = {
     message: sanitizeString(message, 1000),
@@ -106,13 +101,27 @@ export function sanitizeLogEntry(entry: unknown): LogEntry | null {
 
     const sanitizedMeta: Record<string, unknown> = {};
     for (const [key, val] of entries) {
-      sanitizedMeta[sanitizeString(key, 50)] =
-        typeof val === "string" ? sanitizeString(val, 500) : val;
+      sanitizedMeta[sanitizeString(key, 50)] = sanitizeMetaValue(val);
     }
     result.meta = sanitizedMeta;
   }
 
   return result;
+}
+
+function getLogLevel(level: unknown): LogEntry["level"] {
+  if (typeof level === "string" && (VALID_LEVELS as readonly string[]).includes(level)) {
+    return level as LogEntry["level"];
+  }
+  return "info";
+}
+
+function getTimestamp(timestamp: unknown): string {
+  return typeof timestamp === "string" ? timestamp : String(Date.now());
+}
+
+function sanitizeMetaValue(value: unknown): unknown {
+  return typeof value === "string" ? sanitizeString(value, 500) : value;
 }
 
 export function sanitizeLogPayload(body: unknown): LogEntry[] {

@@ -93,16 +93,15 @@ export default function BacklogModal({
 
   return (
     <div style={styles.overlay} onClick={handleOverlayClick}>
-      <div style={styles.dialog} role="dialog" aria-label="Story Backlog">
-        <>
-          <div style={styles.header}>
-            <h2 style={styles.sectionTitle}>Story Backlog</h2>
-            <div style={styles.backlogHeader}>
-              <button style={styles.closeButton} aria-label="Close" onClick={onClose}>
-                <X size={18} />
-              </button>
-            </div>
+      <dialog open style={styles.dialog} aria-label="Story Backlog">
+        <div style={styles.header}>
+          <h2 style={styles.sectionTitle}>Story Backlog</h2>
+          <div style={styles.backlogHeader}>
+            <button style={styles.closeButton} aria-label="Close" onClick={onClose}>
+              <X size={18} />
+            </button>
           </div>
+        </div>
 
           <div style={styles.backlogList}>
             {stories.map((story, index) => (
@@ -150,45 +149,45 @@ export default function BacklogModal({
                   )}
                 </div>
                 <div style={styles.backlogStoryRight}>
+                  {amIAdmin && !story.voted && index !== currentStoryIndex && (
+                    <button
+                      style={{ ...styles.button, ...styles.primarySmallButton }}
+                      onClick={() => onSelectStory(story.id)}
+                      title="Select story"
+                    >
+                      Select
+                    </button>
+                  )}
                   {amIAdmin && (
-                    <>
-                      {!story.voted && index !== currentStoryIndex && (
-                        <button
-                          style={{ ...styles.button, ...styles.primarySmallButton }}
-                          onClick={() => onSelectStory(story.id)}
-                          title="Select story"
-                        >
-                          Select
-                        </button>
-                      )}
-                      <button
-                        style={{ ...styles.button, ...styles.secondarySmallButton }}
-                        onClick={() => handleMove(story.id, index - 1)}
-                        disabled={index === 0}
-                        aria-label={`Move ${story.name} up`}
-                        title="Move up"
-                      >
-                        <ChevronUp size={14} />
-                      </button>
-                      <button
-                        style={{ ...styles.button, ...styles.secondarySmallButton }}
-                        onClick={() => handleMove(story.id, index + 1)}
-                        disabled={index === stories.length - 1}
-                        aria-label={`Move ${story.name} down`}
-                        title="Move down"
-                      >
-                        <ChevronDown size={14} />
-                      </button>
-                      {!story.voted && index !== currentStoryIndex && (
-                        <button
-                          style={{ ...styles.button, ...styles.dangerSmallButton }}
-                          onClick={() => onRemoveStory(story.id)}
-                          title="Remove story"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </>
+                    <button
+                      style={{ ...styles.button, ...styles.secondarySmallButton }}
+                      onClick={() => handleMove(story.id, index - 1)}
+                      disabled={index === 0}
+                      aria-label={`Move ${story.name} up`}
+                      title="Move up"
+                    >
+                      <ChevronUp size={14} />
+                    </button>
+                  )}
+                  {amIAdmin && (
+                    <button
+                      style={{ ...styles.button, ...styles.secondarySmallButton }}
+                      onClick={() => handleMove(story.id, index + 1)}
+                      disabled={index === stories.length - 1}
+                      aria-label={`Move ${story.name} down`}
+                      title="Move down"
+                    >
+                      <ChevronDown size={14} />
+                    </button>
+                  )}
+                  {amIAdmin && !story.voted && index !== currentStoryIndex && (
+                    <button
+                      style={{ ...styles.button, ...styles.dangerSmallButton }}
+                      onClick={() => onRemoveStory(story.id)}
+                      title="Remove story"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   )}
                 </div>
               </div>
@@ -219,8 +218,7 @@ export default function BacklogModal({
               </button>
             </div>
           )}
-        </>
-      </div>
+      </dialog>
     </div>
   );
 }

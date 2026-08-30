@@ -6,7 +6,7 @@ import {
   sanitizeLogPayload,
 } from "@/lib/security";
 
-let rateLimiter = new RateLimiter();
+let rateLimiter: RateLimiter = new RateLimiter();
 
 export function resetRateLimiter(): void {
   rateLimiter = new RateLimiter();
@@ -98,9 +98,8 @@ function buildLokiPayload(
     });
 
     const dateMs = new Date(entry.timestamp).getTime();
-    const timestamp = String(
-      BigInt(Number.isFinite(dateMs) ? dateMs : Date.now()) * BigInt(1000000),
-    );
+    const timestampMs = Number.isFinite(dateMs) ? dateMs : Date.now();
+    const timestamp = String(BigInt(timestampMs) * BigInt(1000000));
 
     const existing = groups.get(key);
     if (existing) {

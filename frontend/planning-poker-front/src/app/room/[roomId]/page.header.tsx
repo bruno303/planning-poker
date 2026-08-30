@@ -1,3 +1,4 @@
+import { useLogger } from '@/context/logger/loggerContext';
 import { styles } from "./page.styles";
 
 type HeaderProps = {
@@ -6,6 +7,8 @@ type HeaderProps = {
 }
 
 export default function Header({ handleBackToHome, generateShareableLink, children }: HeaderProps & { children: React.ReactNode }) {
+  const logger = useLogger('room-header');
+
   return (
     <div>
       {/* Room Header */}
@@ -14,11 +17,14 @@ export default function Header({ handleBackToHome, generateShareableLink, childr
           ← Back to Home
         </button>
         <div style={styles.roomInfo}>
-          <span
-            style={{
-              ...styles.roomCode,
-              cursor: 'pointer',
+          <button
+            type="button"
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                e.currentTarget.click();
+              }
             }}
+            style={styles.roomCode}
             onMouseEnter={e => {
               (e.target as HTMLElement).style.backgroundColor = '#f3f4f6';
               (e.target as HTMLElement).style.cursor = 'pointer';
@@ -28,7 +34,12 @@ export default function Header({ handleBackToHome, generateShareableLink, childr
             }}
             title="Click to copy shareable link"
             onClick={async () => {
-              await navigator.clipboard.writeText(generateShareableLink())
+              try {
+                await navigator.clipboard.writeText(generateShareableLink());
+              } catch (err) {
+                logger.debug('Clipboard API unavailable', { meta: { error: String(err) } });
+                return;
+              }
 
               const toast = document.createElement('div');
               toast.textContent = 'Shareable link copied!';
@@ -53,10 +64,10 @@ export default function Header({ handleBackToHome, generateShareableLink, childr
               }, 10);
               setTimeout(() => {
                 toast.style.opacity = '0';
-                setTimeout(() => document.body.removeChild(toast), 300);
+                setTimeout(() => toast.remove(), 300);
               }, 1800);
             }}
-          >Click here to share the room</span>
+          >Click here to share the room</button>
         </div>
       </div>
       {children}
