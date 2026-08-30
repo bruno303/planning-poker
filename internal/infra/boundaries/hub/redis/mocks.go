@@ -85,6 +85,49 @@ func (c *MockRedisClientDelCall) DoAndReturn(f func(context.Context, ...string) 
 	return c
 }
 
+// Eval mocks base method.
+func (m *MockRedisClient) Eval(ctx context.Context, script string, keys []string, args ...any) *redis.Cmd {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, script, keys}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Eval", varargs...)
+	ret0, _ := ret[0].(*redis.Cmd)
+	return ret0
+}
+
+// Eval indicates an expected call of Eval.
+func (mr *MockRedisClientMockRecorder) Eval(ctx, script, keys any, args ...any) *MockRedisClientEvalCall {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, script, keys}, args...)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Eval", reflect.TypeOf((*MockRedisClient)(nil).Eval), varargs...)
+	return &MockRedisClientEvalCall{Call: call}
+}
+
+// MockRedisClientEvalCall wrap *gomock.Call
+type MockRedisClientEvalCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockRedisClientEvalCall) Return(arg0 *redis.Cmd) *MockRedisClientEvalCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockRedisClientEvalCall) Do(f func(context.Context, string, []string, ...any) *redis.Cmd) *MockRedisClientEvalCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockRedisClientEvalCall) DoAndReturn(f func(context.Context, string, []string, ...any) *redis.Cmd) *MockRedisClientEvalCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Get mocks base method.
 func (m *MockRedisClient) Get(ctx context.Context, key string) *redis.StringCmd {
 	m.ctrl.T.Helper()

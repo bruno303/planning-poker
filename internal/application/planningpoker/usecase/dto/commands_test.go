@@ -35,6 +35,7 @@ func TestNewRoomStateCommand(t *testing.T) {
 		VoteSpread:          lo.ToPtr(2),
 		NonNumericVoteCount: 1,
 		BacklogMode:         true,
+		RoomVersion:         4,
 	}
 	got := NewRoomStateCommand(room)
 	want := RoomState{
@@ -56,6 +57,7 @@ func TestNewRoomStateCommand(t *testing.T) {
 		BacklogMode:         true,
 		Stories:             []Story{},
 		CurrentStoryIndex:   0,
+		RoomVersion:         4,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("NewRoomStateCommand() = %+v, want %+v", got, want)

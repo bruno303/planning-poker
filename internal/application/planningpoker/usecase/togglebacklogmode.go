@@ -9,8 +9,9 @@ import (
 
 type (
 	ToggleBacklogModeCommand struct {
-		RoomID   string
-		SenderID string
+		RoomID              string
+		SenderID            string
+		ExpectedRoomVersion *uint64
 	}
 	ToggleBacklogModeUseCase struct {
 		hub         domain.Hub
@@ -38,7 +39,7 @@ func (uc ToggleBacklogModeUseCase) Execute(ctx context.Context, cmd ToggleBacklo
 			return err
 		}
 
-		if err := uc.hub.SaveRoom(ctx, room); err != nil {
+		if err := uc.hub.SaveRoomIfVersion(ctx, room, cmd.ExpectedRoomVersion); err != nil {
 			return err
 		}
 

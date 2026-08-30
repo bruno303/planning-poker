@@ -9,8 +9,9 @@ import (
 
 type (
 	RevealCommand struct {
-		RoomID   string
-		SenderID string
+		RoomID              string
+		SenderID            string
+		ExpectedRoomVersion *uint64
 	}
 	RevealUseCase struct {
 		hub         domain.Hub
@@ -38,7 +39,7 @@ func (uc RevealUseCase) Execute(ctx context.Context, cmd RevealCommand) error {
 			return err
 		}
 
-		if err := uc.hub.SaveRoom(ctx, room); err != nil {
+		if err := uc.hub.SaveRoomIfVersion(ctx, room, cmd.ExpectedRoomVersion); err != nil {
 			return err
 		}
 

@@ -9,9 +9,10 @@ import (
 
 type (
 	UpdateStoryCommand struct {
-		RoomID   string
-		SenderID string
-		Story    string
+		RoomID              string
+		SenderID            string
+		Story               string
+		ExpectedRoomVersion *uint64
 	}
 	UpdateStoryUseCase struct {
 		hub         domain.Hub
@@ -40,7 +41,7 @@ func (uc UpdateStoryUseCase) Execute(ctx context.Context, cmd UpdateStoryCommand
 			return err
 		}
 
-		if err := uc.hub.SaveRoom(ctx, room); err != nil {
+		if err := uc.hub.SaveRoomIfVersion(ctx, room, cmd.ExpectedRoomVersion); err != nil {
 			return err
 		}
 

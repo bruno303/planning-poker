@@ -81,6 +81,7 @@ export default function PlanningPoker() {
   const [backlogMode, setBacklogMode] = useState(false);
   const [stories, setStories] = useState<Story[]>([]);
   const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
+  const [roomVersion, setRoomVersion] = useState<number | null>(null);
   const [showBacklogModal, setShowBacklogModal] = useState(false);
   const deliberateDisconnect = useRef(false);
   const editingStoryRef = useRef('');
@@ -156,8 +157,17 @@ export default function PlanningPoker() {
       return;
     }
 
+    const guardedCommands = new Set(['reset', 'reveal-votes', 'toggle-spectator', 'toggle-owner', 'update-story', 'vote-again', 'toggle-backlog-mode', 'remove-story', 'select-story', 'reorder-story', 'advance-story', 'prev-story']);
+    if (guardedCommands.has(message.type) && roomVersion === null) {
+      pushError('Room state is still loading. Please wait and try again.');
+      return;
+    }
+
     try {
-      activeSocket.send(JSON.stringify(message));
+      const payload = guardedCommands.has(message.type)
+        ? { ...(message.payload as object), expectedRoomVersion: roomVersion }
+        : message.payload;
+      activeSocket.send(JSON.stringify({ ...message, payload }));
     } catch (err: any) {
       const errorMessage = err?.message
         ? `Failed to send message: ${err.message}`
@@ -330,6 +340,10 @@ export default function PlanningPoker() {
           setBacklogMode(roomState.backlogMode ?? false);
           setStories(roomState.stories ?? []);
           setCurrentStoryIndex(roomState.currentStoryIndex ?? 0);
+          setRoomVersion(roomState.roomVersion);
+
+        } else if (data.type === 'stale-command') {
+          pushError('Room changed; review and try again.');
 
         } else if (data.type === 'update-client-id') {
           setClientId(data.clientId);

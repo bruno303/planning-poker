@@ -37,13 +37,16 @@ type (
 		Username string `json:"username"`
 	}
 	ToggleSpectatorPayload struct {
-		TargetClientID string `json:"targetClientId"`
+		TargetClientID      string  `json:"targetClientId"`
+		ExpectedRoomVersion *uint64 `json:"expectedRoomVersion"`
 	}
 	ToggleOwnerPayload struct {
-		TargetClientID string `json:"targetClientId"`
+		TargetClientID      string  `json:"targetClientId"`
+		ExpectedRoomVersion *uint64 `json:"expectedRoomVersion"`
 	}
 	UpdateStoryPayload struct {
-		Story string `json:"story"`
+		Story               string  `json:"story"`
+		ExpectedRoomVersion *uint64 `json:"expectedRoomVersion"`
 	}
 	VotePayload struct {
 		Vote string `json:"vote"`
@@ -52,14 +55,17 @@ type (
 		Story string `json:"story"`
 	}
 	RemoveStoryPayload struct {
-		StoryID string `json:"storyId"`
+		StoryID             string  `json:"storyId"`
+		ExpectedRoomVersion *uint64 `json:"expectedRoomVersion"`
 	}
 	SelectStoryPayload struct {
-		StoryID string `json:"storyId"`
+		StoryID             string  `json:"storyId"`
+		ExpectedRoomVersion *uint64 `json:"expectedRoomVersion"`
 	}
 	ReorderStoryPayload struct {
-		StoryID     string `json:"storyId"`
-		TargetIndex int    `json:"targetIndex"`
+		StoryID             string  `json:"storyId"`
+		TargetIndex         int     `json:"targetIndex"`
+		ExpectedRoomVersion *uint64 `json:"expectedRoomVersion"`
 	}
 	useCaseCall func(context.Context, WebSocketMessage) error
 
@@ -208,12 +214,39 @@ func (c *WebsocketBus) process(ctx context.Context, msg WebSocketMessage) {
 		c.logger.Error(ctx, fmt.Sprintf("Unknown event type '%v' for client %v", msg.Type, c.ID), errors.New("unknown event type"))
 		return
 	}
-
 	err := usecaseCall(ctx, msg)
 	if err != nil {
+		if errors.Is(err, domain.ErrStaleRoomVersion) {
+			room, loadErr := c.hub.LoadRoom(ctx, c.roomID)
+			version := uint64(0)
+			if loadErr == nil {
+				version = room.RoomVersion
+			}
+			_ = c.Send(ctx, map[string]any{"type": "stale-command", "roomVersion": version})
+			return
+		}
 		c.logger.Error(ctx, fmt.Sprintf("Error handling event for client %v", c.ID), err)
 		return
 	}
+}
+
+func expectedRoomVersion(payload any) (*uint64, bool) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return nil, false
+	}
+	var value struct {
+		ExpectedRoomVersion *uint64 `json:"expectedRoomVersion"`
+	}
+	if json.Unmarshal(data, &value) != nil || value.ExpectedRoomVersion == nil {
+		return nil, false
+	}
+	return value.ExpectedRoomVersion, true
+}
+
+func withExpectedRoomVersion(payload any, execute func(*uint64) error) error {
+	expected, _ := expectedRoomVersion(payload)
+	return execute(expected)
 }
 
 func (c *WebsocketBus) handleReceiveError(ctx context.Context, err error) {
@@ -313,54 +346,53 @@ func mapUsecases(usecases usecase.UseCasesFacade, clientID, roomID string) map[s
 			})
 		},
 		"reset": func(ctx context.Context, msg WebSocketMessage) error {
-			return usecases.Reset.Execute(ctx, usecase.ResetCommand{
-				RoomID:   roomID,
-				SenderID: clientID,
+			return withExpectedRoomVersion(msg.Payload, func(expected *uint64) error {
+				return usecases.Reset.Execute(ctx, usecase.ResetCommand{RoomID: roomID, SenderID: clientID, ExpectedRoomVersion: expected})
 			})
 		},
 		"reveal-votes": func(ctx context.Context, msg WebSocketMessage) error {
-			return usecases.Reveal.Execute(ctx, usecase.RevealCommand{
-				RoomID:   roomID,
-				SenderID: clientID,
+			return withExpectedRoomVersion(msg.Payload, func(expected *uint64) error {
+				return usecases.Reveal.Execute(ctx, usecase.RevealCommand{RoomID: roomID, SenderID: clientID, ExpectedRoomVersion: expected})
 			})
 		},
 		"toggle-spectator": func(ctx context.Context, msg WebSocketMessage) error {
 			return withPayload(msg.Payload, func(payload ToggleSpectatorPayload) error {
 				return usecases.ToggleSpectator.Execute(ctx, usecase.ToggleSpectatorCommand{
-					RoomID:         roomID,
-					SenderID:       clientID,
-					TargetClientID: payload.TargetClientID,
+					RoomID:              roomID,
+					SenderID:            clientID,
+					TargetClientID:      payload.TargetClientID,
+					ExpectedRoomVersion: payload.ExpectedRoomVersion,
 				})
 			})
 		},
 		"toggle-owner": func(ctx context.Context, msg WebSocketMessage) error {
 			return withPayload(msg.Payload, func(payload ToggleOwnerPayload) error {
 				return usecases.ToggleOwner.Execute(ctx, usecase.ToggleOwnerCommand{
-					RoomID:         roomID,
-					SenderID:       clientID,
-					TargetClientID: payload.TargetClientID,
+					RoomID:              roomID,
+					SenderID:            clientID,
+					TargetClientID:      payload.TargetClientID,
+					ExpectedRoomVersion: payload.ExpectedRoomVersion,
 				})
 			})
 		},
 		"update-story": func(ctx context.Context, msg WebSocketMessage) error {
 			return withPayload(msg.Payload, func(payload UpdateStoryPayload) error {
 				return usecases.UpdateStory.Execute(ctx, usecase.UpdateStoryCommand{
-					RoomID:   roomID,
-					SenderID: clientID,
-					Story:    payload.Story,
+					RoomID:              roomID,
+					SenderID:            clientID,
+					Story:               payload.Story,
+					ExpectedRoomVersion: payload.ExpectedRoomVersion,
 				})
 			})
 		},
 		"vote-again": func(ctx context.Context, msg WebSocketMessage) error {
-			return usecases.VoteAgain.Execute(ctx, usecase.VoteAgainCommand{
-				RoomID:   roomID,
-				SenderID: clientID,
+			return withExpectedRoomVersion(msg.Payload, func(expected *uint64) error {
+				return usecases.VoteAgain.Execute(ctx, usecase.VoteAgainCommand{RoomID: roomID, SenderID: clientID, ExpectedRoomVersion: expected})
 			})
 		},
 		"toggle-backlog-mode": func(ctx context.Context, msg WebSocketMessage) error {
-			return usecases.ToggleBacklogMode.Execute(ctx, usecase.ToggleBacklogModeCommand{
-				RoomID:   roomID,
-				SenderID: clientID,
+			return withExpectedRoomVersion(msg.Payload, func(expected *uint64) error {
+				return usecases.ToggleBacklogMode.Execute(ctx, usecase.ToggleBacklogModeCommand{RoomID: roomID, SenderID: clientID, ExpectedRoomVersion: expected})
 			})
 		},
 		"add-story": func(ctx context.Context, msg WebSocketMessage) error {
@@ -375,40 +407,41 @@ func mapUsecases(usecases usecase.UseCasesFacade, clientID, roomID string) map[s
 		"remove-story": func(ctx context.Context, msg WebSocketMessage) error {
 			return withPayload(msg.Payload, func(payload RemoveStoryPayload) error {
 				return usecases.RemoveStory.Execute(ctx, usecase.RemoveStoryCommand{
-					RoomID:   roomID,
-					SenderID: clientID,
-					StoryID:  payload.StoryID,
+					RoomID:              roomID,
+					SenderID:            clientID,
+					StoryID:             payload.StoryID,
+					ExpectedRoomVersion: payload.ExpectedRoomVersion,
 				})
 			})
 		},
 		"advance-story": func(ctx context.Context, msg WebSocketMessage) error {
-			return usecases.AdvanceStory.Execute(ctx, usecase.AdvanceStoryCommand{
-				RoomID:   roomID,
-				SenderID: clientID,
+			return withExpectedRoomVersion(msg.Payload, func(expected *uint64) error {
+				return usecases.AdvanceStory.Execute(ctx, usecase.AdvanceStoryCommand{RoomID: roomID, SenderID: clientID, ExpectedRoomVersion: expected})
 			})
 		},
 		"prev-story": func(ctx context.Context, msg WebSocketMessage) error {
-			return usecases.PrevStory.Execute(ctx, usecase.PrevStoryCommand{
-				RoomID:   roomID,
-				SenderID: clientID,
+			return withExpectedRoomVersion(msg.Payload, func(expected *uint64) error {
+				return usecases.PrevStory.Execute(ctx, usecase.PrevStoryCommand{RoomID: roomID, SenderID: clientID, ExpectedRoomVersion: expected})
 			})
 		},
 		"select-story": func(ctx context.Context, msg WebSocketMessage) error {
 			return withPayload(msg.Payload, func(payload SelectStoryPayload) error {
 				return usecases.SelectStory.Execute(ctx, usecase.SelectStoryCommand{
-					RoomID:   roomID,
-					SenderID: clientID,
-					StoryID:  payload.StoryID,
+					RoomID:              roomID,
+					SenderID:            clientID,
+					StoryID:             payload.StoryID,
+					ExpectedRoomVersion: payload.ExpectedRoomVersion,
 				})
 			})
 		},
 		"reorder-story": func(ctx context.Context, msg WebSocketMessage) error {
 			return withPayload(msg.Payload, func(payload ReorderStoryPayload) error {
 				return usecases.ReorderStory.Execute(ctx, usecase.ReorderStoryCommand{
-					RoomID:      roomID,
-					SenderID:    clientID,
-					StoryID:     payload.StoryID,
-					TargetIndex: payload.TargetIndex,
+					RoomID:              roomID,
+					SenderID:            clientID,
+					StoryID:             payload.StoryID,
+					TargetIndex:         payload.TargetIndex,
+					ExpectedRoomVersion: payload.ExpectedRoomVersion,
 				})
 			})
 		},

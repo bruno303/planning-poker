@@ -92,4 +92,10 @@ export interface RoomState {
   backlogMode?: boolean;
   stories?: Story[];
   currentStoryIndex?: number;
+  roomVersion: number;
+}
+
+export interface StaleCommand {
+  type: 'stale-command';
+  roomVersion?: number;
 }

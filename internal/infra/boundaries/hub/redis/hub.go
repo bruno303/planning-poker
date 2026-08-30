@@ -24,6 +24,7 @@ type RedisClient interface {
 	Subscribe(ctx context.Context, channels ...string) *redis.PubSub
 	Scan(ctx context.Context, count uint64, match string, cursor int64) *redis.ScanCmd
 	Keys(ctx context.Context, pattern string) *redis.StringSliceCmd
+	Eval(ctx context.Context, script string, keys []string, args ...interface{}) *redis.Cmd
 }
 
 const (
@@ -90,7 +91,7 @@ func (h *RedisHub) Close() error {
 func (h *RedisHub) NewRoom(ctx context.Context) (*entity.Room, error) {
 	room, err := trace.Trace(ctx, trace.NameConfig("RedisHub", "NewRoom"), func(ctx context.Context) (any, error) {
 		room := entity.NewRoom(clientcollection.New())
-		if err := h.saveRoom(ctx, room); err != nil {
+		if err := h.saveInitialRoom(ctx, room); err != nil {
 			h.logger.Error(ctx, "Failed to save new room to Redis", err)
 			return nil, err
 		}
@@ -107,7 +108,7 @@ func (h *RedisHub) NewRoom(ctx context.Context) (*entity.Room, error) {
 func (h *RedisHub) NewRoomWithID(ctx context.Context, roomID string) (*entity.Room, error) {
 	room, err := trace.Trace(ctx, trace.NameConfig("RedisHub", "NewRoomWithID"), func(ctx context.Context) (any, error) {
 		room := entity.NewRoomWithID(roomID, clientcollection.New())
-		if err := h.saveRoom(ctx, room); err != nil {
+		if err := h.saveInitialRoom(ctx, room); err != nil {
 			h.logger.Error(ctx, "Failed to save new room to Redis", err)
 			return nil, err
 		}
@@ -379,6 +380,10 @@ func (h *RedisHub) SaveRoom(ctx context.Context, room *entity.Room) error {
 	return h.saveRoom(ctx, room)
 }
 
+func (h *RedisHub) SaveRoomIfVersion(ctx context.Context, room *entity.Room, expectedVersion *uint64) error {
+	return h.saveRoomConditionally(ctx, room, expectedVersion)
+}
+
 func (h *RedisHub) saveRoom(ctx context.Context, room *entity.Room) error {
 	data, err := SerializeRoom(room)
 	if err != nil {
@@ -386,10 +391,80 @@ func (h *RedisHub) saveRoom(ctx context.Context, room *entity.Room) error {
 	}
 
 	key := roomKeyPrefix + room.ID
-	if err := h.client.Set(ctx, key, data, twentyFourHours).Err(); err != nil {
+	result, err := h.client.Eval(ctx, saveRoomScript, []string{key}, data, twentyFourHours.Milliseconds()).Result()
+	if err != nil {
 		return fmt.Errorf("failed to save room to Redis: %w", err)
 	}
+	values, ok := result.([]interface{})
+	if !ok || len(values) < 2 {
+		return fmt.Errorf("unexpected save response")
+	}
+	nextVersion, ok := values[1].(int64)
+	if !ok {
+		return fmt.Errorf("unexpected save version")
+	}
+	room.RoomVersion = uint64(nextVersion)
 
+	return nil
+}
+
+func (h *RedisHub) saveInitialRoom(ctx context.Context, room *entity.Room) error {
+	data, err := SerializeRoom(room)
+	if err != nil {
+		return fmt.Errorf("failed to serialize room: %w", err)
+	}
+	if err := h.client.Set(ctx, roomKeyPrefix+room.ID, data, twentyFourHours).Err(); err != nil {
+		return fmt.Errorf("failed to save room to Redis: %w", err)
+	}
+	return nil
+}
+
+const saveRoomScript = `
+local stored = redis.call('GET', KEYS[1])
+local version = 0
+if stored then version = cjson.decode(stored).roomVersion end
+local next = version + 1
+local data = string.gsub(ARGV[1], '"roomVersion":%d+', '"roomVersion":' .. next)
+redis.call('SET', KEYS[1], data, 'PX', ARGV[2])
+return {1, next}
+`
+
+const compareAndSaveRoomScript = `
+local stored = redis.call('GET', KEYS[1])
+if not stored then return {-1} end
+local room = cjson.decode(stored)
+if room.roomVersion ~= tonumber(ARGV[1]) then return {0, room.roomVersion} end
+redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
+return {1}
+`
+
+func (h *RedisHub) saveRoomConditionally(ctx context.Context, room *entity.Room, expectedVersion *uint64) error {
+	if expectedVersion == nil {
+		return domain.ErrStaleRoomVersion
+	}
+	nextVersion := *expectedVersion + 1
+	persistedRoom := *room
+	persistedRoom.RoomVersion = nextVersion
+	data, err := SerializeRoom(&persistedRoom)
+	if err != nil {
+		return fmt.Errorf("failed to serialize room: %w", err)
+	}
+	result, err := h.client.Eval(ctx, compareAndSaveRoomScript, []string{roomKeyPrefix + room.ID}, expectedVersion, data, twentyFourHours.Milliseconds()).Result()
+	if err != nil {
+		return fmt.Errorf("failed to conditionally save room to Redis: %w", err)
+	}
+	values, ok := result.([]interface{})
+	if !ok || len(values) == 0 {
+		return fmt.Errorf("unexpected conditional save response")
+	}
+	status, ok := values[0].(int64)
+	if !ok {
+		return fmt.Errorf("unexpected conditional save status")
+	}
+	if status != 1 {
+		return domain.ErrStaleRoomVersion
+	}
+	room.RoomVersion = nextVersion
 	return nil
 }
 

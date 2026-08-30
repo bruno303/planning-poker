@@ -496,6 +496,44 @@ func (c *MockHubSaveRoomCall) DoAndReturn(f func(context.Context, *entity.Room) 
 	return c
 }
 
+// SaveRoomIfVersion mocks base method.
+func (m *MockHub) SaveRoomIfVersion(ctx context.Context, room *entity.Room, expectedVersion *uint64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SaveRoomIfVersion", ctx, room, expectedVersion)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SaveRoomIfVersion indicates an expected call of SaveRoomIfVersion.
+func (mr *MockHubMockRecorder) SaveRoomIfVersion(ctx, room, expectedVersion any) *MockHubSaveRoomIfVersionCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveRoomIfVersion", reflect.TypeOf((*MockHub)(nil).SaveRoomIfVersion), ctx, room, expectedVersion)
+	return &MockHubSaveRoomIfVersionCall{Call: call}
+}
+
+// MockHubSaveRoomIfVersionCall wrap *gomock.Call
+type MockHubSaveRoomIfVersionCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockHubSaveRoomIfVersionCall) Return(arg0 error) *MockHubSaveRoomIfVersionCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockHubSaveRoomIfVersionCall) Do(f func(context.Context, *entity.Room, *uint64) error) *MockHubSaveRoomIfVersionCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockHubSaveRoomIfVersionCall) DoAndReturn(f func(context.Context, *entity.Room, *uint64) error) *MockHubSaveRoomIfVersionCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockAdminHub is a mock of AdminHub interface.
 type MockAdminHub struct {
 	ctrl     *gomock.Controller

@@ -862,6 +862,14 @@ func TestRoom_ToggleReveal(t *testing.T) {
 	})
 }
 
+func TestRoomMutationsDoNotChangeVersion(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	room := NewRoom(NewMockClientCollection(ctrl))
+	if room.RoomVersion != 0 {
+		t.Fatalf("initial room version = %d, want 0", room.RoomVersion)
+	}
+}
+
 func TestRoom_IsEmpty(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

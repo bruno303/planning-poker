@@ -41,6 +41,7 @@ type (
 		BacklogMode         bool
 		Stories             []Story
 		CurrentStoryIndex   int
+		RoomVersion         uint64
 	}
 )
 
@@ -108,7 +109,6 @@ func (r *Room) ToggleBacklogMode(ctx context.Context, clientID string) error {
 		r.Stories = nil
 		r.CurrentStoryIndex = 0
 	}
-
 	return nil
 }
 
@@ -129,7 +129,6 @@ func (r *Room) AddStory(ctx context.Context, clientID string, name string) error
 	if len(r.Stories) == 1 {
 		r.CurrentStoryIndex = 0
 	}
-
 	return nil
 }
 
@@ -166,7 +165,6 @@ func (r *Room) RemoveStory(ctx context.Context, clientID string, storyID string)
 	}
 
 	r.Stories = append(r.Stories[:index], r.Stories[index+1:]...)
-
 	return nil
 }
 
@@ -199,7 +197,6 @@ func (r *Room) SelectStory(ctx context.Context, clientID string, storyID string)
 	r.Clients.ForEach(func(c *Client) {
 		c.Vote(ctx, nil)
 	})
-
 	return nil
 }
 
@@ -219,7 +216,6 @@ func (r *Room) ReorderStory(ctx context.Context, clientID string, storyID string
 	r.Stories = append(r.Stories[:storyIndex], r.Stories[storyIndex+1:]...)
 	r.Stories = slices.Insert(r.Stories, targetIndex, story)
 	r.updateCurrentStoryIndex(storyIndex, targetIndex, currentStoryID)
-
 	return nil
 }
 
@@ -295,7 +291,6 @@ func (r *Room) AdvanceToNextStory(ctx context.Context, clientID string) error {
 			c.Vote(ctx, nil)
 		})
 	}
-
 	return nil
 }
 
@@ -315,7 +310,6 @@ func (r *Room) PrevStory(ctx context.Context, clientID string) error {
 			c.Vote(ctx, nil)
 		})
 	}
-
 	return nil
 }
 
@@ -347,7 +341,6 @@ func (r *Room) ResetVoting(ctx context.Context, clientID string) error {
 	r.Clients.ForEach(func(c *Client) {
 		c.Vote(ctx, nil)
 	})
-
 	return nil
 }
 
@@ -385,7 +378,6 @@ func (r *Room) ToggleSpectator(ctx context.Context, clientID string, targetClien
 	} else {
 		return fmt.Errorf("target client %s not found in room %s", targetClientID, r.ID)
 	}
-
 	return nil
 }
 
@@ -416,7 +408,6 @@ func (r *Room) ToggleOwner(ctx context.Context, clientID string, targetClientID 
 	} else {
 		return fmt.Errorf("target client %s not found in room %s", targetClientID, r.ID)
 	}
-
 	return nil
 }
 
@@ -472,7 +463,6 @@ func (r *Room) ToggleReveal(ctx context.Context, clientID string) error {
 	}
 
 	r.reveal(!r.Reveal)
-
 	return nil
 }
 

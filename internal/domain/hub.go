@@ -16,6 +16,7 @@ type (
 		LoadRoom(ctx context.Context, roomID string) (*entity.Room, error)
 		RemoveRoom(roomID string)
 		SaveRoom(ctx context.Context, room *entity.Room) error
+		SaveRoomIfVersion(ctx context.Context, room *entity.Room, expectedVersion *uint64) error
 		BroadcastToRoom(ctx context.Context, roomID string, message any) error
 
 		GetBus(clientID string) (Bus, bool)

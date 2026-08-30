@@ -14,6 +14,7 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 	originalRoom := entity.NewRoom(clientcollection.New())
 	originalRoom.ID = "test-room-123"
 	originalRoom.CurrentStory = "User Story #42"
+	originalRoom.RoomVersion = 7
 	originalRoom.Reveal = false
 	originalRoom.Consensus = "Medium"
 	originalRoom.LowestVote = lo.ToPtr(3)
@@ -83,6 +84,9 @@ func assertSerializedRoomProperties(t *testing.T, originalRoom, deserializedRoom
 	}
 	if deserializedRoom.NonNumericVoteCount != originalRoom.NonNumericVoteCount {
 		t.Errorf("Expected non-numeric vote count %d, got %d", originalRoom.NonNumericVoteCount, deserializedRoom.NonNumericVoteCount)
+	}
+	if deserializedRoom.RoomVersion != originalRoom.RoomVersion {
+		t.Errorf("Expected room version %d, got %d", originalRoom.RoomVersion, deserializedRoom.RoomVersion)
 	}
 }
 

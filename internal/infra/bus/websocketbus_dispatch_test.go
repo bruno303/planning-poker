@@ -11,6 +11,7 @@ import (
 
 	"planning-poker/internal/application/planningpoker/usecase"
 	"planning-poker/internal/domain"
+	"planning-poker/internal/domain/entity"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
 	"github.com/gorilla/websocket"
@@ -192,6 +193,44 @@ func TestMapUsecases_DispatchesSupportedCommands(t *testing.T) {
 	}
 }
 
+func TestGuardedCommandAndExpectedRoomVersion(t *testing.T) {
+	version, ok := expectedRoomVersion(map[string]uint64{"expectedRoomVersion": 7})
+	if !ok || version == nil || *version != 7 {
+		t.Fatalf("expectedRoomVersion returned (%v, %t), want (7, true)", version, ok)
+	}
+	if _, ok := expectedRoomVersion(map[string]string{"expectedRoomVersion": "invalid"}); ok {
+		t.Fatal("expectedRoomVersion accepted an invalid revision")
+	}
+	if _, ok := expectedRoomVersion(nil); ok {
+		t.Fatal("expectedRoomVersion accepted a missing revision")
+	}
+	if _, ok := expectedRoomVersion(func() {}); ok {
+		t.Fatal("expectedRoomVersion accepted an unserializable payload")
+	}
+}
+
+func TestMapUsecases_ForwardsClientRevisionToGuardedCommand(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	reset := usecase.NewMockUseCase[usecase.ResetCommand](ctrl)
+	reset.EXPECT().Execute(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, cmd usecase.ResetCommand) error {
+		if cmd.ExpectedRoomVersion == nil {
+			t.Fatal("expected client revision to be forwarded")
+		}
+		if *cmd.ExpectedRoomVersion != 7 {
+			t.Fatalf("expected client revision 7, got %d", *cmd.ExpectedRoomVersion)
+		}
+		return nil
+	})
+
+	calls := mapUsecases(usecase.UseCasesFacade{Reset: reset}, "client-1", "room-1")
+	if err := calls["reset"](context.Background(), WebSocketMessage{
+		Type:    "reset",
+		Payload: map[string]uint64{"expectedRoomVersion": 7},
+	}); err != nil {
+		t.Fatalf("dispatch returned error: %v", err)
+	}
+}
+
 func TestMapUsecases_InvalidPayloadReturnsError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	updateName := usecase.NewMockUseCase[usecase.UpdateNameCommand](ctrl)
@@ -237,6 +276,39 @@ func TestWebsocketBus_Process_WhenUseCaseFailsDoesNotStopBus(t *testing.T) {
 	bus.process(context.Background(), WebSocketMessage{Type: "event"})
 	if !called {
 		t.Fatal("expected use case callback to be dispatched")
+	}
+}
+
+func TestWebsocketBus_Process_WhenUseCaseReportsStaleVersion(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	serverConn, clientConn := websocketPair(t)
+	defer clientConn.Close()
+	room := &entity.Room{RoomVersion: 6}
+	hub := domain.NewMockHub(ctrl)
+	hub.EXPECT().LoadRoom(gomock.Any(), "room-1").Return(room, nil)
+	calls := map[string]useCaseCall{
+		"reset": func(context.Context, WebSocketMessage) error { return domain.ErrStaleRoomVersion },
+	}
+	bus := NewWebsocketBus("client-1", "room-1", serverConn, hub, usecase.UseCasesFacade{}, WebSocketConfig{WriteTimeout: time.Second})
+	bus.calls = calls
+	bus.Detach()
+	defer bus.Close()
+
+	bus.process(context.Background(), WebSocketMessage{Type: "reset", Payload: map[string]uint64{"expectedRoomVersion": 6}})
+	assertStaleCommand(t, clientConn, true, 6)
+}
+
+func assertStaleCommand(t *testing.T, conn *websocket.Conn, hasVersion bool, version uint64) {
+	t.Helper()
+	var message struct {
+		Type        string `json:"type"`
+		RoomVersion uint64 `json:"roomVersion"`
+	}
+	if err := conn.ReadJSON(&message); err != nil {
+		t.Fatalf("failed to read stale command: %v", err)
+	}
+	if message.Type != "stale-command" || (hasVersion && message.RoomVersion != version) || (!hasVersion && message.RoomVersion != 0) {
+		t.Fatalf("unexpected stale command: %+v", message)
 	}
 }
 

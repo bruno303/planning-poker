@@ -9,9 +9,10 @@ import (
 
 type (
 	ToggleOwnerCommand struct {
-		RoomID         string
-		SenderID       string
-		TargetClientID string
+		RoomID              string
+		SenderID            string
+		TargetClientID      string
+		ExpectedRoomVersion *uint64
 	}
 	ToggleOwnerUseCase struct {
 		hub         domain.Hub
@@ -39,7 +40,7 @@ func (uc ToggleOwnerUseCase) Execute(ctx context.Context, cmd ToggleOwnerCommand
 			return err
 		}
 
-		if err := uc.hub.SaveRoom(ctx, room); err != nil {
+		if err := uc.hub.SaveRoomIfVersion(ctx, room, cmd.ExpectedRoomVersion); err != nil {
 			return err
 		}
 

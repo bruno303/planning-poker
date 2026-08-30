@@ -9,8 +9,9 @@ import (
 
 type (
 	ResetCommand struct {
-		RoomID   string
-		SenderID string
+		RoomID              string
+		SenderID            string
+		ExpectedRoomVersion *uint64
 	}
 	ResetUseCase struct {
 		hub         domain.Hub
@@ -38,7 +39,7 @@ func (uc ResetUseCase) Execute(ctx context.Context, cmd ResetCommand) error {
 			return err
 		}
 
-		if err := uc.hub.SaveRoom(ctx, room); err != nil {
+		if err := uc.hub.SaveRoomIfVersion(ctx, room, cmd.ExpectedRoomVersion); err != nil {
 			return err
 		}
 
