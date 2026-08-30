@@ -157,7 +157,7 @@ export default function PlanningPoker() {
       return;
     }
 
-    const guardedCommands = new Set(['reset', 'reveal-votes', 'toggle-spectator', 'toggle-owner', 'update-story', 'new-voting', 'vote-again', 'toggle-backlog-mode', 'remove-story', 'select-story', 'reorder-story', 'advance-story', 'prev-story']);
+    const guardedCommands = new Set(['reset', 'reveal-votes', 'toggle-spectator', 'toggle-owner', 'update-story', 'vote-again', 'toggle-backlog-mode', 'remove-story', 'select-story', 'reorder-story', 'advance-story', 'prev-story']);
     if (guardedCommands.has(message.type) && roomVersion === null) {
       pushError('Room state is still loading. Please wait and try again.');
       return;

@@ -247,7 +247,7 @@ func (c *WebsocketBus) process(ctx context.Context, msg WebSocketMessage) {
 
 func guardedCommand(commandType string) bool {
 	switch commandType {
-	case "reset", "reveal-votes", "toggle-spectator", "toggle-owner", "update-story", "new-voting", "vote-again", "toggle-backlog-mode", "remove-story", "select-story", "reorder-story", "advance-story", "prev-story":
+	case "reset", "reveal-votes", "toggle-spectator", "toggle-owner", "update-story", "vote-again", "toggle-backlog-mode", "remove-story", "select-story", "reorder-story", "advance-story", "prev-story":
 		return true
 	default:
 		return false

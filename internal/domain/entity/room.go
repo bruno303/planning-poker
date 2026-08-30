@@ -107,26 +107,6 @@ func (r *Room) RemoveClient(ctx context.Context, clientID string) error {
 	return nil
 }
 
-func (r *Room) NewVoting(ctx context.Context, clientID string) error {
-	client, ok := r.FindClient(clientID)
-	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
-	}
-	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can start a new voting")
-	}
-
-	if !r.BacklogMode {
-		r.CurrentStory = ""
-	}
-	r.reveal(false)
-	r.Clients.ForEach(func(c *Client) {
-		c.Vote(ctx, nil)
-	})
-	r.IncrementRoomVersion()
-
-	return nil
-}
 func (r *Room) ToggleBacklogMode(ctx context.Context, clientID string) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
