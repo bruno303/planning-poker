@@ -7,6 +7,19 @@ import { useParams, useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 import { styles } from './page.styles';
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error) {
+    return error.message.trim() ? error.message : fallback;
+  }
+  if (typeof error === 'string') {
+    return error.trim() ? error : fallback;
+  }
+  if (error !== null && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+    return error.message.trim() ? error.message : fallback;
+  }
+  return fallback;
+}
+
 export default function PlanningPokerHome() {
   const router = useRouter();
   const params = useParams<{ roomId?: string }>();
@@ -46,8 +59,8 @@ export default function PlanningPokerHome() {
       logger.setContext({ roomId: data.roomId });
       sessionStorage.setItem('userName', userName.trim());
       router.push(getRoomRoute(data.roomId));
-    } catch (err: any) {
-      const message = err?.message || 'Failed to create room. Please try again.';
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, 'Failed to create room. Please try again.');
       logger.error('Failed to create room', { error: message });
       pushError(message);
     } finally {
@@ -73,11 +86,10 @@ export default function PlanningPokerHome() {
       sessionStorage.setItem('userName', userName.trim());
       logger.setContext({ roomId: roomCode.trim() });
       router.push(getRoomRoute(roomCode));
-    } catch (err: any) {
-      const message = err?.message || 'Failed to join room. Please try again.';
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, 'Failed to join room. Please try again.');
       logger.error('Failed to join room', { error: message });
       pushError(message);
-    } finally {
       setIsJoining(false);
     }
   };
@@ -105,9 +117,10 @@ export default function PlanningPokerHome() {
         {/* Form */}
         <div style={styles.form}>
           <div style={styles.inputGroup}>
-            <label style={styles.label}>Your Name</label>
+            <label htmlFor="user-name" style={styles.label}>Your Name</label>
             <input
               ref={nameInputRef}
+              id="user-name"
               type="text"
               autoComplete="name"
               value={userName}

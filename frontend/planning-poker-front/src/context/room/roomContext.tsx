@@ -9,12 +9,14 @@ type RoomContextType = {
 
 const RoomContext = createContext<RoomContextType | null>(null);
 
-export function RoomProvider({ children }: { children: React.ReactNode }) {
+export function RoomProvider({ children }: Readonly<{ children: React.ReactNode }>) {
   const socket = useRef<WebSocket | null>(null);
   const connected = useRef(false);
 
+  const value = React.useMemo(() => ({ socket, connected }), [socket, connected]);
+
   return (
-    <RoomContext.Provider value={{ socket, connected }}>
+    <RoomContext.Provider value={value}>
       {children}
     </RoomContext.Provider>
   );

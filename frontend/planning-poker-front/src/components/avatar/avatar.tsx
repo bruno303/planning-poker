@@ -38,7 +38,7 @@ function avatarIndex(participantId: string): number {
   return (hash >>> 0) % avatarCatalog.length;
 }
 
-export default function Avatar({ participant }: { participant: Participant }) {
+export default function Avatar({ participant }: Readonly<{ participant: Participant }>) {
   const avatar = avatarCatalog[avatarIndex(participant.id)];
 
   return (

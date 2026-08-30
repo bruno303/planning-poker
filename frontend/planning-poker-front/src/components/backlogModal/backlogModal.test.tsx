@@ -66,6 +66,17 @@ describe('BacklogModal', () => {
     expect(screen.getByText('Avg: 6.5')).not.toBeNull();
   });
 
+  it('renders the backlog with native dialog semantics and resets native defaults', () => {
+    renderBacklogModal();
+
+    const dialog = screen.getByRole('dialog', { name: 'Story Backlog' });
+    expect(dialog.tagName).toBe('DIALOG');
+    expect(dialog.hasAttribute('open')).toBe(true);
+    expect((dialog as HTMLElement).style.position).toBe('relative');
+    expect((dialog as HTMLElement).style.left).toBe('auto');
+    expect((dialog as HTMLElement).style.right).toBe('auto');
+  });
+
   it('renders admin controls when amIAdmin is true', () => {
     const stories: Story[] = [
       { id: 'story-1', name: 'Current story', mostAppearingVotes: [], voted: false },

@@ -12,8 +12,13 @@ export const styles = {
     zIndex: 1000
   },
   dialog: {
+    position: 'relative' as const,
+    left: 'auto',
+    right: 'auto',
     backgroundColor: 'white',
     borderRadius: '0.5rem',
+    border: 'none',
+    margin: 0,
     padding: '2rem',
     maxWidth: '600px',
     width: '100%',

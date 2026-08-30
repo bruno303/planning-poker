@@ -12,10 +12,10 @@ export type Toast = {
   variant: ToastVariant;
 };
 
-type Props = {
+type Props = Readonly<{
   toasts: Toast[];
   onDismiss: (id: string) => void;
-};
+}>;
 
 // Detect prefers-color-scheme to switch toast theme subtly
 function usePrefersLight() {

@@ -18,13 +18,11 @@ function generateSessionId(): string {
   }
 }
 
-export function LoggerProvider({ children }: { children: React.ReactNode }) {
+export function LoggerProvider({ children }: Readonly<{ children: React.ReactNode }>) {
   const loggerRef = useRef<LogBus | null>(null);
   const sessionIdRef = useRef(generateSessionId());
 
-  if (!loggerRef.current) {
-    loggerRef.current = new LogBus();
-  }
+  loggerRef.current ??= new LogBus();
 
   const logger = loggerRef.current;
 

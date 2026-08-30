@@ -397,6 +397,8 @@ export const styles = {
     fontWeight: '600',
     color: '#1f2937',
     backgroundColor: '#e0e7ff',
+    border: 'none',
+    cursor: 'pointer',
     padding: '0.25rem 0.5rem',
     borderRadius: '0.25rem',
     fontFamily: 'Monaco, "Lucida Console", monospace'
