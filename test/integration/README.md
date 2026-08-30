@@ -31,6 +31,11 @@ go test -cover ./test/integration/...
 
 Integration tests use `httptest.Server` to spin up a real HTTP server with all middleware and dependencies configured. This ensures tests reflect actual production behavior.
 
+There are two server modes:
+
+- `NewTestServer(t)` uses the production Redis hub and lock manager. Use it for tests that verify Redis adapters, and run Redis before invoking `go test` directly.
+- `NewInMemoryTestServer(t)` uses `InMemoryHub` and `InMemoryLockManager`. Use it for fast full-stack API and WebSocket tests that do not require Redis.
+
 The Make target starts the current Compose project with the local profile,
 passes its Redis host port through `REDIS_HOST` and `REDIS_PORT`, and always
 tears that project down after the test command. Direct `go test` runs support
@@ -58,7 +63,8 @@ func TestMyEndpoint(t *testing.T) {
 
 ### Test Helpers
 
-- `NewTestServer(t)` - Creates a fully configured test server
+- `NewTestServer(t)` - Creates a fully configured Redis-backed test server
+- `NewInMemoryTestServer(t)` - Creates a fully configured in-memory test server
 - `ts.GetJSON(t, path, target)` - GET request with JSON decode
 - `AssertStatus(t, resp, expected)` - Assert HTTP status code
 - `HTTPClient` - Reusable HTTP client for more complex scenarios
@@ -67,7 +73,7 @@ func TestMyEndpoint(t *testing.T) {
 
 1. **Isolation**: Each test should be independent and not rely on state from other tests
 2. **Cleanup**: Always defer `ts.Close()` to clean up resources
-3. **Real Dependencies**: Use the same dependency container as production (via `setup.NewContainer`)
+3. **Real Dependencies**: Use the same API and use-case wiring as production; choose the Redis or in-memory infrastructure appropriate to the test
 4. **Fast Tests**: Keep integration tests focused and fast (< 1 second per test)
 5. **Error Messages**: Provide clear error messages that help diagnose failures
 
