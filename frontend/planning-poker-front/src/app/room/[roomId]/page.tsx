@@ -400,7 +400,7 @@ export default function PlanningPoker() {
 
         } else if (isRecordWithType(data, 'update-client-id')) {
           if (typeof data.clientId !== 'string') {
-            throw new Error('Invalid client ID from websocket');
+            throw new TypeError('Invalid client ID from websocket');
           }
           setClientId(data.clientId);
           sessionStorage.setItem('clientId', data.clientId);
