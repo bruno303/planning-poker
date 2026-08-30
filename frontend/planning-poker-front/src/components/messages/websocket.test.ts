@@ -39,6 +39,14 @@ describe('isRoomState', () => {
     expect(isRoomState(validRoomState)).toBe(true);
   });
 
+  it('accepts null slice values emitted for empty backend collections', () => {
+    expect(isRoomState({
+      ...validRoomState,
+      mostAppearingVotes: null,
+      stories: null,
+    })).toBe(true);
+  });
+
   it.each([
     ['required field', 'currentStory', null],
     ['vote array member', 'mostAppearingVotes', ['5']],

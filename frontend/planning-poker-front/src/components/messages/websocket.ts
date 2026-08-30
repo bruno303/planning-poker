@@ -65,7 +65,7 @@ export interface Story {
   id: string;
   name: string;
   result?: number;
-  mostAppearingVotes: number[];
+  mostAppearingVotes: number[] | null;
   voted: boolean;
 }
 
@@ -74,7 +74,7 @@ export interface RoomState {
   currentStory: string;
   reveal: boolean;
   result?: number;
-  mostAppearingVotes: number[];
+  mostAppearingVotes: number[] | null;
   consensus?: ConsensusLevel;
   lowestVote?: number;
   highestVote?: number;
@@ -90,7 +90,7 @@ export interface RoomState {
     isOwner: boolean;
   }>;
   backlogMode?: boolean;
-  stories?: Story[];
+  stories?: Story[] | null;
   currentStoryIndex?: number;
   roomVersion: number;
 }
@@ -103,6 +103,10 @@ function isNumberArray(value: unknown): value is number[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'number');
 }
 
+function isNullableNumberArray(value: unknown): value is number[] | null {
+  return value === null || isNumberArray(value);
+}
+
 function isStory(value: unknown): value is Story {
   if (!isRecord(value)) {
     return false;
@@ -111,7 +115,7 @@ function isStory(value: unknown): value is Story {
   return (
     typeof value.id === 'string' &&
     typeof value.name === 'string' &&
-    isNumberArray(value.mostAppearingVotes) &&
+    isNullableNumberArray(value.mostAppearingVotes) &&
     typeof value.voted === 'boolean' &&
     (!('result' in value) || typeof value.result === 'number')
   );
@@ -132,7 +136,7 @@ export function isRoomState(value: unknown): value is RoomState {
   if (
     typeof value.currentStory !== 'string' ||
     typeof value.reveal !== 'boolean' ||
-    !isNumberArray(value.mostAppearingVotes) ||
+     !isNullableNumberArray(value.mostAppearingVotes) ||
     typeof value.roomVersion !== 'number' ||
     !Array.isArray(value.participants)
   ) {
@@ -161,7 +165,7 @@ export function isRoomState(value: unknown): value is RoomState {
     hasOptionalNumber(value, 'voteSpread') &&
     hasOptionalNumber(value, 'nonNumericVoteCount') &&
     (!('backlogMode' in value) || typeof value.backlogMode === 'boolean') &&
-    (!('stories' in value) || (Array.isArray(value.stories) && value.stories.every(isStory))) &&
+     (!('stories' in value) || value.stories === null || (Array.isArray(value.stories) && value.stories.every(isStory))) &&
     (!('currentStoryIndex' in value) || typeof value.currentStoryIndex === 'number');
 }
 
