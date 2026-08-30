@@ -376,7 +376,7 @@ func (h *RedisHub) GetRooms() []*entity.Room {
 	return rooms
 }
 
-func (h *RedisHub) SaveRoom(ctx context.Context, room *entity.Room, expectedVersion uint64) error {
+func (h *RedisHub) SaveRoom(ctx context.Context, room *entity.Room, expectedVersion *uint64) error {
 	return h.saveRoomConditionally(ctx, room, expectedVersion)
 }
 
@@ -404,7 +404,10 @@ redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
 return {1}
 `
 
-func (h *RedisHub) saveRoomConditionally(ctx context.Context, room *entity.Room, expectedVersion uint64) error {
+func (h *RedisHub) saveRoomConditionally(ctx context.Context, room *entity.Room, expectedVersion *uint64) error {
+	if expectedVersion == nil {
+		return domain.ErrStaleRoomVersion
+	}
 	data, err := SerializeRoom(room)
 	if err != nil {
 		return fmt.Errorf("failed to serialize room: %w", err)

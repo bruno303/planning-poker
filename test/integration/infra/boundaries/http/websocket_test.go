@@ -318,7 +318,7 @@ func TestWebSocketToggleSpectator(t *testing.T) {
 			Type: "toggle-spectator",
 			Payload: bus.ToggleSpectatorPayload{
 				TargetClientID:      clientID2,
-				ExpectedRoomVersion: 0,
+				ExpectedRoomVersion: uint64Ptr(0),
 			},
 		})
 
@@ -371,7 +371,7 @@ func TestWebSocketToggleOwner(t *testing.T) {
 			Type: "toggle-owner",
 			Payload: bus.ToggleOwnerPayload{
 				TargetClientID:      clientID2,
-				ExpectedRoomVersion: 0,
+				ExpectedRoomVersion: uint64Ptr(0),
 			},
 		})
 
@@ -415,7 +415,7 @@ func TestWebSocketUpdateStory(t *testing.T) {
 			Type: "update-story",
 			Payload: bus.UpdateStoryPayload{
 				Story:               "User story #123",
-				ExpectedRoomVersion: 0,
+				ExpectedRoomVersion: uint64Ptr(0),
 			},
 		})
 
@@ -425,6 +425,8 @@ func TestWebSocketUpdateStory(t *testing.T) {
 		}
 	})
 }
+
+func uint64Ptr(value uint64) *uint64 { return &value }
 
 func TestWebSocketVoteAgain(t *testing.T) {
 	ts := integration.NewTestServer(t)

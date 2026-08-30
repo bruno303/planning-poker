@@ -9,9 +9,10 @@ import (
 
 type (
 	ToggleSpectatorCommand struct {
-		RoomID         string
-		SenderID       string
-		TargetClientID string
+		RoomID              string
+		SenderID            string
+		TargetClientID      string
+		ExpectedRoomVersion *uint64
 	}
 	ToggleSpectatorUseCase struct {
 		hub         domain.Hub
@@ -39,7 +40,7 @@ func (uc ToggleSpectatorUseCase) Execute(ctx context.Context, cmd ToggleSpectato
 			return err
 		}
 
-		if err := uc.hub.SaveRoom(ctx, room, room.ExpectedPersistedRoomVersion()); err != nil {
+		if err := uc.hub.SaveRoom(ctx, room, cmd.ExpectedRoomVersion); err != nil {
 			return err
 		}
 

@@ -39,7 +39,8 @@ func (uc *voteUseCase) Execute(ctx context.Context, cmd VoteCommand) error {
 			return err
 		}
 
-		if err := uc.hub.SaveRoom(ctx, room, room.ExpectedPersistedRoomVersion()); err != nil {
+		expectedVersion := room.ExpectedPersistedRoomVersion()
+		if err := uc.hub.SaveRoom(ctx, room, &expectedVersion); err != nil {
 			return err
 		}
 

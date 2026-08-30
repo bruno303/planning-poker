@@ -9,8 +9,9 @@ import (
 
 type (
 	VoteAgainCommand struct {
-		RoomID   string
-		SenderID string
+		RoomID              string
+		SenderID            string
+		ExpectedRoomVersion *uint64
 	}
 	voteAgainUseCase struct {
 		hub         domain.Hub
@@ -38,7 +39,7 @@ func (uc *voteAgainUseCase) Execute(ctx context.Context, cmd VoteAgainCommand) e
 			return err
 		}
 
-		if err := uc.hub.SaveRoom(ctx, room, room.ExpectedPersistedRoomVersion()); err != nil {
+		if err := uc.hub.SaveRoom(ctx, room, cmd.ExpectedRoomVersion); err != nil {
 			return err
 		}
 

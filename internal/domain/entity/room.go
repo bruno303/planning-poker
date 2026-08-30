@@ -50,13 +50,6 @@ func NewRoom(clients ClientCollection) *Room {
 	return NewRoomWithID(uuid.NewString(), clients)
 }
 
-func (r *Room) ValidateRoomVersion(expected *uint64) error {
-	if expected == nil || *expected != r.RoomVersion {
-		return domainerror.ErrStaleRoomVersion
-	}
-	return nil
-}
-
 func (r *Room) IncrementRoomVersion() { r.RoomVersion++ }
 
 func (r *Room) ExpectedPersistedRoomVersion() uint64 { return r.persistedRoomVersion }

@@ -47,7 +47,8 @@ func (uc *adminToggleOwnerUseCase) Execute(ctx context.Context, cmd AdminToggleO
 			return err
 		}
 
-		if err := uc.hub.SaveRoom(ctx, room, room.ExpectedPersistedRoomVersion()); err != nil {
+		expectedVersion := room.ExpectedPersistedRoomVersion()
+		if err := uc.hub.SaveRoom(ctx, room, &expectedVersion); err != nil {
 			uc.logger.Error(ctx, "Error saving room", err)
 			return fmt.Errorf("save room: %w", err)
 		}

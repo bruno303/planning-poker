@@ -46,7 +46,8 @@ func TestRedisHub_NewRoom_SaveRoom_LoadRoom(t *testing.T) {
 	mockRedis.EXPECT().Get(gomock.Any(), "planning-poker:room:room1").Return(stringCmd).AnyTimes()
 
 	// SaveRoom
-	err := hub.SaveRoom(context.Background(), room, room.ExpectedPersistedRoomVersion())
+	expectedVersion := room.ExpectedPersistedRoomVersion()
+	err := hub.SaveRoom(context.Background(), room, &expectedVersion)
 	assert.NoError(t, err)
 
 	// LoadRoom
@@ -84,7 +85,8 @@ func TestRedisHub_SaveRoomConditionally(t *testing.T) {
 
 			hub := &RedisHub{client: mockRedis}
 			room := &entity.Room{ID: "room-conditional", Clients: clientcollection.New(), RoomVersion: 3}
-			err := hub.SaveRoom(context.Background(), room, 2)
+			expectedVersion := uint64(2)
+			err := hub.SaveRoom(context.Background(), room, &expectedVersion)
 			if test.wantError != nil {
 				assert.EqualError(t, err, test.wantError.Error())
 			} else {

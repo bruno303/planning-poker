@@ -10,10 +10,11 @@ import (
 
 type (
 	ReorderStoryCommand struct {
-		RoomID      string
-		SenderID    string
-		StoryID     string
-		TargetIndex int
+		RoomID              string
+		SenderID            string
+		StoryID             string
+		TargetIndex         int
+		ExpectedRoomVersion *uint64
 	}
 	ReorderStoryUseCase struct {
 		hub         domain.Hub
@@ -37,7 +38,7 @@ func (uc ReorderStoryUseCase) Execute(ctx context.Context, cmd ReorderStoryComma
 		if err := room.ReorderStory(ctx, cmd.SenderID, cmd.StoryID, cmd.TargetIndex); err != nil {
 			return err
 		}
-		if err := uc.hub.SaveRoom(ctx, room, room.ExpectedPersistedRoomVersion()); err != nil {
+		if err := uc.hub.SaveRoom(ctx, room, cmd.ExpectedRoomVersion); err != nil {
 			return err
 		}
 		return uc.hub.BroadcastToRoom(ctx, room.ID, dto.NewRoomStateCommand(room))

@@ -194,16 +194,9 @@ func TestMapUsecases_DispatchesSupportedCommands(t *testing.T) {
 }
 
 func TestGuardedCommandAndExpectedRoomVersion(t *testing.T) {
-	if !guardedCommand("reorder-story") {
-		t.Fatal("reorder-story should require a room version")
-	}
-	if guardedCommand("vote") {
-		t.Fatal("vote should not require a room version")
-	}
-
 	version, ok := expectedRoomVersion(map[string]uint64{"expectedRoomVersion": 7})
-	if !ok || version != 7 {
-		t.Fatalf("expectedRoomVersion returned (%d, %t), want (7, true)", version, ok)
+	if !ok || version == nil || *version != 7 {
+		t.Fatalf("expectedRoomVersion returned (%v, %t), want (7, true)", version, ok)
 	}
 	if _, ok := expectedRoomVersion(map[string]string{"expectedRoomVersion": "invalid"}); ok {
 		t.Fatal("expectedRoomVersion accepted an invalid revision")
@@ -264,41 +257,13 @@ func TestWebsocketBus_Process_WhenUseCaseFailsDoesNotStopBus(t *testing.T) {
 	}
 }
 
-func TestWebsocketBus_Process_GuardedCommandRequiresCurrentVersion(t *testing.T) {
-	t.Run("missing version", func(t *testing.T) {
-		serverConn, clientConn := websocketPair(t)
-		defer clientConn.Close()
-		bus := NewWebsocketBus("client-1", "room-1", serverConn, domain.NewMockHub(gomock.NewController(t)), usecase.UseCasesFacade{}, WebSocketConfig{WriteTimeout: time.Second})
-		bus.Detach()
-		defer bus.Close()
-
-		bus.process(context.Background(), WebSocketMessage{Type: "reset"})
-		assertStaleCommand(t, clientConn, false, 0)
-	})
-
-	t.Run("stale version", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		serverConn, clientConn := websocketPair(t)
-		defer clientConn.Close()
-		room := &entity.Room{RoomVersion: 4}
-		hub := domain.NewMockHub(ctrl)
-		hub.EXPECT().LoadRoom(gomock.Any(), "room-1").Return(room, nil)
-		bus := NewWebsocketBus("client-1", "room-1", serverConn, hub, usecase.UseCasesFacade{}, WebSocketConfig{WriteTimeout: time.Second})
-		bus.Detach()
-		defer bus.Close()
-
-		bus.process(context.Background(), WebSocketMessage{Type: "reset", Payload: map[string]uint64{"expectedRoomVersion": 3}})
-		assertStaleCommand(t, clientConn, true, 4)
-	})
-}
-
 func TestWebsocketBus_Process_WhenUseCaseReportsStaleVersion(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	serverConn, clientConn := websocketPair(t)
 	defer clientConn.Close()
 	room := &entity.Room{RoomVersion: 6}
 	hub := domain.NewMockHub(ctrl)
-	hub.EXPECT().LoadRoom(gomock.Any(), "room-1").Return(room, nil).Times(2)
+	hub.EXPECT().LoadRoom(gomock.Any(), "room-1").Return(room, nil)
 	calls := map[string]useCaseCall{
 		"reset": func(context.Context, WebSocketMessage) error { return domain.ErrStaleRoomVersion },
 	}

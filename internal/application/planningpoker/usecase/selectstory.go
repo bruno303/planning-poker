@@ -10,9 +10,10 @@ import (
 
 type (
 	SelectStoryCommand struct {
-		RoomID   string
-		SenderID string
-		StoryID  string
+		RoomID              string
+		SenderID            string
+		StoryID             string
+		ExpectedRoomVersion *uint64
 	}
 	SelectStoryUseCase struct {
 		hub         domain.Hub
@@ -36,7 +37,7 @@ func (uc SelectStoryUseCase) Execute(ctx context.Context, cmd SelectStoryCommand
 		if err := room.SelectStory(ctx, cmd.SenderID, cmd.StoryID); err != nil {
 			return err
 		}
-		if err := uc.hub.SaveRoom(ctx, room, room.ExpectedPersistedRoomVersion()); err != nil {
+		if err := uc.hub.SaveRoom(ctx, room, cmd.ExpectedRoomVersion); err != nil {
 			return err
 		}
 		return uc.hub.BroadcastToRoom(ctx, room.ID, dto.NewRoomStateCommand(room))

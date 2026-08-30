@@ -451,7 +451,8 @@ func TestSaveRoom(t *testing.T) {
 
 	// Change some state in the room
 	room.Reveal = true
-	err = hub.SaveRoom(ctx, room, room.ExpectedPersistedRoomVersion())
+	expectedVersion := room.ExpectedPersistedRoomVersion()
+	err = hub.SaveRoom(ctx, room, &expectedVersion)
 	if err != nil {
 		t.Fatalf("expected no error from SaveRoom, got %v", err)
 	}
@@ -471,7 +472,8 @@ func TestSaveRoom_RejectsStaleVersion(t *testing.T) {
 	room := entity.NewRoom(nil)
 	room.RoomVersion = 2
 
-	err := hub.SaveRoom(context.Background(), room, 0)
+	expectedVersion := uint64(0)
+	err := hub.SaveRoom(context.Background(), room, &expectedVersion)
 	if !errors.Is(err, domain.ErrStaleRoomVersion) {
 		t.Fatalf("expected stale room version error, got %v", err)
 	}
