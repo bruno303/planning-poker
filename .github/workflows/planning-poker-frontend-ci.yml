@@ -39,7 +39,22 @@ jobs:
 
       - name: Run Frontend Tests
         working-directory: ${{ env.APP_DIR }}
-        run: npm test
+        run: npm run test:coverage
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602
+        with:
+          projectBaseDir: ${{ env.APP_DIR }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      - name: SonarQube Quality Gate
+        uses: SonarSource/sonarqube-quality-gate-action@7a5fffe8e523c40e0c740b6bc2712ab503e52efa
+        with:
+          pollingTimeoutSec: 600
+          scanMetadataReportFile: ${{ env.APP_DIR }}/.scannerwork/report-task.txt
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   release:
     runs-on: ubuntu-latest
