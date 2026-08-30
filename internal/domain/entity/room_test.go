@@ -862,6 +862,33 @@ func TestRoom_ToggleReveal(t *testing.T) {
 	})
 }
 
+func TestRoomVersionLifecycle(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	room := NewRoom(NewMockClientCollection(ctrl))
+	expected := uint64(0)
+	if err := room.ValidateRoomVersion(&expected); err != nil {
+		t.Fatalf("ValidateRoomVersion returned error: %v", err)
+	}
+
+	stale := uint64(1)
+	if err := room.ValidateRoomVersion(&stale); err == nil {
+		t.Fatal("ValidateRoomVersion accepted a stale revision")
+	}
+	if err := room.ValidateRoomVersion(nil); err == nil {
+		t.Fatal("ValidateRoomVersion accepted a missing revision")
+	}
+
+	room.SetPersistedRoomVersion(3)
+	if got := room.ExpectedPersistedRoomVersion(); got != 3 {
+		t.Fatalf("ExpectedPersistedRoomVersion = %d, want 3", got)
+	}
+	room.IncrementRoomVersion()
+	room.MarkRoomSaved()
+	if got := room.ExpectedPersistedRoomVersion(); got != 1 {
+		t.Fatalf("persisted version after save = %d, want 1", got)
+	}
+}
+
 func TestRoom_IsEmpty(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

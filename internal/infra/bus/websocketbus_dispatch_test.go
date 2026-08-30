@@ -192,6 +192,26 @@ func TestMapUsecases_DispatchesSupportedCommands(t *testing.T) {
 	}
 }
 
+func TestGuardedCommandAndExpectedRoomVersion(t *testing.T) {
+	if !guardedCommand("reorder-story") {
+		t.Fatal("reorder-story should require a room version")
+	}
+	if guardedCommand("vote") {
+		t.Fatal("vote should not require a room version")
+	}
+
+	version, ok := expectedRoomVersion(map[string]uint64{"expectedRoomVersion": 7})
+	if !ok || version != 7 {
+		t.Fatalf("expectedRoomVersion returned (%d, %t), want (7, true)", version, ok)
+	}
+	if _, ok := expectedRoomVersion(map[string]string{"expectedRoomVersion": "invalid"}); ok {
+		t.Fatal("expectedRoomVersion accepted an invalid revision")
+	}
+	if _, ok := expectedRoomVersion(nil); ok {
+		t.Fatal("expectedRoomVersion accepted a missing revision")
+	}
+}
+
 func TestMapUsecases_InvalidPayloadReturnsError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	updateName := usecase.NewMockUseCase[usecase.UpdateNameCommand](ctrl)
