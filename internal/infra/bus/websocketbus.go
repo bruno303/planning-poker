@@ -37,13 +37,16 @@ type (
 		Username string `json:"username"`
 	}
 	ToggleSpectatorPayload struct {
-		TargetClientID string `json:"targetClientId"`
+		TargetClientID      string `json:"targetClientId"`
+		ExpectedRoomVersion uint64 `json:"expectedRoomVersion"`
 	}
 	ToggleOwnerPayload struct {
-		TargetClientID string `json:"targetClientId"`
+		TargetClientID      string `json:"targetClientId"`
+		ExpectedRoomVersion uint64 `json:"expectedRoomVersion"`
 	}
 	UpdateStoryPayload struct {
-		Story string `json:"story"`
+		Story               string `json:"story"`
+		ExpectedRoomVersion uint64 `json:"expectedRoomVersion"`
 	}
 	VotePayload struct {
 		Vote string `json:"vote"`
@@ -52,7 +55,8 @@ type (
 		Story string `json:"story"`
 	}
 	RemoveStoryPayload struct {
-		StoryID string `json:"storyId"`
+		StoryID             string `json:"storyId"`
+		ExpectedRoomVersion uint64 `json:"expectedRoomVersion"`
 	}
 	SelectStoryPayload struct {
 		StoryID string `json:"storyId"`

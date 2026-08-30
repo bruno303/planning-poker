@@ -242,7 +242,8 @@ func TestWebSocketRevealVotes(t *testing.T) {
 
 		// Now toggle reveal off
 		send(t, conn, bus.WebSocketMessage{
-			Type: "reveal-votes",
+			Type:    "reveal-votes",
+			Payload: map[string]uint64{"expectedRoomVersion": 0},
 		})
 
 		msg = readMessages(t, conn)[0]
@@ -275,7 +276,8 @@ func TestWebSocketReset(t *testing.T) {
 
 		// Reset
 		send(t, conn, bus.WebSocketMessage{
-			Type: "reset",
+			Type:    "reset",
+			Payload: map[string]uint64{"expectedRoomVersion": 0},
 		})
 
 		msg := readMessages(t, conn)[0]
@@ -315,7 +317,8 @@ func TestWebSocketToggleSpectator(t *testing.T) {
 		send(t, conn1, bus.WebSocketMessage{
 			Type: "toggle-spectator",
 			Payload: bus.ToggleSpectatorPayload{
-				TargetClientID: clientID2,
+				TargetClientID:      clientID2,
+				ExpectedRoomVersion: 0,
 			},
 		})
 
@@ -367,7 +370,8 @@ func TestWebSocketToggleOwner(t *testing.T) {
 		send(t, conn1, bus.WebSocketMessage{
 			Type: "toggle-owner",
 			Payload: bus.ToggleOwnerPayload{
-				TargetClientID: clientID2,
+				TargetClientID:      clientID2,
+				ExpectedRoomVersion: 0,
 			},
 		})
 
@@ -410,7 +414,8 @@ func TestWebSocketUpdateStory(t *testing.T) {
 		send(t, conn, bus.WebSocketMessage{
 			Type: "update-story",
 			Payload: bus.UpdateStoryPayload{
-				Story: "User story #123",
+				Story:               "User story #123",
+				ExpectedRoomVersion: 0,
 			},
 		})
 
@@ -444,7 +449,8 @@ func TestWebSocketVoteAgain(t *testing.T) {
 
 		// Vote again
 		send(t, conn, bus.WebSocketMessage{
-			Type: "vote-again",
+			Type:    "vote-again",
+			Payload: map[string]uint64{"expectedRoomVersion": 0},
 		})
 
 		msg := readMessages(t, conn)[0]
@@ -510,7 +516,7 @@ func testAllClientsReceiveVote(t *testing.T, connections ...*websocket.Conn) {
 }
 
 func testAllClientsAutoReveal(t *testing.T, connections ...*websocket.Conn) {
-	send(t, connections[0], bus.WebSocketMessage{Type: "reset"})
+	send(t, connections[0], bus.WebSocketMessage{Type: "reset", Payload: map[string]uint64{"expectedRoomVersion": 0}})
 	consumeMessages(t, connections...)
 
 	send(t, connections[0], bus.WebSocketMessage{Type: "vote", Payload: bus.VotePayload{Vote: "3"}})
