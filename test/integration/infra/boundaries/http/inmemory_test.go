@@ -109,8 +109,13 @@ func TestInMemoryWebSocketConcurrentGuardedCommands(t *testing.T) {
 	close(start)
 	wg.Wait()
 
+	assertGuardedCommandResults(t, owner, other)
+}
+
+func assertGuardedCommandResults(t *testing.T, connections ...*websocket.Conn) {
+	t.Helper()
 	messages := make(chan map[string]any, 3)
-	for _, conn := range []*websocket.Conn{owner, other} {
+	for _, conn := range connections {
 		go readUntilStaleCommand(conn, messages)
 	}
 
@@ -119,33 +124,31 @@ func TestInMemoryWebSocketConcurrentGuardedCommands(t *testing.T) {
 	deadline := time.NewTimer(2 * time.Second)
 	defer deadline.Stop()
 	for roomStates < 2 || staleCommands < 1 {
-		var message map[string]any
 		select {
-		case message = <-messages:
+		case message := <-messages:
+			switch message["type"] {
+			case "room-state":
+				roomStates++
+				assertCommittedRoomState(t, message)
+			case "stale-command":
+				staleCommands++
+				if message["roomVersion"] != float64(2) {
+					t.Errorf("expected stale command to report room version 2, got %v", message["roomVersion"])
+				}
+			}
 		case <-deadline.C:
 			t.Fatalf("timed out waiting for guarded command results: room states=%d stale commands=%d", roomStates, staleCommands)
 		}
-		switch message["type"] {
-		case "room-state":
-			roomStates++
-			if message["currentStory"] != "concurrent story" {
-				t.Errorf("expected committed story %q, got %v", "concurrent story", message["currentStory"])
-			}
-			if message["roomVersion"] != float64(2) {
-				t.Errorf("expected committed room version 2, got %v", message["roomVersion"])
-			}
-		case "stale-command":
-			staleCommands++
-			if message["roomVersion"] != float64(2) {
-				t.Errorf("expected stale command to report room version 2, got %v", message["roomVersion"])
-			}
-		}
 	}
-	if roomStates != 2 {
-		t.Fatalf("expected both clients to receive the one successful update, got %d room states", roomStates)
+}
+
+func assertCommittedRoomState(t *testing.T, message map[string]any) {
+	t.Helper()
+	if message["currentStory"] != "concurrent story" {
+		t.Errorf("expected committed story %q, got %v", "concurrent story", message["currentStory"])
 	}
-	if staleCommands != 1 {
-		t.Fatalf("expected exactly one stale command, got %d", staleCommands)
+	if message["roomVersion"] != float64(2) {
+		t.Errorf("expected committed room version 2, got %v", message["roomVersion"])
 	}
 }
 

@@ -87,8 +87,6 @@ func (h *InMemoryHub) RemoveRoom(roomID string) {
 	}
 }
 
-// WaitForRoomRemoval waits until the room has been removed or the context ends.
-// It is useful for deterministic integration-test cleanup assertions.
 func (h *InMemoryHub) WaitForRoomRemoval(ctx context.Context, roomID string) error {
 	h.roomMu.Lock()
 	removed, ok := h.removed[roomID]
@@ -106,7 +104,6 @@ func (h *InMemoryHub) WaitForRoomRemoval(ctx context.Context, roomID string) err
 	}
 }
 
-// WaitForClientRemoval waits until a client has been removed from a room.
 func (h *InMemoryHub) WaitForClientRemoval(ctx context.Context, roomID, clientID string) error {
 	h.roomMu.Lock()
 	key := roomID + "\x00" + clientID
