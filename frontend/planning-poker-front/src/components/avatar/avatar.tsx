@@ -10,15 +10,15 @@ type AvatarDefinition = {
 };
 
 const avatarCatalog = [
-  { filename: 'fox.svg', label: 'Fox avatar' },
-  { filename: 'dog.svg', label: 'Dog avatar' },
-  { filename: 'cat.svg', label: 'Cat avatar' },
-  { filename: 'hammer.svg', label: 'Hammer avatar' },
-  { filename: 'strawberry.svg', label: 'Strawberry avatar' },
-  { filename: 'wrench.svg', label: 'Wrench avatar' },
-  { filename: 'apple.svg', label: 'Apple avatar' },
-  { filename: 'screwdriver.svg', label: 'Screwdriver avatar' },
-  { filename: 'lemon.svg', label: 'Lemon avatar' },
+  { filename: 'keyboard.svg', label: 'Keyboard avatar' },
+  { filename: 'mouse.svg', label: 'Mouse avatar' },
+  { filename: 'monitor.svg', label: 'Monitor avatar' },
+  { filename: 'robot.svg', label: 'Robot avatar' },
+  { filename: 'headset.svg', label: 'Headset avatar' },
+  { filename: 'joystick.svg', label: 'Joystick avatar' },
+  { filename: 'gamepad.svg', label: 'Gamepad avatar' },
+  { filename: 'smartphone.svg', label: 'Smartphone avatar' },
+  { filename: 'laptop.svg', label: 'Laptop avatar' },
 ] satisfies readonly AvatarDefinition[];
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
