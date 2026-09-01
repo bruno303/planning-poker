@@ -54,6 +54,9 @@ type Participant = {
 declare global {
   interface Window {
     __ws?: WebSocket;
+    planning_poker?: {
+      clientID?: string;
+    };
   }
 }
 
@@ -345,6 +348,9 @@ export default function PlanningPoker() {
   const cleanupSocket = () => {
     deliberateDisconnect.current = true;
     cancelReconnect();
+    if (window.planning_poker) {
+      window.planning_poker.clientID = undefined;
+    }
     const activeSocket = socket.current;
     if (activeSocket) {
       activeSocket.onopen = null;
@@ -403,6 +409,7 @@ export default function PlanningPoker() {
             throw new TypeError('Invalid client ID from websocket');
           }
           setClientId(data.clientId);
+          window.planning_poker = { clientID: data.clientId };
           sessionStorage.setItem('clientId', data.clientId);
           logger.setContext({ clientId: data.clientId });
           const payload: UpdateNamePayload = { username: userName };
@@ -412,6 +419,9 @@ export default function PlanningPoker() {
           deliberateDisconnect.current = true;
           cancelReconnect();
           logger.info('Kicked from room');
+          if (window.planning_poker) {
+            window.planning_poker.clientID = undefined;
+          }
           sessionStorage.removeItem('clientId');
           logger.setContext({ clientId: undefined, roomId: undefined });
           pushError('You have been kicked from the room');
