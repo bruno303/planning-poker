@@ -59,6 +59,7 @@ describe('room page', () => {
     socketRef.current = null; connected.current = false;
     push.mockReset(); replace.mockReset(); pushError.mockReset(); pushSuccess.mockReset();
     sessionStorage.clear(); vi.restoreAllMocks();
+    delete window.planning_poker;
   });
 
   it('redirects invalid routes and routes visitors without a name to join', async () => {
@@ -78,6 +79,7 @@ describe('room page', () => {
     await waitFor(() => expect(socketRef.current).not.toBeNull());
     const ws = socketRef.current!;
     act(() => ws.onmessage?.({ data: JSON.stringify({ type: 'update-client-id', clientId: 'me' }) }));
+    expect(window.planning_poker?.clientID).toBe('me');
     act(() => ws.onmessage?.({ data: JSON.stringify(roomState()) }));
     await waitFor(() => expect(screen.getByText('Implement feature')).toBeTruthy());
     expect(screen.getAllByText('Ada').length).toBeGreaterThan(0);
@@ -110,6 +112,7 @@ describe('room page', () => {
     act(() => vi.advanceTimersByTime(1000));
     expect(socketRef.current?.url).toContain('/planning/123e4567-e89b-12d3-a456-426614174000/ws');
     act(() => socketRef.current?.onmessage?.({ data: JSON.stringify({ type: 'kicked' }) }));
+    expect(window.planning_poker?.clientID).toBeUndefined();
     expect(push).toHaveBeenCalledWith('/');
     vi.useRealTimers();
   });
@@ -119,7 +122,10 @@ describe('room page', () => {
     const view = renderRoom();
     expect(socketRef.current).not.toBeNull();
     const ws = socketRef.current!;
+    act(() => ws.onmessage?.({ data: JSON.stringify({ type: 'update-client-id', clientId: 'me' }) }));
+    expect(window.planning_poker?.clientID).toBe('me');
     view.unmount();
+    expect(window.planning_poker?.clientID).toBeUndefined();
     expect(ws.onopen).toBeNull();
     expect(ws.onmessage).toBeNull();
     expect(ws.onclose).toBeNull();
