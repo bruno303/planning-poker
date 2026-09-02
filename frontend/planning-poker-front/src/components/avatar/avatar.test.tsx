@@ -5,26 +5,26 @@ import Avatar from './avatar';
 
 const firstParticipant = { id: '550e8400-e29b-41d4-a716-446655440000' };
 const validAvatarSources = [
-  '/avatars/fox.svg',
-  '/avatars/dog.svg',
-  '/avatars/cat.svg',
-  '/avatars/hammer.svg',
-  '/avatars/strawberry.svg',
-  '/avatars/wrench.svg',
-  '/avatars/apple.svg',
-  '/avatars/screwdriver.svg',
-  '/avatars/lemon.svg',
+  '/avatars/keyboard.svg',
+  '/avatars/mouse.svg',
+  '/avatars/monitor.svg',
+  '/avatars/robot.svg',
+  '/avatars/headset.svg',
+  '/avatars/joystick.svg',
+  '/avatars/gamepad.svg',
+  '/avatars/smartphone.svg',
+  '/avatars/laptop.svg',
 ];
 const validAvatarLabels = [
-  'Fox avatar',
-  'Dog avatar',
-  'Cat avatar',
-  'Hammer avatar',
-  'Strawberry avatar',
-  'Wrench avatar',
-  'Apple avatar',
-  'Screwdriver avatar',
-  'Lemon avatar',
+  'Keyboard avatar',
+  'Mouse avatar',
+  'Monitor avatar',
+  'Robot avatar',
+  'Headset avatar',
+  'Joystick avatar',
+  'Gamepad avatar',
+  'Smartphone avatar',
+  'Laptop avatar',
 ];
 
 describe('Avatar', () => {
@@ -66,8 +66,8 @@ describe('Avatar', () => {
 
       const image = screen.getByRole('img');
 
-      expect(image.getAttribute('src')).toBe('/avatars/fox.svg');
-      expect(image.getAttribute('alt')).toBe('Fox avatar');
+      expect(image.getAttribute('src')).toBe('/avatars/keyboard.svg');
+      expect(image.getAttribute('alt')).toBe('Keyboard avatar');
     },
   );
 
