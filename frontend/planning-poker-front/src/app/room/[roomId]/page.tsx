@@ -25,6 +25,7 @@ import ParticipantIdBadge from '@/components/participantIdBadge/participantIdBad
 import { useLogger } from '@/context/logger/loggerContext';
 import { useRoom } from '@/context/room/roomContext';
 import { useToast } from '@/context/toast/toastContext';
+import { playNotificationSound } from '@/lib/notificationSound';
 import { ChevronLeft, ChevronRight, Eye, EyeOff, List, Repeat, Shield, Users, X } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -39,6 +40,16 @@ const isValidRoomId = (value: string): boolean => uuidPattern.test(value);
 const RECONNECT_INITIAL_DELAY = 1000;
 const RECONNECT_MAX_DELAY = 30000;
 const RECONNECT_MULTIPLIER = 2;
+const UNVOTED_NOTIFICATION_MESSAGE = 'The room is waiting for your vote.';
+
+function getNotificationNumberConfig(value: string | undefined, fallback: number): number {
+  const parsedValue = Number.parseInt(value ?? '', 10);
+  return Number.isFinite(parsedValue) && parsedValue >= 0 ? parsedValue : fallback;
+}
+
+const UNVOTED_NOTIFICATION_DELAY = getNotificationNumberConfig(process.env.NEXT_PUBLIC_UNVOTED_NOTIFICATION_DELAY_MS, 4000);
+const UNVOTED_NOTIFICATION_INTERVAL = getNotificationNumberConfig(process.env.NEXT_PUBLIC_UNVOTED_NOTIFICATION_REPEAT_INTERVAL_MS, 10000);
+const UNVOTED_NOTIFICATION_MAX_REPEATS = getNotificationNumberConfig(process.env.NEXT_PUBLIC_UNVOTED_NOTIFICATION_MAX_REPEATS, 3);
 
 type Card = string | null
 
@@ -142,6 +153,21 @@ export default function PlanningPoker() {
   const editingStoryRef = useRef('');
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptsRef = useRef(0);
+  const notificationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notificationStateRef = useRef<string | null>(null);
+  const notificationCountsRef = useRef(new Map<string, number>());
+  const notificationGenerationRef = useRef(0);
+  const participantsRef = useRef(participants);
+  const clientIdRef = useRef(clientId);
+  const currentStoryRef = useRef(currentStory);
+  const isRevealedRef = useRef(isRevealed);
+  const isConnectedRef = useRef(isConnected);
+
+  participantsRef.current = participants;
+  clientIdRef.current = clientId;
+  currentStoryRef.current = currentStory;
+  isRevealedRef.current = isRevealed;
+  isConnectedRef.current = isConnected;
 
   // Planning poker cards (Fibonacci sequence + special cards)
   const cards = ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'];
@@ -203,6 +229,71 @@ export default function PlanningPoker() {
       setSelectedCard(getCurrentUser()?.vote ?? null);
     }
   }, [participants, clientId]);
+
+  useEffect(() => {
+    if (notificationTimeoutRef.current !== null) {
+      clearTimeout(notificationTimeoutRef.current);
+      notificationTimeoutRef.current = null;
+    }
+
+    const activeParticipants = participants.filter((participant) => !participant.isSpectator);
+    const waitingParticipants = activeParticipants.filter((participant) => !participant.hasVoted);
+    const notificationState = `${currentStory}:${activeParticipants
+      .slice()
+      .sort((left, right) => left.id.localeCompare(right.id))
+      .map((participant) => `${participant.id}:${participant.hasVoted}:${participant.isSpectator}`)
+      .join('|')}`;
+
+    if (notificationStateRef.current !== notificationState) {
+      notificationStateRef.current = notificationState;
+      notificationCountsRef.current.clear();
+    }
+
+    if (!isConnected || isRevealed || activeParticipants.length < 2 || waitingParticipants.length > 2) {
+      if (isRevealed) notificationCountsRef.current.clear();
+      return;
+    }
+
+    const target = waitingParticipants.length === 1 || activeParticipants.length >= 3
+      ? waitingParticipants.find((participant) => participant.id === clientId)
+      : undefined;
+    if (!target) return;
+
+    const notificationKey = `${notificationState}:${target.id}`;
+    const generation = ++notificationGenerationRef.current;
+    const scheduledParticipants = participants;
+    const notify = () => {
+      const currentWaitingParticipants = participantsRef.current.filter((participant) => !participant.isSpectator && !participant.hasVoted);
+      const currentActiveParticipants = participantsRef.current.filter((participant) => !participant.isSpectator);
+      const currentTarget = currentWaitingParticipants.find((participant) => participant.id === clientIdRef.current);
+      const currentThreshold = currentWaitingParticipants.length === 1 || currentActiveParticipants.length >= 3;
+      if (
+        generation !== notificationGenerationRef.current ||
+        !isConnectedRef.current ||
+        isRevealedRef.current ||
+        currentStoryRef.current !== currentStory ||
+        scheduledParticipants !== participantsRef.current ||
+        !currentThreshold ||
+        !currentTarget
+      ) {
+        return;
+      }
+      const count = notificationCountsRef.current.get(notificationKey) ?? 0;
+      if (count >= UNVOTED_NOTIFICATION_MAX_REPEATS) return;
+
+      notificationCountsRef.current.set(notificationKey, count + 1);
+      pushSuccess(UNVOTED_NOTIFICATION_MESSAGE);
+      playNotificationSound();
+      if (count + 1 < UNVOTED_NOTIFICATION_MAX_REPEATS) {
+        notificationTimeoutRef.current = setTimeout(notify, UNVOTED_NOTIFICATION_INTERVAL);
+      }
+    };
+
+    notificationTimeoutRef.current = setTimeout(notify, UNVOTED_NOTIFICATION_DELAY);
+    return () => {
+      cancelNotifications();
+    };
+  }, [clientId, currentStory, isConnected, isRevealed, participants, pushSuccess]);
 
   const sendMessage = <T,>(message: WebSocketMessage<T>) => {
     const activeSocket = socket.current;
@@ -333,6 +424,14 @@ export default function PlanningPoker() {
     }
   };
 
+  function cancelNotifications() {
+    notificationGenerationRef.current++;
+    if (notificationTimeoutRef.current !== null) {
+      clearTimeout(notificationTimeoutRef.current);
+      notificationTimeoutRef.current = null;
+    }
+  }
+
   const scheduleReconnect = (roomCode: string, storedUserName: string) => {
     const delay = Math.min(
       RECONNECT_INITIAL_DELAY * Math.pow(RECONNECT_MULTIPLIER, reconnectAttemptsRef.current),
@@ -348,6 +447,7 @@ export default function PlanningPoker() {
   const cleanupSocket = () => {
     deliberateDisconnect.current = true;
     cancelReconnect();
+    cancelNotifications();
     if (window.planning_poker) {
       window.planning_poker.clientID = undefined;
     }
@@ -384,6 +484,11 @@ export default function PlanningPoker() {
 
         if (isRoomState(data)) {
           const roomState = data;
+          // Keep callback guards current before React commits the state update.
+          cancelNotifications();
+          participantsRef.current = roomState.participants;
+          currentStoryRef.current = roomState.currentStory;
+          isRevealedRef.current = roomState.reveal;
           setParticipants(roomState.participants);
           setCurrentStory(roomState.currentStory);
           setIsRevealed(roomState.reveal);
@@ -408,6 +513,7 @@ export default function PlanningPoker() {
           if (typeof data.clientId !== 'string') {
             throw new TypeError('Invalid client ID from websocket');
           }
+          clientIdRef.current = data.clientId;
           setClientId(data.clientId);
           window.planning_poker = { clientID: data.clientId };
           sessionStorage.setItem('clientId', data.clientId);
@@ -447,6 +553,7 @@ export default function PlanningPoker() {
 
     ws.onclose = (event) => {
       logger.warn('WebSocket closed', { code: event.code, reason: event.reason });
+      cancelNotifications();
       setIsConnected(false);
       if (socket.current === ws) {
         socket.current = null;

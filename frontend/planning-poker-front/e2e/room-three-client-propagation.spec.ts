@@ -145,3 +145,26 @@ test('propagates participants and reveal state consistently across three clients
     await Promise.allSettled([ownerContext.close(), guestBContext.close(), guestCContext.close()]);
   }
 });
+
+test('notifies only the remaining voter', async ({ browser, baseURL }) => {
+  test.setTimeout(60_000);
+
+  const ownerContext = await browser.newContext();
+  const guestContext = await browser.newContext();
+  await ownerContext.addInitScript(randomUUIDPolyfillScript);
+  await guestContext.addInitScript(randomUUIDPolyfillScript);
+  const ownerPage = await ownerContext.newPage();
+  const guestPage = await guestContext.newPage();
+
+  try {
+    const roomId = await createRoom(ownerPage, baseURL, ownerName);
+    await joinRoom(guestPage, roomId, guestBName);
+
+    await ownerPage.getByRole('button', { name: '3', exact: true }).click();
+    await expect(guestPage.getByText('The room is waiting for your vote.')).not.toBeVisible();
+    await expect(guestPage.getByText('The room is waiting for your vote.')).toBeVisible({ timeout: 5_000 });
+    await expect(ownerPage.getByText('The room is waiting for your vote.')).not.toBeVisible();
+  } finally {
+    await Promise.allSettled([ownerContext.close(), guestContext.close()]);
+  }
+});
