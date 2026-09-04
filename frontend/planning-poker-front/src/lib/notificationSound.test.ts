@@ -37,6 +37,12 @@ describe('playNotificationSound', () => {
     expect(() => playNotificationSound()).not.toThrow();
   });
 
+  it('does nothing when AudioContext is unavailable', () => {
+    vi.stubGlobal('AudioContext', undefined);
+
+    expect(() => playNotificationSound()).not.toThrow();
+  });
+
   it('ignores rejected resume and close operations', async () => {
     let ended: (() => void) | undefined;
     const context = {

@@ -24,9 +24,20 @@ export function playNotificationSound(): void {
     gain.connect(context.destination);
     oscillator.start(now);
     oscillator.stop(now + SOUND_DURATION_MS / 1000);
-    oscillator.addEventListener('ended', () => {
-      void context.close().catch(() => undefined);
-    }, { once: true });
+    let closed = false;
+    let closeTimeout: ReturnType<typeof setTimeout> | undefined;
+    const closeContext = () => {
+      if (closed) return;
+      closed = true;
+      if (closeTimeout !== undefined) clearTimeout(closeTimeout);
+      try {
+        void context.close().catch(() => undefined);
+      } catch {
+        // Closing is best effort.
+      }
+    };
+    closeTimeout = setTimeout(closeContext, SOUND_DURATION_MS + 100);
+    oscillator.addEventListener('ended', closeContext, { once: true });
     void context.resume().catch(() => undefined);
   } catch {
     // Audio is an optional enhancement and may be blocked by the browser.

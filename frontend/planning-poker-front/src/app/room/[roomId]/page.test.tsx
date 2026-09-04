@@ -233,11 +233,11 @@ describe('room page', () => {
     act(() => ws.onmessage?.({ data: JSON.stringify(roomState({ participants })) }));
     act(() => vi.advanceTimersByTime(4000));
     expect(playNotificationSound).toHaveBeenCalledOnce();
-    act(() => ws.onmessage?.({ data: JSON.stringify(roomState({ participants: participants.slice().reverse() })) }));
-    act(() => vi.advanceTimersByTime(4000));
+    act(() => ws.onmessage?.({ data: JSON.stringify(roomState({ participants: participants.slice().reverse().map((participant) => participant.id === 'me' ? { ...participant, name: 'Ada Renamed' } : participant) })) }));
+    act(() => vi.advanceTimersByTime(10_000));
     expect(playNotificationSound).toHaveBeenCalledTimes(2);
     act(() => ws.onmessage?.({ data: JSON.stringify(roomState({ participants })) }));
-    act(() => vi.advanceTimersByTime(4000));
+    act(() => vi.advanceTimersByTime(10_000));
     expect(playNotificationSound).toHaveBeenCalledTimes(3);
     act(() => ws.onmessage?.({ data: JSON.stringify(roomState({ participants: participants.slice().reverse() })) }));
     act(() => vi.advanceTimersByTime(4000));

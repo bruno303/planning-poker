@@ -161,8 +161,9 @@ test('notifies only the remaining voter', async ({ browser, baseURL }) => {
     await joinRoom(guestPage, roomId, guestBName);
 
     await ownerPage.getByRole('button', { name: '3', exact: true }).click();
+    await guestPage.waitForTimeout(2_000);
     await expect(guestPage.getByText('The room is waiting for your vote.')).not.toBeVisible();
-    await expect(guestPage.getByText('The room is waiting for your vote.')).toBeVisible({ timeout: 5_000 });
+    await expect(guestPage.getByText('The room is waiting for your vote.')).toBeVisible({ timeout: 3_000 });
     await expect(ownerPage.getByText('The room is waiting for your vote.')).not.toBeVisible();
   } finally {
     await Promise.allSettled([ownerContext.close(), guestContext.close()]);
