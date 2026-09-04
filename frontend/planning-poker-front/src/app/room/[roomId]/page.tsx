@@ -19,6 +19,7 @@ import {
   UpdateStoryPayload,
   VotePayload,
   WebSocketMessage,
+  isRFC3339Timestamp,
   isRoomState
 } from '@/components/messages/websocket';
 import ParticipantIdBadge from '@/components/participantIdBadge/participantIdBadge';
@@ -47,6 +48,7 @@ type Participant = {
   name: string
   vote: Card
   hasVoted: boolean
+  votedAt?: string
   isSpectator: boolean
   isOwner: boolean
 }
@@ -106,6 +108,45 @@ function getStatusDotStyle(participant: Participant) {
   return styles.statusWaiting;
 }
 
+export function formatElapsedTime(totalSeconds: number): string {
+  const elapsedSeconds = Math.max(0, Math.floor(totalSeconds));
+  const seconds = elapsedSeconds % 60;
+  const totalMinutes = Math.floor(elapsedSeconds / 60);
+  const minutes = totalMinutes % 60;
+  const hours = Math.floor(totalMinutes / 60);
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function getElapsedSeconds(startedAt: string, now = Date.now()): number {
+  const startedAtMilliseconds = Date.parse(startedAt);
+  if (!Number.isFinite(startedAtMilliseconds)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.floor((now - startedAtMilliseconds) / 1000));
+}
+
+export function formatVotedAt(votedAt: string | undefined, startedAt: string | null): string | null {
+  if (!startedAt || !isRFC3339Timestamp(startedAt) || !isRFC3339Timestamp(votedAt)) {
+    return null;
+  }
+
+  return formatElapsedTime(getElapsedSeconds(startedAt, Date.parse(votedAt)));
+}
+
+function getParticipantVoteTime(participant: Participant, startedAt: string | null): string | null {
+  if (participant.isSpectator || !participant.hasVoted || participant.vote === null) {
+    return null;
+  }
+
+  return formatVotedAt(participant.votedAt, startedAt);
+}
+
 export default function PlanningPoker() {
   const logger = useLogger('room-page');
   const params = useParams();
@@ -137,6 +178,8 @@ export default function PlanningPoker() {
   const [stories, setStories] = useState<Story[]>([]);
   const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
   const [roomVersion, setRoomVersion] = useState<number | null>(null);
+  const [roomStartedAt, setRoomStartedAt] = useState<string | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [showBacklogModal, setShowBacklogModal] = useState(false);
   const deliberateDisconnect = useRef(false);
   const editingStoryRef = useRef('');
@@ -145,6 +188,21 @@ export default function PlanningPoker() {
 
   // Planning poker cards (Fibonacci sequence + special cards)
   const cards = ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'];
+
+  useEffect(() => {
+    if (!roomStartedAt || !isRFC3339Timestamp(roomStartedAt)) {
+      setElapsedSeconds(0);
+      return;
+    }
+
+    const updateElapsedTime = () => {
+      setElapsedSeconds(getElapsedSeconds(roomStartedAt));
+    };
+
+    updateElapsedTime();
+    const interval = setInterval(updateElapsedTime, 1000);
+    return () => clearInterval(interval);
+  }, [roomStartedAt]);
 
   useEffect(() => {
     if (isValidRoomId(routeRoomId)) {
@@ -388,6 +446,7 @@ export default function PlanningPoker() {
           setCurrentStory(roomState.currentStory);
           setIsRevealed(roomState.reveal);
           setSelectedCard(getCurrentUser()?.vote ?? null);
+          setRoomStartedAt(roomState.startedAt ?? null);
           setResult(roomState.result ?? null);
           setMostAppearingVotes(roomState.mostAppearingVotes ?? []);
           setConsensus(roomState.consensus ?? null);
@@ -532,6 +591,9 @@ export default function PlanningPoker() {
             <div style={styles.storyCard}>
               <div style={styles.storyHeader}>
                 <h2 style={styles.storyTitle}>Current Story</h2>
+                <time role="timer" aria-label="Elapsed room time" style={styles.roomClock}>
+                  {formatElapsedTime(elapsedSeconds)}
+                </time>
                 {amIAdmin && !isEditingStory && ((backlogMode && currentStory) || !backlogMode) && (
                   <button
                     style={{ ...styles.button, ...styles.primaryButton, ...styles.storyEditButton }}
@@ -742,6 +804,7 @@ export default function PlanningPoker() {
               <div style={styles.participantsList}>
                 {participants.map((participant) => {
                   const extremes = getParticipantExtremes(participant);
+                  const votedAt = getParticipantVoteTime(participant, roomStartedAt);
                   return (
                   <div
                     key={participant.id}
@@ -771,6 +834,7 @@ export default function PlanningPoker() {
                         <div style={styles.participantStatus}>
                            {getParticipantStatus(participant)}
                         </div>
+                        {votedAt && <div style={styles.participantVotedAt}>Voted at {votedAt}</div>}
                       </div>
                       <div style={styles.participantRight}>
                         {!participant.isSpectator && participant.hasVoted && (

@@ -1,7 +1,7 @@
 import { act } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import Room from './page';
+import Room, { formatElapsedTime, formatVotedAt } from './page';
 
 const push = vi.fn();
 const replace = vi.fn();
@@ -92,6 +92,72 @@ describe('room page', () => {
     fireEvent.click(screen.getAllByTitle('Make Admin')[0]);
     expect(ws.sent.map((value) => JSON.parse(value).type)).toContain('toggle-spectator');
     expect(ws.sent.map((value) => JSON.parse(value).type)).toContain('toggle-owner');
+  });
+
+  it('formats and ticks the elapsed room clock from the server timestamp', async () => {
+    vi.useFakeTimers({ now: new Date('2026-09-03T12:02:03Z') });
+    expect(formatElapsedTime(0)).toBe('00:00');
+    expect(formatElapsedTime(3600)).toBe('1:00:00');
+    expect(formatElapsedTime(-1)).toBe('00:00');
+
+    const view = renderRoom();
+    await act(async () => {});
+    const ws = socketRef.current!;
+    act(() => ws.onmessage?.({ data: JSON.stringify(roomState({ startedAt: '2026-09-03T12:00:00Z' })) }));
+
+    expect(screen.getByRole('timer', { name: 'Elapsed room time' }).textContent).toBe('02:03');
+    act(() => vi.advanceTimersByTime(1000));
+    expect(screen.getByRole('timer', { name: 'Elapsed room time' }).textContent).toBe('02:04');
+    expect(vi.getTimerCount()).toBe(1);
+    view.unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('shows only current voter timestamps and omits invalid or unavailable times', async () => {
+    const startedAt = '2026-09-03T12:00:00Z';
+    expect(formatVotedAt('2026-09-03T12:00:30Z', startedAt)).toBe('00:30');
+    expect(formatVotedAt('not-a-timestamp', startedAt)).toBeNull();
+    expect(formatVotedAt(undefined, startedAt)).toBeNull();
+
+    renderRoom();
+    await act(async () => {});
+    const ws = socketRef.current!;
+    act(() => ws.onmessage?.({ data: JSON.stringify(roomState({
+      startedAt,
+      participants: [
+        { id: 'me', name: 'Ada', vote: null, hasVoted: false, isSpectator: false, isOwner: true },
+        { id: 'other', name: 'Bob', vote: '5', hasVoted: true, votedAt: '2026-09-03T12:00:30Z', isSpectator: false, isOwner: false },
+        { id: 'spectator', name: 'Cy', vote: '8', hasVoted: true, votedAt: '2026-09-03T12:00:10Z', isSpectator: true, isOwner: false },
+        { id: 'waiting', name: 'Dee', vote: null, hasVoted: false, isSpectator: false, isOwner: false },
+        { id: 'cleared', name: 'Eve', vote: null, hasVoted: false, votedAt: '2026-09-03T12:00:20Z', isSpectator: false, isOwner: false },
+      ],
+    })) }));
+
+    expect(screen.getByText('Voted at 00:30')).toBeTruthy();
+    expect(screen.queryByText('Voted at 00:10')).toBeNull();
+    expect(screen.queryByText('Voted at 00:20')).toBeNull();
+  });
+
+  it('hydrates the clock and vote time after reconnecting', async () => {
+    vi.useFakeTimers({ now: new Date('2026-09-03T12:01:15Z') });
+    renderRoom();
+    await act(async () => {});
+    const firstSocket = socketRef.current!;
+    act(() => firstSocket.onmessage?.({ data: JSON.stringify(roomState({ startedAt: '2026-09-03T12:00:00Z' })) }));
+    act(() => firstSocket.onclose?.({ code: 1006, reason: 'lost' }));
+
+    act(() => vi.advanceTimersByTime(1000));
+    const reconnectedSocket = socketRef.current!;
+    act(() => reconnectedSocket.onmessage?.({ data: JSON.stringify(roomState({
+      startedAt: '2026-09-03T12:00:00Z',
+      participants: [
+        { id: 'me', name: 'Ada', vote: null, hasVoted: false, isSpectator: false, isOwner: true },
+        { id: 'other', name: 'Bob', vote: '5', hasVoted: true, votedAt: '2026-09-03T12:00:45Z', isSpectator: false, isOwner: false },
+      ],
+    })) }));
+
+    expect(screen.getByRole('timer', { name: 'Elapsed room time' }).textContent).toBe('01:16');
+    expect(screen.getByText('Voted at 00:45')).toBeTruthy();
   });
 
   it('renders revealed results, stale/kicked/error states, and reconnects', async () => {

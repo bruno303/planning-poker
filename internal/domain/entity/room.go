@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/samber/lo"
@@ -27,6 +28,7 @@ type (
 
 	Room struct {
 		ID                  string
+		StartedAt           time.Time
 		Clients             ClientCollection
 		CurrentStory        string
 		Reveal              bool
@@ -52,6 +54,7 @@ func NewRoom(clients ClientCollection) *Room {
 func NewRoomWithID(id string, clients ClientCollection) *Room {
 	return &Room{
 		ID:           id,
+		StartedAt:    time.Now().UTC(),
 		Clients:      clients,
 		CurrentStory: "",
 		Reveal:       false,
@@ -152,6 +155,10 @@ func (r *Room) RemoveStory(ctx context.Context, clientID string, storyID string)
 		if len(r.Stories) == 1 {
 			r.CurrentStoryIndex = 0
 			r.Stories = nil
+			r.reveal(false)
+			r.Clients.ForEach(func(c *Client) {
+				c.Vote(ctx, nil)
+			})
 			return nil
 		} else if index == len(r.Stories)-1 {
 			r.CurrentStoryIndex--

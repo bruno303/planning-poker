@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { isRoomState, type RoomState } from './websocket';
+import { isRFC3339Timestamp, isRoomState, type RoomState } from './websocket';
 
 const validRoomState: RoomState = {
   type: 'room-state',
+  startedAt: '2026-09-03T12:00:00Z',
   currentStory: 'Estimate the story',
   reveal: true,
   result: 5,
@@ -19,6 +20,7 @@ const validRoomState: RoomState = {
     name: 'Ada',
     vote: '5',
     hasVoted: true,
+    votedAt: '2026-09-03T12:01:00.250Z',
     isSpectator: false,
     isOwner: true,
   }],
@@ -47,6 +49,17 @@ describe('isRoomState', () => {
     })).toBe(true);
   });
 
+  it('accepts legacy states without timestamp fields', () => {
+    const legacyState: RoomState = {
+      ...validRoomState,
+      participants: validRoomState.participants.map((participant) => ({ ...participant })),
+    };
+    delete legacyState.startedAt;
+    delete legacyState.participants[0].votedAt;
+
+    expect(isRoomState(legacyState)).toBe(true);
+  });
+
   it.each([
     ['required field', 'currentStory', null],
     ['vote array member', 'mostAppearingVotes', ['5']],
@@ -59,6 +72,8 @@ describe('isRoomState', () => {
     ['optional story result', 'stories', [{ ...validRoomState.stories?.[0], result: null }]],
     ['optional story votes', 'stories', [{ ...validRoomState.stories?.[0], mostAppearingVotes: [null] }]],
     ['optional story index', 'currentStoryIndex', '0'],
+    ['optional room timestamp', 'startedAt', 'not-a-timestamp'],
+    ['optional participant timestamp', 'participants', [{ ...validRoomState.participants[0], votedAt: 'not-a-timestamp' }]],
   ])('rejects malformed %s', (_, field, replacement) => {
     const malformed = { ...validRoomState, [field]: replacement };
 
@@ -67,5 +82,12 @@ describe('isRoomState', () => {
 
   it('rejects a present optional field with undefined', () => {
     expect(isRoomState({ ...validRoomState, result: undefined })).toBe(false);
+  });
+
+  it('validates RFC3339 timestamp values', () => {
+    expect(isRFC3339Timestamp('2026-09-03T12:00:00Z')).toBe(true);
+    expect(isRFC3339Timestamp('2026-09-03T12:00:00.250-03:00')).toBe(true);
+    expect(isRFC3339Timestamp('2026-09-03 12:00:00Z')).toBe(false);
+    expect(isRFC3339Timestamp('2026-02-30T12:00:00Z')).toBe(false);
   });
 });

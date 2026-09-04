@@ -1,7 +1,9 @@
 package redis
 
 import (
+	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/samber/lo"
 
@@ -13,6 +15,7 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 	// Create a room with some clients
 	originalRoom := entity.NewRoom(clientcollection.New())
 	originalRoom.ID = "test-room-123"
+	originalRoom.StartedAt = time.Date(2026, time.September, 3, 12, 0, 0, 0, time.FixedZone("BRT", -3*60*60))
 	originalRoom.CurrentStory = "User Story #42"
 	originalRoom.RoomVersion = 7
 	originalRoom.Reveal = false
@@ -43,6 +46,7 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 	vote := "5"
 	client2.CurrentVote = &vote
 	client2.HasVoted = true
+	client2.VotedAt = lo.ToPtr(time.Date(2026, time.September, 3, 12, 1, 0, 0, time.FixedZone("BRT", -3*60*60)))
 
 	// Serialize the room
 	data, err := SerializeRoom(originalRoom)
@@ -69,6 +73,9 @@ func assertSerializedRoomProperties(t *testing.T, originalRoom, deserializedRoom
 	}
 	if deserializedRoom.CurrentStory != originalRoom.CurrentStory {
 		t.Errorf("Expected story %s, got %s", originalRoom.CurrentStory, deserializedRoom.CurrentStory)
+	}
+	if !deserializedRoom.StartedAt.Equal(originalRoom.StartedAt) || deserializedRoom.StartedAt.Location() != time.UTC {
+		t.Errorf("Expected room start time %v in UTC, got %v", originalRoom.StartedAt, deserializedRoom.StartedAt)
 	}
 	if deserializedRoom.Reveal != originalRoom.Reveal {
 		t.Errorf("Expected reveal %v, got %v", originalRoom.Reveal, deserializedRoom.Reveal)
@@ -103,6 +110,12 @@ func assertSerializedStories(t *testing.T, deserializedRoom *entity.Room) {
 
 func assertSerializedClients(t *testing.T, originalRoom, deserializedRoom *entity.Room) {
 	t.Helper()
+	originalClient2, ok := originalRoom.Clients.Filter(func(c *entity.Client) bool {
+		return c.ID == "client-2"
+	}).First()
+	if !ok {
+		t.Fatal("Original client 2 not found")
+	}
 
 	if deserializedRoom.Clients.Count() != originalRoom.Clients.Count() {
 		t.Errorf("Expected %d clients, got %d", originalRoom.Clients.Count(), deserializedRoom.Clients.Count())
@@ -136,6 +149,9 @@ func assertSerializedClients(t *testing.T, originalRoom, deserializedRoom *entit
 	if deserializedClient2.CurrentVote == nil || *deserializedClient2.CurrentVote != "5" {
 		t.Errorf("Expected client 2 vote to be 5, got %v", lo.FromPtr(deserializedClient2.CurrentVote))
 	}
+	if deserializedClient2.VotedAt == nil || !deserializedClient2.VotedAt.Equal(*originalClient2.VotedAt) || deserializedClient2.VotedAt.Location() != time.UTC {
+		t.Errorf("Expected client 2 vote time %v in UTC, got %v", originalClient2.VotedAt, deserializedClient2.VotedAt)
+	}
 }
 
 func TestDeserializeRoomRejectsStoryWithoutID(t *testing.T) {
@@ -143,5 +159,47 @@ func TestDeserializeRoomRejectsStoryWithoutID(t *testing.T) {
 
 	if _, err := DeserializeRoom(data, clientcollection.New()); err == nil {
 		t.Fatal("DeserializeRoom accepted a story without an ID")
+	}
+}
+
+func TestDeserializeRoomSupportsLegacyRecordsWithoutTimestamps(t *testing.T) {
+	data := []byte(`{"id":"room-legacy","clients":[{"id":"client-1","name":"Alice","hasVoted":false,"isSpectator":false,"isOwner":true}],"backlogMode":true,"stories":[]}`)
+
+	room, err := DeserializeRoom(data, clientcollection.New())
+	if err != nil {
+		t.Fatalf("DeserializeRoom returned error for legacy record: %v", err)
+	}
+	if !room.StartedAt.IsZero() {
+		t.Fatalf("legacy room start time = %v, want zero", room.StartedAt)
+	}
+	client, ok := room.Clients.First()
+	if !ok {
+		t.Fatal("legacy client was not restored")
+	}
+	if client.VotedAt != nil {
+		t.Fatalf("legacy client vote time = %v, want nil", client.VotedAt)
+	}
+
+	serialized, err := SerializeRoom(room)
+	if err != nil {
+		t.Fatalf("SerializeRoom returned error: %v", err)
+	}
+	var wire map[string]any
+	if err := json.Unmarshal(serialized, &wire); err != nil {
+		t.Fatalf("serialized legacy room is invalid JSON: %v", err)
+	}
+	if _, ok := wire["startedAt"]; ok {
+		t.Fatal("legacy room unexpectedly gained startedAt")
+	}
+	clients, ok := wire["clients"].([]any)
+	if !ok || len(clients) != 1 {
+		t.Fatalf("serialized legacy clients = %v", wire["clients"])
+	}
+	clientWire, ok := clients[0].(map[string]any)
+	if !ok {
+		t.Fatalf("serialized legacy client = %v", clients[0])
+	}
+	if _, ok := clientWire["votedAt"]; ok {
+		t.Fatal("legacy client unexpectedly gained votedAt")
 	}
 }

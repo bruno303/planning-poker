@@ -3,6 +3,7 @@ package redis
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
 
@@ -19,6 +20,7 @@ type (
 	}
 	SerializedRoom struct {
 		ID                  string             `json:"id"`
+		StartedAt           *time.Time         `json:"startedAt,omitempty"`
 		Clients             []SerializedClient `json:"clients"`
 		CurrentStory        string             `json:"currentStory"`
 		Reveal              bool               `json:"reveal"`
@@ -36,12 +38,13 @@ type (
 		RoomVersion         uint64             `json:"roomVersion"`
 	}
 	SerializedClient struct {
-		ID          string  `json:"id"`
-		Name        string  `json:"name"`
-		CurrentVote *string `json:"currentVote,omitempty"`
-		HasVoted    bool    `json:"hasVoted"`
-		IsSpectator bool    `json:"isSpectator"`
-		IsOwner     bool    `json:"isOwner"`
+		ID          string     `json:"id"`
+		Name        string     `json:"name"`
+		CurrentVote *string    `json:"currentVote,omitempty"`
+		HasVoted    bool       `json:"hasVoted"`
+		VotedAt     *time.Time `json:"votedAt,omitempty"`
+		IsSpectator bool       `json:"isSpectator"`
+		IsOwner     bool       `json:"isOwner"`
 	}
 )
 
@@ -51,6 +54,7 @@ func (sc SerializedClient) Client(room *entity.Room) *entity.Client {
 		Name:        sc.Name,
 		CurrentVote: sc.CurrentVote,
 		HasVoted:    sc.HasVoted,
+		VotedAt:     cloneUTCTime(sc.VotedAt),
 		IsSpectator: sc.IsSpectator,
 		IsOwner:     sc.IsOwner,
 	}
@@ -68,6 +72,7 @@ func SerializeRoom(room *entity.Room) ([]byte, error) {
 			Name:        client.Name,
 			CurrentVote: client.CurrentVote,
 			HasVoted:    client.HasVoted,
+			VotedAt:     cloneUTCTime(client.VotedAt),
 			IsSpectator: client.IsSpectator,
 			IsOwner:     client.IsOwner,
 		})
@@ -75,6 +80,7 @@ func SerializeRoom(room *entity.Room) ([]byte, error) {
 
 	serialized := SerializedRoom{
 		ID:                  room.ID,
+		StartedAt:           roomStartedAt(room.StartedAt),
 		Clients:             clients,
 		CurrentStory:        room.CurrentStory,
 		Reveal:              room.Reveal,
@@ -121,6 +127,7 @@ func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 
 	room := &entity.Room{
 		ID:                  serialized.ID,
+		StartedAt:           roomStartedAtValue(serialized.StartedAt),
 		Clients:             clientCollection,
 		CurrentStory:        serialized.CurrentStory,
 		Reveal:              serialized.Reveal,
@@ -143,6 +150,32 @@ func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 		room.Clients.Add(client)
 	}
 	return room, nil
+}
+
+func roomStartedAt(value time.Time) *time.Time {
+	if value.IsZero() {
+		return nil
+	}
+
+	utc := value.UTC()
+	return &utc
+}
+
+func roomStartedAtValue(value *time.Time) time.Time {
+	if value == nil || value.IsZero() {
+		return time.Time{}
+	}
+
+	return value.UTC()
+}
+
+func cloneUTCTime(value *time.Time) *time.Time {
+	if value == nil || value.IsZero() {
+		return nil
+	}
+
+	utc := value.UTC()
+	return &utc
 }
 
 func deserializeStories(stories []SerializedStory) ([]entity.Story, error) {
