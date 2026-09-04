@@ -86,7 +86,7 @@ export function useUnvotedReminder({
     const notify = () => {
       const currentWaiting = participantsRef.current.filter((participant) => !participant.isSpectator && !participant.hasVoted);
       const currentActive = participantsRef.current.filter((participant) => !participant.isSpectator);
-      const currentTarget = currentWaiting.find((participant) => participant.id === clientIdRef.current);
+    const hasCurrentTarget = currentWaiting.some((participant) => participant.id === clientIdRef.current);
       const currentThreshold = currentWaiting.length === 1 || currentActive.length >= 3;
       if (
         generation !== generationRef.current ||
@@ -95,7 +95,7 @@ export function useUnvotedReminder({
         isRevealedRef.current ||
         currentStoryRef.current !== currentStory ||
         !currentThreshold ||
-        !currentTarget
+        !hasCurrentTarget
       ) {
         return;
       }

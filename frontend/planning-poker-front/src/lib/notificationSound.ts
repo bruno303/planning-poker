@@ -30,11 +30,7 @@ export function playNotificationSound(): void {
       if (closed) return;
       closed = true;
       if (closeTimeout !== undefined) clearTimeout(closeTimeout);
-      try {
-        void context.close().catch(() => undefined);
-      } catch {
-        // Closing is best effort.
-      }
+      void context.close().catch(() => undefined);
     };
     closeTimeout = setTimeout(closeContext, SOUND_DURATION_MS + 100);
     oscillator.addEventListener('ended', closeContext, { once: true });
