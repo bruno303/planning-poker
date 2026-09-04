@@ -22,6 +22,7 @@ import {
   isRoomState
 } from '@/components/messages/websocket';
 import ParticipantIdBadge from '@/components/participantIdBadge/participantIdBadge';
+import { RoomClock, formatVotedAt } from '@/components/roomClock/roomClock';
 import { useLogger } from '@/context/logger/loggerContext';
 import { useRoom } from '@/context/room/roomContext';
 import { useToast } from '@/context/toast/toastContext';
@@ -47,6 +48,7 @@ type Participant = {
   name: string
   vote: Card
   hasVoted: boolean
+  votedAt?: string
   isSpectator: boolean
   isOwner: boolean
 }
@@ -106,6 +108,14 @@ function getStatusDotStyle(participant: Participant) {
   return styles.statusWaiting;
 }
 
+function getParticipantVoteTime(participant: Participant, startedAt: string | null): string | null {
+  if (participant.isSpectator || !participant.hasVoted || participant.vote === null) {
+    return null;
+  }
+
+  return formatVotedAt(participant.votedAt, startedAt);
+}
+
 export default function PlanningPoker() {
   const logger = useLogger('room-page');
   const params = useParams();
@@ -137,6 +147,7 @@ export default function PlanningPoker() {
   const [stories, setStories] = useState<Story[]>([]);
   const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
   const [roomVersion, setRoomVersion] = useState<number | null>(null);
+  const [roomStartedAt, setRoomStartedAt] = useState<string | null>(null);
   const [showBacklogModal, setShowBacklogModal] = useState(false);
   const deliberateDisconnect = useRef(false);
   const editingStoryRef = useRef('');
@@ -388,6 +399,7 @@ export default function PlanningPoker() {
           setCurrentStory(roomState.currentStory);
           setIsRevealed(roomState.reveal);
           setSelectedCard(getCurrentUser()?.vote ?? null);
+          setRoomStartedAt(roomState.startedAt ?? null);
           setResult(roomState.result ?? null);
           setMostAppearingVotes(roomState.mostAppearingVotes ?? []);
           setConsensus(roomState.consensus ?? null);
@@ -532,6 +544,7 @@ export default function PlanningPoker() {
             <div style={styles.storyCard}>
               <div style={styles.storyHeader}>
                 <h2 style={styles.storyTitle}>Current Story</h2>
+                <RoomClock startedAt={roomStartedAt} style={styles.roomClock} />
                 {amIAdmin && !isEditingStory && ((backlogMode && currentStory) || !backlogMode) && (
                   <button
                     style={{ ...styles.button, ...styles.primaryButton, ...styles.storyEditButton }}
@@ -742,6 +755,7 @@ export default function PlanningPoker() {
               <div style={styles.participantsList}>
                 {participants.map((participant) => {
                   const extremes = getParticipantExtremes(participant);
+                  const votedAt = getParticipantVoteTime(participant, roomStartedAt);
                   return (
                   <div
                     key={participant.id}
@@ -771,6 +785,7 @@ export default function PlanningPoker() {
                         <div style={styles.participantStatus}>
                            {getParticipantStatus(participant)}
                         </div>
+                        {votedAt && <div style={styles.participantVotedAt}>Voted at {votedAt}</div>}
                       </div>
                       <div style={styles.participantRight}>
                         {!participant.isSpectator && participant.hasVoted && (

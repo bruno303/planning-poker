@@ -246,7 +246,7 @@ func (h *InMemoryHub) SaveRoomIfVersion(_ context.Context, room *entity.Room, ex
 }
 
 func cloneRoom(room *entity.Room) *entity.Room {
-	clone := entity.NewRoomWithID(room.ID, clientcollection.New())
+	clone := entity.NewRoomWithIDAndStartedAt(room.ID, clientcollection.New(), room.StartedAt())
 	clone.CurrentStory = room.CurrentStory
 	clone.Reveal = room.Reveal
 	clone.Result = cloneFloat32(room.Result)
@@ -271,6 +271,7 @@ func cloneRoom(room *entity.Room) *entity.Room {
 			copied.Name = client.Name
 			copied.CurrentVote = cloneString(client.CurrentVote)
 			copied.HasVoted = client.HasVoted
+			copied.VotedAt = entity.OptionalUTCTimePtr(client.VotedAt)
 			copied.IsSpectator = client.IsSpectator
 			copied.IsOwner = client.IsOwner
 		}
