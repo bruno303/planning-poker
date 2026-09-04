@@ -41,15 +41,9 @@ const RECONNECT_INITIAL_DELAY = 1000;
 const RECONNECT_MAX_DELAY = 30000;
 const RECONNECT_MULTIPLIER = 2;
 const UNVOTED_NOTIFICATION_MESSAGE = 'The room is waiting for your vote.';
-
-function getNotificationNumberConfig(value: string | undefined, fallback: number): number {
-  const parsedValue = Number.parseInt(value ?? '', 10);
-  return Number.isFinite(parsedValue) && parsedValue >= 0 ? parsedValue : fallback;
-}
-
-const UNVOTED_NOTIFICATION_DELAY = getNotificationNumberConfig(process.env.NEXT_PUBLIC_UNVOTED_NOTIFICATION_DELAY_MS, 4000);
-const UNVOTED_NOTIFICATION_INTERVAL = getNotificationNumberConfig(process.env.NEXT_PUBLIC_UNVOTED_NOTIFICATION_REPEAT_INTERVAL_MS, 10000);
-const UNVOTED_NOTIFICATION_MAX_REPEATS = getNotificationNumberConfig(process.env.NEXT_PUBLIC_UNVOTED_NOTIFICATION_MAX_REPEATS, 3);
+const UNVOTED_NOTIFICATION_DELAY = 4000;
+const UNVOTED_NOTIFICATION_INTERVAL = 10000;
+const UNVOTED_NOTIFICATION_MAX_REPEATS = 3;
 
 type Card = string | null
 

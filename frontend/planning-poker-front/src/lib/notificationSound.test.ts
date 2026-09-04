@@ -4,12 +4,9 @@ import { playNotificationSound } from './notificationSound';
 describe('playNotificationSound', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
-    delete process.env.NEXT_PUBLIC_UNVOTED_NOTIFICATION_SOUND_ENABLED;
-    delete process.env.NEXT_PUBLIC_UNVOTED_NOTIFICATION_SOUND_VOLUME;
   });
 
-  it('plays a short sound using the configured volume', () => {
-    process.env.NEXT_PUBLIC_UNVOTED_NOTIFICATION_SOUND_VOLUME = '0.4';
+  it('plays a short sound using the default volume', () => {
     const setValueAtTime = vi.fn();
     const linearRampToValueAtTime = vi.fn();
     const exponentialRampToValueAtTime = vi.fn();
@@ -28,18 +25,8 @@ describe('playNotificationSound', () => {
     playNotificationSound();
 
     expect(context.createOscillator).toHaveBeenCalledOnce();
-    expect(linearRampToValueAtTime).toHaveBeenCalledWith(0.4, 10.03);
+    expect(linearRampToValueAtTime).toHaveBeenCalledWith(0.12, 10.03);
     expect(oscillator.stop).toHaveBeenCalledWith(10.8);
-  });
-
-  it('does nothing when sound is disabled', () => {
-    process.env.NEXT_PUBLIC_UNVOTED_NOTIFICATION_SOUND_ENABLED = 'false';
-    const audioContext = vi.fn();
-    vi.stubGlobal('AudioContext', audioContext);
-
-    playNotificationSound();
-
-    expect(audioContext).not.toHaveBeenCalled();
   });
 
   it('ignores unavailable or failing audio APIs', () => {
