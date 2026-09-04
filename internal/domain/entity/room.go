@@ -28,7 +28,7 @@ type (
 
 	Room struct {
 		ID                  string
-		StartedAt           time.Time
+		startedAt           time.Time
 		Clients             ClientCollection
 		CurrentStory        string
 		Reveal              bool
@@ -52,15 +52,25 @@ func NewRoom(clients ClientCollection) *Room {
 }
 
 func NewRoomWithID(id string, clients ClientCollection) *Room {
+	return NewRoomWithIDAndStartedAt(id, clients, time.Now().UTC())
+}
+
+// NewRoomWithIDAndStartedAt creates a room with a persisted start time.
+func NewRoomWithIDAndStartedAt(id string, clients ClientCollection, startedAt time.Time) *Room {
 	return &Room{
 		ID:           id,
-		StartedAt:    time.Now().UTC(),
+		startedAt:    startedAt.UTC(),
 		Clients:      clients,
 		CurrentStory: "",
 		Reveal:       false,
 		Result:       nil,
 		BacklogMode:  true,
 	}
+}
+
+// StartedAt returns the room start time as a value copy.
+func (r *Room) StartedAt() time.Time {
+	return r.startedAt
 }
 
 func (r *Room) NewClient(id string) *Client {

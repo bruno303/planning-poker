@@ -12,11 +12,21 @@ import (
 func TestNewRoomInitializesUTCStartTime(t *testing.T) {
 	room := entity.NewRoom(clientcollection.New())
 
-	if room.StartedAt.IsZero() {
+	if room.StartedAt().IsZero() {
 		t.Fatal("room start time is zero")
 	}
-	if room.StartedAt.Location() != time.UTC {
-		t.Fatalf("room start time location = %v, want UTC", room.StartedAt.Location())
+	if room.StartedAt().Location() != time.UTC {
+		t.Fatalf("room start time location = %v, want UTC", room.StartedAt().Location())
+	}
+}
+
+func TestRoomStartedAtReturnsValueCopy(t *testing.T) {
+	room := entity.NewRoom(clientcollection.New())
+	startedAt := room.StartedAt()
+	startedAt = startedAt.Add(time.Hour)
+
+	if room.StartedAt().Equal(startedAt) {
+		t.Fatal("mutating the returned start time changed the room")
 	}
 }
 

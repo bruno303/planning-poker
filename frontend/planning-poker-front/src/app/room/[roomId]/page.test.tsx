@@ -1,7 +1,8 @@
 import { act } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import Room, { formatElapsedTime, formatVotedAt } from './page';
+import { formatElapsedTime, formatVotedAt } from '@/components/roomClock/roomClock';
+import Room from './page';
 
 const push = vi.fn();
 const replace = vi.fn();

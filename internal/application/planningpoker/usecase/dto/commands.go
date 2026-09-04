@@ -61,7 +61,7 @@ type (
 func NewRoomStateCommand(room *entity.Room) RoomState {
 	return RoomState{
 		Type:                "room-state",
-		StartedAt:           optionalUTCTime(room.StartedAt),
+		StartedAt:           entity.OptionalUTCTime(room.StartedAt()),
 		CurrentStory:        room.EffectiveCurrentStory(),
 		Reveal:              room.Reveal,
 		Participants:        MapToParticipants(room.Clients.Values()),
@@ -118,28 +118,10 @@ func MapToParticipants(clients []*entity.Client) []Participant {
 				Name:        client.Name,
 				Vote:        client.CurrentVote,
 				HasVoted:    client.HasVoted,
-				VotedAt:     optionalUTCTimePtr(client.VotedAt),
+				VotedAt:     entity.OptionalUTCTimePtr(client.VotedAt),
 				IsSpectator: client.IsSpectator,
 				IsOwner:     client.IsOwner,
 			}
 		},
 	)
-}
-
-func optionalUTCTime(value time.Time) *time.Time {
-	if value.IsZero() {
-		return nil
-	}
-
-	utc := value.UTC()
-	return &utc
-}
-
-func optionalUTCTimePtr(value *time.Time) *time.Time {
-	if value == nil || value.IsZero() {
-		return nil
-	}
-
-	utc := value.UTC()
-	return &utc
 }

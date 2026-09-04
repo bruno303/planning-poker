@@ -19,10 +19,10 @@ import {
   UpdateStoryPayload,
   VotePayload,
   WebSocketMessage,
-  isRFC3339Timestamp,
   isRoomState
 } from '@/components/messages/websocket';
 import ParticipantIdBadge from '@/components/participantIdBadge/participantIdBadge';
+import { RoomClock, formatVotedAt } from '@/components/roomClock/roomClock';
 import { useLogger } from '@/context/logger/loggerContext';
 import { useRoom } from '@/context/room/roomContext';
 import { useToast } from '@/context/toast/toastContext';
@@ -108,37 +108,6 @@ function getStatusDotStyle(participant: Participant) {
   return styles.statusWaiting;
 }
 
-export function formatElapsedTime(totalSeconds: number): string {
-  const elapsedSeconds = Math.max(0, Math.floor(totalSeconds));
-  const seconds = elapsedSeconds % 60;
-  const totalMinutes = Math.floor(elapsedSeconds / 60);
-  const minutes = totalMinutes % 60;
-  const hours = Math.floor(totalMinutes / 60);
-
-  if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-  }
-
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-}
-
-function getElapsedSeconds(startedAt: string, now = Date.now()): number {
-  const startedAtMilliseconds = Date.parse(startedAt);
-  if (!Number.isFinite(startedAtMilliseconds)) {
-    return 0;
-  }
-
-  return Math.max(0, Math.floor((now - startedAtMilliseconds) / 1000));
-}
-
-export function formatVotedAt(votedAt: string | undefined, startedAt: string | null): string | null {
-  if (!startedAt || !isRFC3339Timestamp(startedAt) || !isRFC3339Timestamp(votedAt)) {
-    return null;
-  }
-
-  return formatElapsedTime(getElapsedSeconds(startedAt, Date.parse(votedAt)));
-}
-
 function getParticipantVoteTime(participant: Participant, startedAt: string | null): string | null {
   if (participant.isSpectator || !participant.hasVoted || participant.vote === null) {
     return null;
@@ -179,7 +148,6 @@ export default function PlanningPoker() {
   const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
   const [roomVersion, setRoomVersion] = useState<number | null>(null);
   const [roomStartedAt, setRoomStartedAt] = useState<string | null>(null);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [showBacklogModal, setShowBacklogModal] = useState(false);
   const deliberateDisconnect = useRef(false);
   const editingStoryRef = useRef('');
@@ -188,21 +156,6 @@ export default function PlanningPoker() {
 
   // Planning poker cards (Fibonacci sequence + special cards)
   const cards = ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'];
-
-  useEffect(() => {
-    if (!roomStartedAt || !isRFC3339Timestamp(roomStartedAt)) {
-      setElapsedSeconds(0);
-      return;
-    }
-
-    const updateElapsedTime = () => {
-      setElapsedSeconds(getElapsedSeconds(roomStartedAt));
-    };
-
-    updateElapsedTime();
-    const interval = setInterval(updateElapsedTime, 1000);
-    return () => clearInterval(interval);
-  }, [roomStartedAt]);
 
   useEffect(() => {
     if (isValidRoomId(routeRoomId)) {
@@ -591,9 +544,7 @@ export default function PlanningPoker() {
             <div style={styles.storyCard}>
               <div style={styles.storyHeader}>
                 <h2 style={styles.storyTitle}>Current Story</h2>
-                <time role="timer" aria-label="Elapsed room time" style={styles.roomClock}>
-                  {formatElapsedTime(elapsedSeconds)}
-                </time>
+                <RoomClock startedAt={roomStartedAt} style={styles.roomClock} />
                 {amIAdmin && !isEditingStory && ((backlogMode && currentStory) || !backlogMode) && (
                   <button
                     style={{ ...styles.button, ...styles.primaryButton, ...styles.storyEditButton }}

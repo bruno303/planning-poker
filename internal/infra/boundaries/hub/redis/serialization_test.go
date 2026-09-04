@@ -13,9 +13,8 @@ import (
 
 func TestSerializeDeserializeRoom(t *testing.T) {
 	// Create a room with some clients
-	originalRoom := entity.NewRoom(clientcollection.New())
-	originalRoom.ID = "test-room-123"
-	originalRoom.StartedAt = time.Date(2026, time.September, 3, 12, 0, 0, 0, time.FixedZone("BRT", -3*60*60))
+	startedAt := time.Date(2026, time.September, 3, 12, 0, 0, 0, time.FixedZone("BRT", -3*60*60))
+	originalRoom := entity.NewRoomWithIDAndStartedAt("test-room-123", clientcollection.New(), startedAt)
 	originalRoom.CurrentStory = "User Story #42"
 	originalRoom.RoomVersion = 7
 	originalRoom.Reveal = false
@@ -74,8 +73,8 @@ func assertSerializedRoomProperties(t *testing.T, originalRoom, deserializedRoom
 	if deserializedRoom.CurrentStory != originalRoom.CurrentStory {
 		t.Errorf("Expected story %s, got %s", originalRoom.CurrentStory, deserializedRoom.CurrentStory)
 	}
-	if !deserializedRoom.StartedAt.Equal(originalRoom.StartedAt) || deserializedRoom.StartedAt.Location() != time.UTC {
-		t.Errorf("Expected room start time %v in UTC, got %v", originalRoom.StartedAt, deserializedRoom.StartedAt)
+	if !deserializedRoom.StartedAt().Equal(originalRoom.StartedAt()) || deserializedRoom.StartedAt().Location() != time.UTC {
+		t.Errorf("Expected room start time %v in UTC, got %v", originalRoom.StartedAt(), deserializedRoom.StartedAt())
 	}
 	if deserializedRoom.Reveal != originalRoom.Reveal {
 		t.Errorf("Expected reveal %v, got %v", originalRoom.Reveal, deserializedRoom.Reveal)
@@ -169,8 +168,8 @@ func TestDeserializeRoomSupportsLegacyRecordsWithoutTimestamps(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DeserializeRoom returned error for legacy record: %v", err)
 	}
-	if !room.StartedAt.IsZero() {
-		t.Fatalf("legacy room start time = %v, want zero", room.StartedAt)
+	if !room.StartedAt().IsZero() {
+		t.Fatalf("legacy room start time = %v, want zero", room.StartedAt())
 	}
 	client, ok := room.Clients.First()
 	if !ok {

@@ -54,7 +54,7 @@ func (sc SerializedClient) Client(room *entity.Room) *entity.Client {
 		Name:        sc.Name,
 		CurrentVote: sc.CurrentVote,
 		HasVoted:    sc.HasVoted,
-		VotedAt:     cloneUTCTime(sc.VotedAt),
+		VotedAt:     entity.OptionalUTCTimePtr(sc.VotedAt),
 		IsSpectator: sc.IsSpectator,
 		IsOwner:     sc.IsOwner,
 	}
@@ -72,7 +72,7 @@ func SerializeRoom(room *entity.Room) ([]byte, error) {
 			Name:        client.Name,
 			CurrentVote: client.CurrentVote,
 			HasVoted:    client.HasVoted,
-			VotedAt:     cloneUTCTime(client.VotedAt),
+			VotedAt:     entity.OptionalUTCTimePtr(client.VotedAt),
 			IsSpectator: client.IsSpectator,
 			IsOwner:     client.IsOwner,
 		})
@@ -80,7 +80,7 @@ func SerializeRoom(room *entity.Room) ([]byte, error) {
 
 	serialized := SerializedRoom{
 		ID:                  room.ID,
-		StartedAt:           roomStartedAt(room.StartedAt),
+		StartedAt:           entity.OptionalUTCTime(room.StartedAt()),
 		Clients:             clients,
 		CurrentStory:        room.CurrentStory,
 		Reveal:              room.Reveal,
@@ -125,57 +125,31 @@ func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 		return nil, err
 	}
 
-	room := &entity.Room{
-		ID:                  serialized.ID,
-		StartedAt:           roomStartedAtValue(serialized.StartedAt),
-		Clients:             clientCollection,
-		CurrentStory:        serialized.CurrentStory,
-		Reveal:              serialized.Reveal,
-		Result:              serialized.Result,
-		MostAppearingVotes:  serialized.MostAppearingVotes,
-		Consensus:           serialized.Consensus,
-		LowestVote:          serialized.LowestVote,
-		HighestVote:         serialized.HighestVote,
-		VoteRange:           serialized.VoteRange,
-		VoteSpread:          serialized.VoteSpread,
-		NonNumericVoteCount: serialized.NonNumericVoteCount,
-		BacklogMode:         serialized.BacklogMode,
-		Stories:             stories,
-		CurrentStoryIndex:   serialized.CurrentStoryIndex,
-		RoomVersion:         serialized.RoomVersion,
-	}
+	room := entity.NewRoomWithIDAndStartedAt(
+		serialized.ID,
+		clientCollection,
+		entity.UTCTimeOrZero(serialized.StartedAt),
+	)
+	room.CurrentStory = serialized.CurrentStory
+	room.Reveal = serialized.Reveal
+	room.Result = serialized.Result
+	room.MostAppearingVotes = serialized.MostAppearingVotes
+	room.Consensus = serialized.Consensus
+	room.LowestVote = serialized.LowestVote
+	room.HighestVote = serialized.HighestVote
+	room.VoteRange = serialized.VoteRange
+	room.VoteSpread = serialized.VoteSpread
+	room.NonNumericVoteCount = serialized.NonNumericVoteCount
+	room.BacklogMode = serialized.BacklogMode
+	room.Stories = stories
+	room.CurrentStoryIndex = serialized.CurrentStoryIndex
+	room.RoomVersion = serialized.RoomVersion
 
 	for _, sc := range serialized.Clients {
 		client := sc.Client(room)
 		room.Clients.Add(client)
 	}
 	return room, nil
-}
-
-func roomStartedAt(value time.Time) *time.Time {
-	if value.IsZero() {
-		return nil
-	}
-
-	utc := value.UTC()
-	return &utc
-}
-
-func roomStartedAtValue(value *time.Time) time.Time {
-	if value == nil || value.IsZero() {
-		return time.Time{}
-	}
-
-	return value.UTC()
-}
-
-func cloneUTCTime(value *time.Time) *time.Time {
-	if value == nil || value.IsZero() {
-		return nil
-	}
-
-	utc := value.UTC()
-	return &utc
 }
 
 func deserializeStories(stories []SerializedStory) ([]entity.Story, error) {
