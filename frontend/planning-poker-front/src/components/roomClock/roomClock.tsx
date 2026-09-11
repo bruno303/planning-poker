@@ -34,8 +34,8 @@ export function formatVotedAt(votedAt: string | undefined, startedAt: string | n
 }
 
 type RoomClockProps = {
-  startedAt: string | null
-  style?: CSSProperties
+  readonly startedAt: string | null
+  readonly style?: CSSProperties
 }
 
 export function RoomClock({ startedAt, style }: RoomClockProps) {
