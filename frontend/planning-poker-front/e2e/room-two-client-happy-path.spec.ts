@@ -24,6 +24,7 @@ const randomUUIDPolyfillScript = () => {
 };
 
 const backlogDialog = (page: Page) => page.getByRole('dialog', { name: 'Story Backlog' });
+const roomClock = (page: Page) => page.getByRole('timer', { name: 'Elapsed room time' });
 
 const openBacklogModal = async (page: Page) => {
   await page.getByRole('button', { name: 'Open backlog' }).click();
@@ -78,6 +79,14 @@ test('allows two users to join, vote, and sync story updates', async ({ browser,
       .getByRole('heading', { name: 'Participants' })
       .locator('xpath=ancestor::div[2]');
 
+    await expect(roomClock(ownerPage)).toBeVisible();
+    await expect(roomClock(guestPage)).toBeVisible();
+    await expect.poll(async () => {
+      const ownerReading = await roomClock(ownerPage).textContent();
+      const guestReading = await roomClock(guestPage).textContent();
+      return ownerReading === guestReading ? ownerReading : null;
+    }).toMatch(/^(?:\d+:)?\d{2}:\d{2}$/);
+
     await expect(ownerParticipantsPanel.getByText(userA, { exact: true })).toBeVisible();
     await expect(ownerParticipantsPanel.getByText(userB, { exact: true })).toBeVisible();
     await expect(guestParticipantsPanel.getByText(userA, { exact: true })).toBeVisible();
@@ -121,6 +130,12 @@ test('allows two users to join, vote, and sync story updates', async ({ browser,
     await guestBacklogDialog.getByRole('button', { name: 'Close' }).click();
 
     await ownerPage.getByRole('button', { name: '5', exact: true }).click();
+    const ownerVoteTime = ownerParticipantsPanel.getByText(/^Voted at (?:\d+:)?\d{2}:\d{2}$/);
+    await expect(ownerVoteTime).toBeVisible();
+    const propagatedVoteTime = await ownerVoteTime.textContent();
+    expect(propagatedVoteTime).not.toBeNull();
+    await expect(guestParticipantsPanel.getByText(propagatedVoteTime!, { exact: true })).toBeVisible();
+
     await guestPage.getByRole('button', { name: '8', exact: true }).click();
 
     await expect(ownerPage.getByText('2/2', { exact: true })).toBeVisible();

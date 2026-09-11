@@ -25,6 +25,9 @@ func assertNewClient(t *testing.T, client *Client, wantID string) {
 	if client.HasVoted {
 		t.Errorf("newClient() HasVoted = %v, want false", client.HasVoted)
 	}
+	if client.VotedAt != nil {
+		t.Errorf("newClient() VotedAt = %v, want nil", client.VotedAt)
+	}
 	if client.IsSpectator {
 		t.Errorf("newClient() IsSpectator = %v, want false", client.IsSpectator)
 	}

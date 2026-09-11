@@ -32,6 +32,15 @@ export const styles = {
     color: '#374151',
     margin: 0
   },
+  roomClock: {
+    padding: '0.25rem 0.5rem',
+    borderRadius: '0.375rem',
+    backgroundColor: '#eff6ff',
+    color: '#1d4ed8',
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+    fontSize: '0.875rem',
+    fontVariantNumeric: 'tabular-nums'
+  },
   storyHeader: {
     display: 'flex',
     alignItems: 'center',
@@ -280,6 +289,11 @@ export const styles = {
   participantStatus: {
     fontSize: '0.875rem',
     color: '#6b7280'
+  },
+  participantVotedAt: {
+    fontSize: '0.75rem',
+    color: '#6b7280',
+    fontVariantNumeric: 'tabular-nums'
   },
   lowestVoteBadge: {
     padding: '0.125rem 0.375rem',

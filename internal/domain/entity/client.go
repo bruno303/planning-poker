@@ -2,6 +2,7 @@ package entity
 
 import (
 	"context"
+	"time"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
 )
@@ -15,6 +16,7 @@ type (
 
 		CurrentVote *string
 		HasVoted    bool
+		VotedAt     *time.Time
 		IsSpectator bool
 		IsOwner     bool
 
@@ -48,8 +50,11 @@ func (c *Client) Vote(ctx context.Context, vote *string) {
 	c.CurrentVote = vote
 	if vote != nil && *vote != "" {
 		c.HasVoted = true
+		now := time.Now().UTC()
+		c.VotedAt = &now
 	} else {
 		c.HasVoted = false
+		c.VotedAt = nil
 	}
 }
 
