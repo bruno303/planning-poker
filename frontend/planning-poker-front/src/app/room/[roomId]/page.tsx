@@ -25,6 +25,7 @@ import ParticipantIdBadge from '@/components/participantIdBadge/participantIdBad
 import { useLogger } from '@/context/logger/loggerContext';
 import { useRoom } from '@/context/room/roomContext';
 import { useToast } from '@/context/toast/toastContext';
+import { useUnvotedReminder } from '@/hooks/useUnvotedReminder';
 import { ChevronLeft, ChevronRight, Eye, EyeOff, List, Repeat, Shield, Users, X } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -142,6 +143,9 @@ export default function PlanningPoker() {
   const editingStoryRef = useRef('');
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptsRef = useRef(0);
+  const clientIdRef = useRef(clientId);
+  clientIdRef.current = clientId;
+  const cancelNotifications = useUnvotedReminder({ participants, clientId, currentStory, isRevealed, isConnected, pushSuccess });
 
   // Planning poker cards (Fibonacci sequence + special cards)
   const cards = ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'];
@@ -348,6 +352,7 @@ export default function PlanningPoker() {
   const cleanupSocket = () => {
     deliberateDisconnect.current = true;
     cancelReconnect();
+    cancelNotifications();
     if (window.planning_poker) {
       window.planning_poker.clientID = undefined;
     }
@@ -408,6 +413,7 @@ export default function PlanningPoker() {
           if (typeof data.clientId !== 'string') {
             throw new TypeError('Invalid client ID from websocket');
           }
+          clientIdRef.current = data.clientId;
           setClientId(data.clientId);
           window.planning_poker = { clientID: data.clientId };
           sessionStorage.setItem('clientId', data.clientId);
@@ -447,6 +453,7 @@ export default function PlanningPoker() {
 
     ws.onclose = (event) => {
       logger.warn('WebSocket closed', { code: event.code, reason: event.reason });
+      cancelNotifications();
       setIsConnected(false);
       if (socket.current === ws) {
         socket.current = null;
