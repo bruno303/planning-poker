@@ -100,7 +100,7 @@ export function useRoomConnection({ roomId, userName, enabled }: UseRoomConnecti
 
   const sendMessage = useCallback(<T,>(message: WebSocketMessage<T>) => {
     const activeSocket = socket.current;
-    if (!activeSocket || activeSocket.readyState !== WebSocket.OPEN) {
+    if (activeSocket?.readyState !== WebSocket.OPEN) {
       pushError('Connection is not ready. Please wait and try again.');
       return;
     }

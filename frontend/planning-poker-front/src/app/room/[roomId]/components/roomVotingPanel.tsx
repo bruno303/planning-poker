@@ -3,9 +3,17 @@ import { type Card, type RoomSnapshot } from '@/hooks/room/roomState';
 import { Eye, EyeOff, List, Repeat, X } from 'lucide-react';
 import { styles } from '../page.styles';
 
-type Props = { snapshot: RoomSnapshot; clientId: string; userName: string; amIAdmin: boolean; onSelectCard: (card: Card) => void; onReveal: () => void; onVoteAgain: () => void; onToggleBacklog: () => void };
+type Props = Readonly<{ snapshot: RoomSnapshot; clientId: string; userName: string; amIAdmin: boolean; onSelectCard: (card: Card) => void; onReveal: () => void; onVoteAgain: () => void; onToggleBacklog: () => void }>;
 const cards: Card[] = ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'];
-const color = (card: Card) => card === '?' ? '#8b5cf6' : card === '☕' ? '#f59e0b' : Number(card) <= 2 ? '#10b981' : Number(card) <= 8 ? '#eab308' : Number(card) <= 21 ? '#f97316' : '#ef4444';
+const color = (card: Card) => {
+  if (card === '?') return '#8b5cf6';
+  if (card === '☕') return '#f59e0b';
+  const numericCard = Number(card);
+  if (numericCard <= 2) return '#10b981';
+  if (numericCard <= 8) return '#eab308';
+  if (numericCard <= 21) return '#f97316';
+  return '#ef4444';
+};
 
 export default function RoomVotingPanel({ snapshot, clientId, userName, amIAdmin, onSelectCard, onReveal, onVoteAgain, onToggleBacklog }: Props) {
   const selected = snapshot.participants.find((participant) => participant.id === clientId)?.vote ?? null;

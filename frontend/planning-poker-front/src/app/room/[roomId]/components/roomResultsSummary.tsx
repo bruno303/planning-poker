@@ -1,7 +1,9 @@
 import type { RoomSnapshot } from '@/hooks/room/roomState';
 import { styles } from '../page.styles';
 
-export default function RoomResultsSummary({ snapshot }: { snapshot: RoomSnapshot }) {
+type Props = Readonly<{ snapshot: RoomSnapshot }>;
+
+export default function RoomResultsSummary({ snapshot }: Props) {
   if (!snapshot.reveal) return null;
   const { consensus, result, mostAppearingVotes, lowestVote, highestVote, voteRange, voteSpread, nonNumericVoteCount } = snapshot;
   return <div style={styles.summary}><h4 style={styles.summaryTitle}>Results Summary</h4><div style={styles.summaryContent}>

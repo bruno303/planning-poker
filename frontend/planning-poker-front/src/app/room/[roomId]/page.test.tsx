@@ -375,7 +375,7 @@ describe('room page', () => {
      expect(kickedSocket.onmessage).toBeNull();
      act(() => vi.runAllTimers());
      expect(socketRef.current).toBeNull();
-     expect(pushSuccess.mock.calls.length).toBe(successesBeforeKick);
+      expect(pushSuccess.mock.calls).toHaveLength(successesBeforeKick);
     vi.useRealTimers();
   });
 
