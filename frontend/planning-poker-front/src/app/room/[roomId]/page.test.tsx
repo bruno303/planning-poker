@@ -2,6 +2,7 @@ import { act } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { formatElapsedTime, formatVotedAt } from '@/components/roomClock/roomClock';
+import { normalizeRoomState } from '@/hooks/room/roomState';
 import Room from './page';
 
 const push = vi.fn();
@@ -95,6 +96,41 @@ describe('room page', () => {
     fireEvent.click(screen.getAllByTitle('Make Admin')[0]);
     expect(ws.sent.map((value) => JSON.parse(value).type)).toContain('toggle-spectator');
     expect(ws.sent.map((value) => JSON.parse(value).type)).toContain('toggle-owner');
+  });
+
+  it('normalizes optional room state fields at message ingress', () => {
+    const normalized = normalizeRoomState(roomState({
+      startedAt: undefined,
+      result: undefined,
+      consensus: undefined,
+      stories: null,
+      mostAppearingVotes: null,
+      participants: [{ ...roomState().participants[0], votedAt: undefined }],
+    }) as Parameters<typeof normalizeRoomState>[0]);
+
+    expect(normalized).toMatchObject({
+      startedAt: null,
+      result: null,
+      consensus: null,
+      stories: [],
+      mostAppearingVotes: [],
+      participants: [{ votedAt: null }],
+      roomVersion: 4,
+    });
+  });
+
+  it('derives the acknowledged selection and resets it from a new snapshot', async () => {
+    renderRoom();
+    await waitFor(() => expect(socketRef.current).not.toBeNull());
+    const ws = socketRef.current!;
+    act(() => ws.onmessage?.({ data: JSON.stringify({ type: 'update-client-id', clientId: 'me' }) }));
+    act(() => ws.onmessage?.({ data: JSON.stringify(roomState({ participants: [
+      { id: 'me', name: 'Ada', vote: '5', hasVoted: true, isSpectator: false, isOwner: true },
+    ] })) }));
+    expect(screen.getByRole('button', { name: '5' }).getAttribute('aria-pressed')).toBe('true');
+
+    act(() => ws.onmessage?.({ data: JSON.stringify(roomState()) }));
+    expect(screen.getByRole('button', { name: '5' }).getAttribute('aria-pressed')).toBe('false');
   });
 
   it('formats and ticks the elapsed room clock from the server timestamp', async () => {
@@ -319,8 +355,9 @@ describe('room page', () => {
     const ws = socketRef.current!;
     act(() => ws.onopen?.());
     act(() => ws.onmessage?.({ data: JSON.stringify({ type: 'update-client-id', clientId: 'me' }) }));
-    act(() => ws.onmessage?.({ data: JSON.stringify(roomState({ reveal: true, result: 5.5, consensus: 'High', lowestVote: 3, highestVote: 8, voteRange: 5, voteSpread: 2, nonNumericVoteCount: 1, mostAppearingVotes: [5] })) }));
-    expect(screen.getByText('Consensus: High')).toBeTruthy();
+     act(() => ws.onmessage?.({ data: JSON.stringify(roomState({ reveal: true, result: 5.5, consensus: 'High', lowestVote: 3, highestVote: 8, voteRange: 5, voteSpread: 2, nonNumericVoteCount: 1, mostAppearingVotes: [5] })) }));
+     expect(screen.getByText('Results Summary')).toBeTruthy();
+     expect(screen.getByText('Consensus: High')).toBeTruthy();
     act(() => ws.onmessage?.({ data: JSON.stringify({ type: 'stale-command' }) }));
     act(() => ws.onmessage?.({ data: '{bad json' }));
     expect(pushError).toHaveBeenCalledWith('Room changed; review and try again.');
@@ -328,9 +365,17 @@ describe('room page', () => {
     act(() => ws.onclose?.({ code: 1006, reason: 'lost' }));
     act(() => vi.advanceTimersByTime(1000));
     expect(socketRef.current?.url).toContain('/planning/123e4567-e89b-12d3-a456-426614174000/ws');
-    act(() => socketRef.current?.onmessage?.({ data: JSON.stringify({ type: 'kicked' }) }));
-    expect(window.planning_poker?.clientID).toBeUndefined();
-    expect(push).toHaveBeenCalledWith('/');
+     const kickedSocket = socketRef.current!;
+     act(() => kickedSocket.onmessage?.({ data: JSON.stringify(roomState()) }));
+     const successesBeforeKick = pushSuccess.mock.calls.length;
+     act(() => kickedSocket.onmessage?.({ data: JSON.stringify({ type: 'kicked' }) }));
+     expect(window.planning_poker?.clientID).toBeUndefined();
+     expect(push).toHaveBeenCalledWith('/');
+     expect(kickedSocket.readyState).toBe(FakeSocket.CLOSED);
+     expect(kickedSocket.onmessage).toBeNull();
+     act(() => vi.runAllTimers());
+     expect(socketRef.current).toBeNull();
+     expect(pushSuccess.mock.calls.length).toBe(successesBeforeKick);
     vi.useRealTimers();
   });
 
@@ -361,12 +406,60 @@ describe('room page', () => {
     expect(socketRef.current).toBeNull();
   });
 
+  it('replaces the room connection on route changes without leaking the old identity', async () => {
+    const view = renderRoom();
+    await waitFor(() => expect(socketRef.current).not.toBeNull());
+    const firstSocket = socketRef.current!;
+
+    params = { roomId: '223e4567-e89b-12d3-a456-426614174000' };
+    view.rerender(<Room />);
+    await waitFor(() => expect(socketRef.current).not.toBe(firstSocket));
+    const secondSocket = socketRef.current!;
+
+    act(() => firstSocket.onmessage?.({ data: JSON.stringify({ type: 'update-client-id', clientId: 'old-room-client' }) }));
+    expect(window.planning_poker?.clientID).toBeUndefined();
+
+    act(() => secondSocket.onmessage?.({ data: JSON.stringify({ type: 'update-client-id', clientId: 'new-room-client' }) }));
+    expect(window.planning_poker?.clientID).toBe('new-room-client');
+    expect(secondSocket.sent.map((value) => JSON.parse(value))).toContainEqual({ type: 'update-name', payload: { username: 'Ada' } });
+    view.unmount();
+  });
+
+  it('redirects a changed room without a stored name and does not open a replacement socket', async () => {
+    const view = renderRoom();
+    await waitFor(() => expect(socketRef.current).not.toBeNull());
+    const firstSocket = socketRef.current!;
+    sessionStorage.removeItem('userName');
+
+    params = { roomId: '223e4567-e89b-12d3-a456-426614174000' };
+    view.rerender(<Room />);
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/join/223e4567-e89b-12d3-a456-426614174000'));
+    expect(socketRef.current).not.toBe(firstSocket);
+    expect(socketRef.current).toBeNull();
+    view.unmount();
+  });
+
   it('edits stories and uses backlog actions', async () => {
     renderRoom();
     await waitFor(() => expect(socketRef.current).not.toBeNull());
     const ws = socketRef.current!;
     act(() => ws.onmessage?.({ data: JSON.stringify({ type: 'update-client-id', clientId: 'me' }) }));
     act(() => ws.onmessage?.({ data: JSON.stringify(roomState({ backlogMode: true, stories: [{ id: 's1', name: 'Implement feature', mostAppearingVotes: [], voted: false }, { id: 's2', name: 'Next', mostAppearingVotes: [], voted: false }], currentStoryIndex: 0 })) }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('Story editor'), { target: { value: 'Locally typed draft' } });
+    act(() => ws.onmessage?.({ data: JSON.stringify(roomState({
+      currentStory: 'Implement feature',
+      backlogMode: true,
+      stories: [{ id: 's1', name: 'Implement feature', mostAppearingVotes: [], voted: false }, { id: 's2', name: 'Next', mostAppearingVotes: [], voted: false }],
+      currentStoryIndex: 0,
+    })) }));
+    expect((screen.getByLabelText('Story editor') as HTMLInputElement).value).toBe('Implement feature');
+
+    fireEvent.change(screen.getByLabelText('Story editor'), { target: { value: 'Changed then cancelled' } });
+    fireEvent.keyDown(screen.getByLabelText('Story editor'), { key: 'Escape' });
+    expect(screen.getByText('Implement feature')).toBeTruthy();
+
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     fireEvent.change(screen.getByLabelText('Story editor'), { target: { value: 'Renamed' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
