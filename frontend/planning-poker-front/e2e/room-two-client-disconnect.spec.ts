@@ -78,7 +78,8 @@ const expectParticipantAdminTogglesVisible = async (page: Page, participantName:
   await expect(row.locator('button[title="Remove Admin"]')).toBeVisible();
 };
 
-test('keeps room interactive for remaining client after peer page closes', async ({ browser, baseURL }) => {
+for (const departure of ['closes the tab', 'returns home'] as const) {
+test(`keeps room interactive for remaining client after peer ${departure}`, async ({ browser, baseURL }) => {
   test.setTimeout(60_000);
 
   const ownerContext = await browser.newContext();
@@ -91,7 +92,11 @@ test('keeps room interactive for remaining client after peer page closes', async
   const guestPage = await guestContext.newPage();
 
   try {
+    const roomSocketCreated = ownerPage.waitForEvent('websocket', {
+      predicate: (socket) => /\/planning\/[^/]+\/ws(?:\?|$)/.test(socket.url()),
+    });
     const roomId = await createRoom(ownerPage, baseURL, ownerName);
+    const roomSocket = await roomSocketCreated;
     await joinRoom(guestPage, roomId, guestName);
 
     const guestParticipants = participantsPanel(guestPage);
@@ -108,7 +113,25 @@ test('keeps room interactive for remaining client after peer page closes', async
     await expect(backlogDialog.getByText('Test Story', { exact: true })).toBeVisible();
     await backlogDialog.getByRole('button', { name: 'Close' }).click();
 
-    await ownerPage.close();
+    let replacementSocketCount = 0;
+    ownerPage.on('websocket', (socket) => {
+      if (socket.url() === roomSocket.url() || socket.url().includes(`/planning/${roomId}/ws`)) {
+        replacementSocketCount++;
+      }
+    });
+
+    if (departure === 'returns home') {
+      await ownerPage.clock.install();
+      await Promise.all([
+        roomSocket.waitForEvent('close'),
+        ownerPage.waitForURL((url) => url.pathname === '/join'),
+        ownerPage.getByRole('button', { name: 'Back to Home' }).click(),
+      ]);
+      expect(ownerPage.isClosed()).toBe(false);
+      expect(roomSocket.isClosed()).toBe(true);
+    } else {
+      await ownerPage.close();
+    }
 
     await expect(guestParticipants.getByText(ownerName, { exact: true })).toHaveCount(0);
     await expectAdminControlsVisible(guestPage);
@@ -118,7 +141,16 @@ test('keeps room interactive for remaining client after peer page closes', async
 
     await expect(guestPage.getByText('1/1', { exact: true })).toBeVisible();
     await expect(guestPage.getByText('Results Summary')).toBeVisible();
+
+    if (departure === 'returns home') {
+      // Advance beyond the initial one-second retry delay to catch accidental reconnects.
+      await ownerPage.clock.runFor(2_000);
+      expect(replacementSocketCount).toBe(0);
+      await expect(ownerPage).toHaveURL((url) => url.pathname === '/join');
+      await expect(guestParticipants.getByText(ownerName, { exact: true })).toHaveCount(0);
+    }
   } finally {
     await Promise.allSettled([ownerContext.close(), guestContext.close()]);
   }
 });
+}
