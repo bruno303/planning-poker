@@ -16,7 +16,9 @@ export type RoomSnapshot = {
   currentStory: string;
   reveal: boolean;
   result: number | null;
-  mostAppearingVotes: number[];
+  mostAppearingVotes: string[];
+  deck: 'fibonacci' | 't-shirt';
+  deckLabels: string[];
   consensus: ConsensusLevel | null;
   lowestVote: number | null;
   highestVote: number | null;
@@ -37,6 +39,8 @@ export function normalizeRoomState(state: RoomState): RoomSnapshot {
     reveal: state.reveal,
     result: state.result ?? null,
     mostAppearingVotes: state.mostAppearingVotes ?? [],
+    deck: state.deck,
+    deckLabels: [...state.deckLabels],
     consensus: state.consensus ?? null,
     lowestVote: state.lowestVote ?? null,
     highestVote: state.highestVote ?? null,

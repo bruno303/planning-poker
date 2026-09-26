@@ -89,8 +89,13 @@ func (h *RedisHub) Close() error {
 }
 
 func (h *RedisHub) NewRoom(ctx context.Context) (*entity.Room, error) {
+	return h.NewRoomWithDeck(ctx, entity.DeckFibonacci)
+}
+
+func (h *RedisHub) NewRoomWithDeck(ctx context.Context, deck entity.Deck) (*entity.Room, error) {
 	room, err := trace.Trace(ctx, trace.NameConfig("RedisHub", "NewRoom"), func(ctx context.Context) (any, error) {
 		room := entity.NewRoom(clientcollection.New())
+		room.Deck, room.DeckLabels = deck, deck.Labels()
 		if err := h.saveInitialRoom(ctx, room); err != nil {
 			h.logger.Error(ctx, "Failed to save new room to Redis", err)
 			return nil, err

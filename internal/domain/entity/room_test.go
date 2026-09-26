@@ -310,7 +310,7 @@ func TestRoom_RevealCalculatesConsensusAndCountsSpecialVotes(t *testing.T) {
 	if room.NonNumericVoteCount != 2 {
 		t.Errorf("non-numeric vote count = %d, want 2", room.NonNumericVoteCount)
 	}
-	if !reflect.DeepEqual(room.MostAppearingVotes, []int{3}) {
+	if !reflect.DeepEqual(room.MostAppearingVotes, []string{"3"}) {
 		t.Errorf("most appearing votes = %v, want [3]", room.MostAppearingVotes)
 	}
 }
@@ -940,6 +940,24 @@ func TestRoom_Vote(t *testing.T) {
 			t.Error("Vote() expected error for nonexistent client")
 		}
 	})
+
+	t.Run("should reject vote outside selected deck without mutation", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		client := &Client{ID: "client1", IsSpectator: false, CurrentVote: lo.ToPtr("M"), HasVoted: true}
+		mockCC := NewMockClientCollection(ctrl)
+		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
+		mockCC.EXPECT().First().Return(client, true)
+		room := NewRoom(mockCC)
+		vote := "coffee"
+
+		err := room.Vote(ctx, "client1", &vote)
+		if err == nil {
+			t.Fatal("Vote() expected error for unsupported deck label")
+		}
+		if client.CurrentVote == nil || *client.CurrentVote != "M" || !client.HasVoted {
+			t.Fatalf("unsupported vote mutated client state: vote=%v hasVoted=%v", client.CurrentVote, client.HasVoted)
+		}
+	})
 }
 
 func TestRoom_UpdateClientName(t *testing.T) {
@@ -1008,7 +1026,7 @@ func TestRoom_MostAppearingVotes(t *testing.T) {
 			t.Errorf("Expected 1 most appearing vote, got %v", len(room.MostAppearingVotes))
 		}
 
-		if len(room.MostAppearingVotes) > 0 && room.MostAppearingVotes[0] != 5 {
+		if len(room.MostAppearingVotes) > 0 && room.MostAppearingVotes[0] != "5" {
 			t.Errorf("Expected most appearing vote to be 5, got %v", room.MostAppearingVotes[0])
 		}
 	})
@@ -1031,6 +1049,29 @@ func TestRoom_MostAppearingVotes(t *testing.T) {
 			t.Errorf("Expected 2 most appearing votes, got %v", len(room.MostAppearingVotes))
 		}
 	})
+}
+
+func TestRoom_TShirtDeckCategoricalResults(t *testing.T) {
+	if got := NewRoom(nil); got.Deck != DeckFibonacci {
+		t.Fatalf("default deck = %q, want %q", got.Deck, DeckFibonacci)
+	}
+	clients := NewMockClientCollection(gomock.NewController(t))
+	clients.EXPECT().Values().Return([]*Client{
+		{CurrentVote: lo.ToPtr("M")}, {CurrentVote: lo.ToPtr("M")},
+		{CurrentVote: lo.ToPtr("?")}, {CurrentVote: lo.ToPtr("☕")},
+	}).AnyTimes()
+	room := NewRoom(clients)
+	room.Deck, room.DeckLabels = DeckTShirt, DeckTShirt.Labels()
+	room.reveal(true)
+	if !reflect.DeepEqual(room.MostAppearingVotes, []string{"M"}) {
+		t.Fatalf("most appearing votes = %v, want [M]", room.MostAppearingVotes)
+	}
+	if room.Result != nil || room.LowestVote != nil || room.HighestVote != nil || room.VoteRange != nil || room.VoteSpread != nil {
+		t.Fatalf("categorical deck exposed numeric results: %+v", room)
+	}
+	if room.NonNumericVoteCount != 4 {
+		t.Fatalf("non-numeric vote count = %d, want 4", room.NonNumericVoteCount)
+	}
 }
 
 func newOwnerRoomForTest(ctrl *gomock.Controller) (*Room, *Client) {

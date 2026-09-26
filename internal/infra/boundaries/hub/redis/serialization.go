@@ -15,17 +15,19 @@ type (
 		ID                 string   `json:"id,omitempty"`
 		Name               string   `json:"name"`
 		Result             *float32 `json:"result,omitempty"`
-		MostAppearingVotes []int    `json:"mostAppearingVotes"`
+		MostAppearingVotes []string `json:"mostAppearingVotes"`
 		Voted              bool     `json:"voted"`
 	}
 	SerializedRoom struct {
 		ID                  string             `json:"id"`
+		Deck                entity.Deck        `json:"deck"`
+		DeckLabels          []string           `json:"deckLabels"`
 		StartedAt           *time.Time         `json:"startedAt,omitempty"`
 		Clients             []SerializedClient `json:"clients"`
 		CurrentStory        string             `json:"currentStory"`
 		Reveal              bool               `json:"reveal"`
 		Result              *float32           `json:"result,omitempty"`
-		MostAppearingVotes  []int              `json:"mostAppearingVotes"`
+		MostAppearingVotes  []string           `json:"mostAppearingVotes"`
 		Consensus           string             `json:"consensus,omitempty"`
 		LowestVote          *int               `json:"lowestVote,omitempty"`
 		HighestVote         *int               `json:"highestVote,omitempty"`
@@ -80,6 +82,8 @@ func SerializeRoom(room *entity.Room) ([]byte, error) {
 
 	serialized := SerializedRoom{
 		ID:                  room.ID,
+		Deck:                room.Deck,
+		DeckLabels:          room.DeckLabels,
 		StartedAt:           entity.OptionalUTCTime(room.StartedAt()),
 		Clients:             clients,
 		CurrentStory:        room.CurrentStory,
@@ -131,6 +135,8 @@ func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 		entity.UTCTimeOrZero(serialized.StartedAt),
 	)
 	room.CurrentStory = serialized.CurrentStory
+	room.Deck = serialized.Deck
+	room.DeckLabels = serialized.DeckLabels
 	room.Reveal = serialized.Reveal
 	room.Result = serialized.Result
 	room.MostAppearingVotes = serialized.MostAppearingVotes

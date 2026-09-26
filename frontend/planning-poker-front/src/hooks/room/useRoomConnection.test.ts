@@ -45,9 +45,11 @@ describe('useRoomConnection', () => {
     const socket = socketState.current!;
     act(() => socket.onmessage?.({ data: JSON.stringify({ type: 'update-client-id', clientId: 'me' }) }));
     act(() => socket.onmessage?.({ data: JSON.stringify({
-      type: 'room-state', currentStory: 'Story', reveal: false, mostAppearingVotes: [], roomVersion: 7,
+      type: 'room-state', currentStory: 'Story', reveal: false, mostAppearingVotes: [], deck: 't-shirt', deckLabels: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '?', '☕'], roomVersion: 7,
       participants: [],
     }) }));
+    expect(result.current.snapshot.deck).toBe('t-shirt');
+    expect(result.current.snapshot.deckLabels).toEqual(['XS', 'S', 'M', 'L', 'XL', 'XXL', '?', '☕']);
 
     act(() => result.current.sendMessage({ type: 'reveal-votes', payload: null }));
     expect(JSON.parse(socket.sent[0])).toEqual({ type: 'update-name', payload: { username: 'Ada' } });
@@ -61,7 +63,7 @@ describe('useRoomConnection', () => {
     const firstSocket = socketState.current!;
     act(() => firstSocket.onmessage?.({ data: JSON.stringify({ type: 'update-client-id', clientId: 'old' }) }));
     act(() => firstSocket.onmessage?.({ data: JSON.stringify({
-      type: 'room-state', currentStory: 'Old story', reveal: false, mostAppearingVotes: [], roomVersion: 7,
+      type: 'room-state', currentStory: 'Old story', reveal: false, mostAppearingVotes: [], deck: 'fibonacci', deckLabels: ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'], roomVersion: 7,
       participants: [],
     }) }));
     act(() => rerender({ roomId: 'two' }));

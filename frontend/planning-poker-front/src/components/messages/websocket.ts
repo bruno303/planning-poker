@@ -65,7 +65,7 @@ export interface Story {
   id: string;
   name: string;
   result?: number;
-  mostAppearingVotes: number[] | null;
+  mostAppearingVotes: string[] | null;
   voted: boolean;
 }
 
@@ -75,7 +75,9 @@ export interface RoomState {
   currentStory: string;
   reveal: boolean;
   result?: number;
-  mostAppearingVotes: number[] | null;
+  mostAppearingVotes: string[] | null;
+  deck: 'fibonacci' | 't-shirt';
+  deckLabels: string[];
   consensus?: ConsensusLevel;
   lowestVote?: number;
   highestVote?: number;
@@ -101,12 +103,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function isNumberArray(value: unknown): value is number[] {
-  return Array.isArray(value) && value.every((item) => typeof item === 'number');
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }
 
-function isNullableNumberArray(value: unknown): value is number[] | null {
-  return value === null || isNumberArray(value);
+function isNullableStringArray(value: unknown): value is string[] | null {
+  return value === null || isStringArray(value);
 }
 
 function isStory(value: unknown): value is Story {
@@ -117,7 +119,7 @@ function isStory(value: unknown): value is Story {
   return (
     typeof value.id === 'string' &&
     typeof value.name === 'string' &&
-    isNullableNumberArray(value.mostAppearingVotes) &&
+    isNullableStringArray(value.mostAppearingVotes) &&
     typeof value.voted === 'boolean' &&
     (!('result' in value) || typeof value.result === 'number')
   );
@@ -168,7 +170,9 @@ export function isRoomState(value: unknown): value is RoomState {
   if (
     typeof value.currentStory !== 'string' ||
     typeof value.reveal !== 'boolean' ||
-     !isNullableNumberArray(value.mostAppearingVotes) ||
+      !isNullableStringArray(value.mostAppearingVotes) ||
+     (value.deck !== 'fibonacci' && value.deck !== 't-shirt') ||
+     !isStringArray(value.deckLabels) ||
     typeof value.roomVersion !== 'number' ||
     !Array.isArray(value.participants)
   ) {

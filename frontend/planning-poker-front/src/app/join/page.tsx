@@ -25,6 +25,7 @@ export default function PlanningPokerHome() {
   const params = useParams<{ roomId?: string }>();
   const [roomCode, setRoomCode] = useState('');
   const [userName, setUserName] = useState('');
+  const [deck, setDeck] = useState<'fibonacci' | 't-shirt'>('fibonacci');
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const nameInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -50,7 +51,7 @@ export default function PlanningPokerHome() {
 
     try {
       setIsCreating(true);
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/planning/rooms`, { method: 'POST' });
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/planning/rooms`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deck }) });
       if (!res.ok) {
         throw new Error('Failed to create room on server');
       }
@@ -113,6 +114,13 @@ export default function PlanningPokerHome() {
           <h1 style={styles.title}>Planning Poker</h1>
           <p style={styles.subtitle}>Collaborate and estimate together</p>
         </div>
+        {!hasRoomParam && <div style={styles.inputGroup}>
+          <label htmlFor="voting-deck" style={styles.label}>Voting deck</label>
+          <select id="voting-deck" value={deck} onChange={(event) => setDeck(event.target.value as 'fibonacci' | 't-shirt')} style={styles.input}>
+            <option value="fibonacci">Fibonacci</option>
+            <option value="t-shirt">T-shirt</option>
+          </select>
+        </div>}
 
         {/* Form */}
         <div style={styles.form}>

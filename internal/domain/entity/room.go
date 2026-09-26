@@ -33,7 +33,9 @@ type (
 		CurrentStory        string
 		Reveal              bool
 		Result              *float32
-		MostAppearingVotes  []int
+		Deck                Deck
+		DeckLabels          []string
+		MostAppearingVotes  []string
 		Consensus           string
 		LowestVote          *int
 		HighestVote         *int
@@ -65,6 +67,8 @@ func NewRoomWithIDAndStartedAt(id string, clients ClientCollection, startedAt ti
 		Reveal:       false,
 		Result:       nil,
 		BacklogMode:  true,
+		Deck:         DeckFibonacci,
+		DeckLabels:   DeckFibonacci.Labels(),
 	}
 }
 
@@ -496,7 +500,11 @@ func (r *Room) reveal(reveal bool) {
 	}
 
 	metrics := r.collectVotes()
-	r.MostAppearingVotes = mostAppearingVotes(metrics.counts, getMostVoteCount(metrics.counts))
+	if !r.Deck.numeric() {
+		metrics.sum, metrics.count = 0, 0
+		metrics.values, metrics.counts = nil, nil
+	}
+	r.MostAppearingVotes = r.mostAppearingVotes()
 
 	if metrics.count > 0 {
 		r.Result = lo.ToPtr(metrics.sum / metrics.count)
@@ -544,16 +552,51 @@ func (r *Room) collectVotes() voteMetrics {
 	return metrics
 }
 
-func mostAppearingVotes(votes map[int]int, mostVoteCount int) []int {
-	mostVotes := make([]int, 0)
-	for vote, count := range votes {
-		if count == mostVoteCount {
-			mostVotes = append(mostVotes, vote)
+func (d Deck) numeric() bool { return d == "" || d == DeckFibonacci }
+
+func (r *Room) mostAppearingVotes() []string {
+	counts := make(map[string]int)
+	for _, client := range r.Clients.Values() {
+		if client.IsSpectator || client.CurrentVote == nil {
+			continue
+		}
+		if r.hasDeckLabel(*client.CurrentVote) {
+			counts[*client.CurrentVote]++
 		}
 	}
-	slices.Sort(mostVotes)
+	if len(counts) == 0 {
+		return []string{}
+	}
+	max := 0
+	for _, count := range counts {
+		if count > max {
+			max = count
+		}
+	}
+	result := make([]string, 0)
+	for _, label := range r.DeckLabels {
+		if counts[label] == max {
+			result = append(result, label)
+		}
+	}
+	return result
+}
 
-	return mostVotes
+func (r *Room) hasDeckLabel(vote string) bool {
+	labels := r.DeckLabels
+	if len(labels) == 0 {
+		deck := r.Deck
+		if deck == "" {
+			deck = DeckFibonacci
+		}
+		labels = deck.Labels()
+	}
+	for _, label := range labels {
+		if vote == label {
+			return true
+		}
+	}
+	return false
 }
 
 func getMostVoteCount(voteMap map[int]int) int {
@@ -650,6 +693,9 @@ func (r *Room) Vote(ctx context.Context, clientID string, vote *string) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+	}
+	if vote != nil && !r.hasDeckLabel(*vote) {
+		return fmt.Errorf("vote %q is not supported by deck %q", *vote, r.Deck)
 	}
 
 	client.Vote(ctx, vote)

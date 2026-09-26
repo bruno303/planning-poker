@@ -157,6 +157,32 @@ func TestRedisHub_NewRoomWithID(t *testing.T) {
 	assert.Equal(t, "room-explicit", room.ID)
 }
 
+func TestRedisHub_NewRoomWithDeckSavesSelection(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockRedis := NewMockRedisClient(ctrl)
+	statusCmd := redis.NewStatusCmd(context.Background())
+	statusCmd.SetVal("OK")
+	mockRedis.EXPECT().Set(gomock.Any(), gomock.Any(), gomock.Any(), time.Duration(24*time.Hour)).DoAndReturn(
+		func(_ context.Context, _ string, value any, _ time.Duration) *redis.StatusCmd {
+			data, ok := value.([]byte)
+			if !ok {
+				t.Fatalf("stored value type = %T, want []byte", value)
+			}
+			room, err := DeserializeRoom(data, clientcollection.New())
+			if err != nil {
+				t.Fatalf("DeserializeRoom returned error: %v", err)
+			}
+			if room.Deck != entity.DeckTShirt || len(room.DeckLabels) == 0 {
+				t.Fatalf("saved deck = %q labels=%v", room.Deck, room.DeckLabels)
+			}
+			return statusCmd
+		})
+	hub := &RedisHub{client: mockRedis, logger: log.NewLogger("test"), buses: make(map[string]domain.Bus), closeCh: make(chan struct{}), roomClientCounts: make(map[string]int)}
+	room, err := hub.NewRoomWithDeck(context.Background(), entity.DeckTShirt)
+	assert.NoError(t, err)
+	assert.Equal(t, entity.DeckTShirt, room.Deck)
+}
+
 func TestRedisHub_AddClient_RemoveRoom(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockRedis := NewMockRedisClient(ctrl)

@@ -40,7 +40,7 @@ vi.mock('@/components/participantIdBadge/participantIdBadge', () => ({ default: 
 vi.mock('@/components/focusableInput/focusableInput', () => ({ default: (props: { currentStory: string; onChange: React.ChangeEventHandler<HTMLInputElement>; onKeyDown: React.KeyboardEventHandler<HTMLInputElement> }) => <input aria-label="Story editor" value={props.currentStory} onChange={props.onChange} onKeyDown={props.onKeyDown} /> }));
 
 const roomState = (overrides = {}) => ({
-  type: 'room-state', currentStory: 'Implement feature', reveal: false, mostAppearingVotes: [], roomVersion: 4,
+  type: 'room-state', currentStory: 'Implement feature', reveal: false, mostAppearingVotes: [], deck: 'fibonacci', deckLabels: ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'], roomVersion: 4,
   participants: [
     { id: 'me', name: 'Ada', vote: null, hasVoted: false, isSpectator: false, isOwner: true },
     { id: 'other', name: 'Bob', vote: '5', hasVoted: true, isSpectator: false, isOwner: false },
@@ -355,7 +355,7 @@ describe('room page', () => {
     const ws = socketRef.current!;
     act(() => ws.onopen?.());
     act(() => ws.onmessage?.({ data: JSON.stringify({ type: 'update-client-id', clientId: 'me' }) }));
-     act(() => ws.onmessage?.({ data: JSON.stringify(roomState({ reveal: true, result: 5.5, consensus: 'High', lowestVote: 3, highestVote: 8, voteRange: 5, voteSpread: 2, nonNumericVoteCount: 1, mostAppearingVotes: [5] })) }));
+     act(() => ws.onmessage?.({ data: JSON.stringify(roomState({ reveal: true, result: 5.5, consensus: 'High', lowestVote: 3, highestVote: 8, voteRange: 5, voteSpread: 2, nonNumericVoteCount: 1, mostAppearingVotes: ['5'] })) }));
      expect(screen.getByText('Results Summary')).toBeTruthy();
      expect(screen.getByText('Consensus: High')).toBeTruthy();
     act(() => ws.onmessage?.({ data: JSON.stringify({ type: 'stale-command' }) }));

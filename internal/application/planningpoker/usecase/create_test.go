@@ -20,11 +20,11 @@ func TestCreateRoomUseCase_Execute_Success(t *testing.T) {
 	planningPokerMetric, recorder := newTestPlanningPokerMetric(ctrl)
 	room := &entity.Room{ID: "room-123", Clients: clientcollection.New()}
 
-	mockHub.EXPECT().NewRoom(ctx).Return(room, nil)
+	mockHub.EXPECT().NewRoomWithDeck(ctx, entity.DeckFibonacci).Return(room, nil)
 
 	uc := NewCreateRoomUseCase(mockHub, planningPokerMetric)
 
-	got, err := uc.Execute(ctx)
+	got, err := uc.Execute(ctx, CreateRoomCommand{Deck: entity.DeckFibonacci})
 
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -45,11 +45,11 @@ func TestCreateRoomUseCase_Execute_WhenHubFails_ReturnsErrorWithoutMetric(t *tes
 	planningPokerMetric, recorder := newTestPlanningPokerMetric(ctrl)
 	wantErr := errors.New("redis unavailable")
 
-	mockHub.EXPECT().NewRoom(ctx).Return(nil, wantErr)
+	mockHub.EXPECT().NewRoomWithDeck(ctx, entity.DeckFibonacci).Return(nil, wantErr)
 
 	uc := NewCreateRoomUseCase(mockHub, planningPokerMetric)
 
-	got, err := uc.Execute(ctx)
+	got, err := uc.Execute(ctx, CreateRoomCommand{Deck: entity.DeckFibonacci})
 
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("expected %v, got %v", wantErr, err)

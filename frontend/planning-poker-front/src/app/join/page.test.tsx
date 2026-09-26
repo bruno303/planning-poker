@@ -31,12 +31,24 @@ describe('join page', () => {
   });
 
   it('creates a room, stores the trimmed name, and navigates', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ roomId: 'new room' }) }));
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ roomId: 'new room' }) });
+    vi.stubGlobal('fetch', fetchMock);
     render(<Home />);
     fireEvent.change(screen.getByLabelText('Your Name'), { target: { value: ' Ada ' } });
     fireEvent.click(screen.getAllByRole('button', { name: /create room/i })[0]);
     await waitFor(() => expect(push).toHaveBeenCalledWith('/room/new%20room'));
     expect(sessionStorage.getItem('userName')).toBe('Ada');
+    expect(fetchMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ body: JSON.stringify({ deck: 'fibonacci' }) }));
+  });
+
+  it('creates a room with the selected T-shirt deck', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ roomId: 'room' }) });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<Home />);
+    fireEvent.change(screen.getByLabelText('Your Name'), { target: { value: 'Ada' } });
+    fireEvent.change(screen.getByLabelText('Voting deck'), { target: { value: 't-shirt' } });
+    fireEvent.click(screen.getByRole('button', { name: /create room/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ body: JSON.stringify({ deck: 't-shirt' }) })));
   });
 
   it('shows the create loading state and disables the button while pending', async () => {

@@ -51,7 +51,7 @@ describe('BacklogModal', () => {
   it('renders story list with status tags', () => {
     const stories: Story[] = [
       { id: 'story-1', name: 'Story one', mostAppearingVotes: [], voted: false },
-      { id: 'story-2', name: 'Story two', result: 6.5, mostAppearingVotes: [6, 7], voted: true },
+      { id: 'story-2', name: 'Story two', result: 6.5, mostAppearingVotes: ['6', '7'], voted: true },
       { id: 'story-3', name: 'Story three', mostAppearingVotes: [], voted: false },
     ];
 

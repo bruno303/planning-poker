@@ -40,8 +40,13 @@ func NewHub() *InMemoryHub {
 }
 
 func (h *InMemoryHub) NewRoom(ctx context.Context) (*entity.Room, error) {
+	return h.NewRoomWithDeck(ctx, entity.DeckFibonacci)
+}
+
+func (h *InMemoryHub) NewRoomWithDeck(ctx context.Context, deck entity.Deck) (*entity.Room, error) {
 	room, _ := trace.Trace(ctx, trace.NameConfig("InMemoryHub", "NewRoom"), func(ctx context.Context) (any, error) {
 		room := entity.NewRoom(clientcollection.New())
+		room.Deck, room.DeckLabels = deck, deck.Labels()
 		h.roomMu.Lock()
 		h.Rooms[room.ID] = room
 		h.saved[room.ID] = cloneRoom(room)
@@ -250,7 +255,8 @@ func cloneRoom(room *entity.Room) *entity.Room {
 	clone.CurrentStory = room.CurrentStory
 	clone.Reveal = room.Reveal
 	clone.Result = cloneFloat32(room.Result)
-	clone.MostAppearingVotes = append([]int(nil), room.MostAppearingVotes...)
+	clone.Deck, clone.DeckLabels = room.Deck, append([]string(nil), room.DeckLabels...)
+	clone.MostAppearingVotes = append([]string(nil), room.MostAppearingVotes...)
 	clone.Consensus = room.Consensus
 	clone.LowestVote = cloneInt(room.LowestVote)
 	clone.HighestVote = cloneInt(room.HighestVote)
@@ -261,7 +267,7 @@ func cloneRoom(room *entity.Room) *entity.Room {
 	clone.Stories = append([]entity.Story(nil), room.Stories...)
 	for i := range clone.Stories {
 		clone.Stories[i].Result = cloneFloat32(room.Stories[i].Result)
-		clone.Stories[i].MostAppearingVotes = append([]int(nil), room.Stories[i].MostAppearingVotes...)
+		clone.Stories[i].MostAppearingVotes = append([]string(nil), room.Stories[i].MostAppearingVotes...)
 	}
 	clone.CurrentStoryIndex = room.CurrentStoryIndex
 	clone.RoomVersion = room.RoomVersion

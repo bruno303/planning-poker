@@ -33,6 +33,17 @@ func TestNewRoom(t *testing.T) {
 	}
 }
 
+func TestNewRoomWithDeckPersistsSelection(t *testing.T) {
+	hub := NewHub()
+	room, err := hub.NewRoomWithDeck(context.Background(), entity.DeckTShirt)
+	if err != nil {
+		t.Fatalf("NewRoomWithDeck returned error: %v", err)
+	}
+	if room.Deck != entity.DeckTShirt || len(room.DeckLabels) == 0 || hub.saved[room.ID].Deck != entity.DeckTShirt {
+		t.Fatalf("selected deck was not set before snapshot: room=%+v saved=%+v", room, hub.saved[room.ID])
+	}
+}
+
 func TestNewRoomWithID(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()

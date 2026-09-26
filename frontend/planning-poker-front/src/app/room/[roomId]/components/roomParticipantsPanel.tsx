@@ -12,6 +12,7 @@ const voteColor = (vote: string | null) => {
   if (vote === '?') return '#8b5cf6';
   if (vote === '☕') return '#f59e0b';
   const numericVote = Number(vote);
+  if (!Number.isFinite(numericVote)) return '#6b7280';
   if (numericVote <= 2) return '#10b981';
   if (numericVote <= 8) return '#eab308';
   if (numericVote <= 21) return '#f97316';

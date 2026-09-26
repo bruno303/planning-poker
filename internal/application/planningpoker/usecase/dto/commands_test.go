@@ -29,7 +29,7 @@ func TestNewRoomStateCommand(t *testing.T) {
 	room.CurrentStory = "Story 1"
 	room.Reveal = true
 	room.Result = lo.ToPtr(float32(5))
-	room.MostAppearingVotes = []int{1, 2}
+	room.MostAppearingVotes = []string{"1", "2"}
 	room.Consensus = "Medium"
 	room.LowestVote = lo.ToPtr(3)
 	room.HighestVote = lo.ToPtr(8)
@@ -41,6 +41,8 @@ func TestNewRoomStateCommand(t *testing.T) {
 	got := NewRoomStateCommand(room)
 	want := RoomState{
 		Type:         "room-state",
+		Deck:         entity.DeckFibonacci,
+		DeckLabels:   entity.DeckFibonacci.Labels(),
 		StartedAt:    &startedAt,
 		CurrentStory: "Story 1",
 		Reveal:       true,
@@ -49,7 +51,7 @@ func TestNewRoomStateCommand(t *testing.T) {
 			{ID: "2", Name: "Bob", Vote: nil, HasVoted: false, IsSpectator: true, IsOwner: false},
 		},
 		Result:              lo.ToPtr(float32(5)),
-		MostAppearingVotes:  []int{1, 2},
+		MostAppearingVotes:  []string{"1", "2"},
 		Consensus:           "Medium",
 		LowestVote:          lo.ToPtr(3),
 		HighestVote:         lo.ToPtr(8),

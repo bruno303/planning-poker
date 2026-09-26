@@ -15,17 +15,19 @@ type (
 		ID                 string   `json:"id"`
 		Name               string   `json:"name"`
 		Result             *float32 `json:"result,omitempty"`
-		MostAppearingVotes []int    `json:"mostAppearingVotes"`
+		MostAppearingVotes []string `json:"mostAppearingVotes"`
 		Voted              bool     `json:"voted"`
 	}
 
 	RoomState struct {
 		Type                string        `json:"type"`
+		Deck                entity.Deck   `json:"deck"`
+		DeckLabels          []string      `json:"deckLabels"`
 		StartedAt           *time.Time    `json:"startedAt,omitempty"`
 		CurrentStory        string        `json:"currentStory"`
 		Reveal              bool          `json:"reveal"`
 		Result              *float32      `json:"result,omitempty"`
-		MostAppearingVotes  []int         `json:"mostAppearingVotes"`
+		MostAppearingVotes  []string      `json:"mostAppearingVotes"`
 		Consensus           string        `json:"consensus,omitempty"`
 		LowestVote          *int          `json:"lowestVote,omitempty"`
 		HighestVote         *int          `json:"highestVote,omitempty"`
@@ -61,6 +63,8 @@ type (
 func NewRoomStateCommand(room *entity.Room) RoomState {
 	return RoomState{
 		Type:                "room-state",
+		Deck:                room.Deck,
+		DeckLabels:          room.DeckLabels,
 		StartedAt:           entity.OptionalUTCTime(room.StartedAt()),
 		CurrentStory:        room.EffectiveCurrentStory(),
 		Reveal:              room.Reveal,

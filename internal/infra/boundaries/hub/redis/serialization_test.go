@@ -2,6 +2,7 @@ package redis
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 
@@ -15,6 +16,9 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 	// Create a room with some clients
 	startedAt := time.Date(2026, time.September, 3, 12, 0, 0, 0, time.FixedZone("BRT", -3*60*60))
 	originalRoom := entity.NewRoomWithIDAndStartedAt("test-room-123", clientcollection.New(), startedAt)
+	originalRoom.Deck = entity.DeckTShirt
+	originalRoom.DeckLabels = entity.DeckTShirt.Labels()
+	originalRoom.MostAppearingVotes = []string{"M", "?"}
 	originalRoom.CurrentStory = "User Story #42"
 	originalRoom.RoomVersion = 7
 	originalRoom.Reveal = false
@@ -28,7 +32,7 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 		ID:                 "story-1",
 		Name:               "Backlog story",
 		Result:             lo.ToPtr(float32(8)),
-		MostAppearingVotes: []int{8},
+		MostAppearingVotes: []string{"8"},
 		Voted:              true,
 	}}
 
@@ -69,6 +73,9 @@ func assertSerializedRoomProperties(t *testing.T, originalRoom, deserializedRoom
 
 	if deserializedRoom.ID != originalRoom.ID {
 		t.Errorf("Expected room ID %s, got %s", originalRoom.ID, deserializedRoom.ID)
+	}
+	if deserializedRoom.Deck != originalRoom.Deck || !reflect.DeepEqual(deserializedRoom.DeckLabels, originalRoom.DeckLabels) || !reflect.DeepEqual(deserializedRoom.MostAppearingVotes, originalRoom.MostAppearingVotes) {
+		t.Errorf("deck state was not preserved: %+v", deserializedRoom)
 	}
 	if deserializedRoom.CurrentStory != originalRoom.CurrentStory {
 		t.Errorf("Expected story %s, got %s", originalRoom.CurrentStory, deserializedRoom.CurrentStory)
