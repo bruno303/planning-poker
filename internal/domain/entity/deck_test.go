@@ -85,13 +85,7 @@ func TestDefaultDeck(t *testing.T) {
 }
 
 func TestDeckByID(t *testing.T) {
-	tests := []struct {
-		name    string
-		id      string
-		wantID  string
-		wantOK  bool
-		wantLen int
-	}{
+	tests := []deckLookupTest{
 		{name: "fibonacci", id: "fibonacci", wantID: "fibonacci", wantOK: true, wantLen: len(fibonacciCards)},
 		{name: "tshirt", id: "tshirt", wantID: "tshirt", wantOK: true, wantLen: len(tshirtCards)},
 		{name: "unknown", id: "unknown", wantOK: false},
@@ -99,23 +93,37 @@ func TestDeckByID(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			deck, ok := DeckByID(test.id)
-			if ok != test.wantOK {
-				t.Fatalf("DeckByID(%q) ok = %v, want %v", test.id, ok, test.wantOK)
-			}
-			if !test.wantOK {
-				if !reflect.DeepEqual(deck, Deck{}) {
-					t.Errorf("DeckByID(%q) = %+v, want zero deck", test.id, deck)
-				}
-				return
-			}
-			if deck.ID != test.wantID {
-				t.Errorf("DeckByID(%q).ID = %q, want %q", test.id, deck.ID, test.wantID)
-			}
-			if len(deck.Cards) != test.wantLen {
-				t.Errorf("DeckByID(%q) has %d cards, want %d", test.id, len(deck.Cards), test.wantLen)
-			}
+			assertDeckByID(t, test)
 		})
+	}
+}
+
+type deckLookupTest struct {
+	name    string
+	id      string
+	wantID  string
+	wantOK  bool
+	wantLen int
+}
+
+func assertDeckByID(t *testing.T, test deckLookupTest) {
+	t.Helper()
+
+	deck, ok := DeckByID(test.id)
+	if ok != test.wantOK {
+		t.Fatalf("DeckByID(%q) ok = %v, want %v", test.id, ok, test.wantOK)
+	}
+	if !test.wantOK {
+		if !reflect.DeepEqual(deck, Deck{}) {
+			t.Errorf("DeckByID(%q) = %+v, want zero deck", test.id, deck)
+		}
+		return
+	}
+	if deck.ID != test.wantID {
+		t.Errorf("DeckByID(%q).ID = %q, want %q", test.id, deck.ID, test.wantID)
+	}
+	if len(deck.Cards) != test.wantLen {
+		t.Errorf("DeckByID(%q) has %d cards, want %d", test.id, len(deck.Cards), test.wantLen)
 	}
 }
 
@@ -168,10 +176,10 @@ func TestDeckPosition(t *testing.T) {
 	fibonacci, _ := DeckByID("fibonacci")
 
 	tests := []struct {
-		name     string
-		card     string
-		want     int
-		wantOK   bool
+		name   string
+		card   string
+		want   int
+		wantOK bool
 	}{
 		{name: "first card", card: "0", want: 0, wantOK: true},
 		{name: "middle card", card: "13", want: 6, wantOK: true},

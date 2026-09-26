@@ -853,147 +853,162 @@ func TestRoom_IsEmpty(t *testing.T) {
 }
 
 func TestRoom_Vote(t *testing.T) {
+	t.Run("should accept vote from client", testRoomVoteAcceptsVote)
+	t.Run("should fail when client not found", testRoomVoteFailsWhenClientNotFound)
+	t.Run("should accept on-deck vote for a non-default deck", testRoomVoteAcceptsNonDefaultDeck)
+	t.Run("should reject vote that is not a card of the deck", testRoomVoteRejectsOffDeck)
+	t.Run("should clear the vote when vote is nil or empty", testRoomVoteClearsEmptyVote)
+}
+
+func testRoomVoteAcceptsVote(t *testing.T) {
 	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	t.Run("should accept vote from client", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
+	vote := "5"
+	client := &Client{ID: "client1", IsSpectator: false}
 
-		vote := "5"
-		client := &Client{ID: "client1", IsSpectator: false}
+	mockCC := NewMockClientCollection(ctrl)
+	mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC).Times(2) // getClient + checkReveal
+	mockCC.EXPECT().First().Return(client, true)
+	mockCC.EXPECT().Values().Return([]*Client{client}).AnyTimes()
 
-		mockCC := NewMockClientCollection(ctrl)
-		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC).Times(2) // getClient + checkReveal
-		mockCC.EXPECT().First().Return(client, true)
-		mockCC.EXPECT().Values().Return([]*Client{client}).AnyTimes()
+	room := NewRoom(mockCC)
+	room.Reveal = false
+	client.room = room
 
-		room := NewRoom(mockCC)
-		room.Reveal = false
-		client.room = room
+	err := room.Vote(ctx, "client1", &vote)
+	if err != nil {
+		t.Errorf("Vote() error = %v", err)
+	}
 
-		err := room.Vote(ctx, "client1", &vote)
-		if err != nil {
-			t.Errorf("Vote() error = %v", err)
-		}
+	if client.CurrentVote == nil || *client.CurrentVote != vote {
+		t.Errorf("Vote() client vote = %v, want %v", client.CurrentVote, vote)
+	}
+}
 
-		if client.CurrentVote == nil || *client.CurrentVote != vote {
-			t.Errorf("Vote() client vote = %v, want %v", client.CurrentVote, vote)
-		}
-	})
+func testRoomVoteFailsWhenClientNotFound(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	t.Run("should fail when client not found", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
+	vote := "5"
+	mockCC := NewMockClientCollection(ctrl)
+	mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
+	mockCC.EXPECT().First().Return(nil, false)
 
-		vote := "5"
-		mockCC := NewMockClientCollection(ctrl)
-		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
-		mockCC.EXPECT().First().Return(nil, false)
+	room := NewRoom(mockCC)
 
-		room := NewRoom(mockCC)
+	err := room.Vote(ctx, "nonexistent", &vote)
+	if err == nil {
+		t.Error("Vote() expected error for nonexistent client")
+	}
+}
 
-		err := room.Vote(ctx, "nonexistent", &vote)
-		if err == nil {
-			t.Error("Vote() expected error for nonexistent client")
-		}
-	})
+func testRoomVoteAcceptsNonDefaultDeck(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	t.Run("should accept on-deck vote for a non-default deck", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
+	vote := "M"
+	client := &Client{ID: "client1", IsSpectator: false}
 
-		vote := "M"
-		client := &Client{ID: "client1", IsSpectator: false}
+	mockCC := NewMockClientCollection(ctrl)
+	mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC).Times(2) // getClient + checkReveal
+	mockCC.EXPECT().First().Return(client, true)
+	mockCC.EXPECT().Values().Return([]*Client{client}).AnyTimes()
 
-		mockCC := NewMockClientCollection(ctrl)
-		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC).Times(2) // getClient + checkReveal
-		mockCC.EXPECT().First().Return(client, true)
-		mockCC.EXPECT().Values().Return([]*Client{client}).AnyTimes()
+	tshirtDeck, ok := DeckByID("tshirt")
+	if !ok {
+		t.Fatal("tshirt deck preset not found")
+	}
 
-		tshirtDeck, ok := DeckByID("tshirt")
-		if !ok {
-			t.Fatal("tshirt deck preset not found")
-		}
+	room := NewRoomWithDeck(mockCC, tshirtDeck)
+	room.Reveal = false
+	client.room = room
 
-		room := NewRoomWithDeck(mockCC, tshirtDeck)
-		room.Reveal = false
-		client.room = room
+	err := room.Vote(ctx, "client1", &vote)
+	if err != nil {
+		t.Errorf("Vote() error = %v", err)
+	}
 
-		err := room.Vote(ctx, "client1", &vote)
-		if err != nil {
-			t.Errorf("Vote() error = %v", err)
-		}
+	if client.CurrentVote == nil || *client.CurrentVote != vote {
+		t.Errorf("Vote() client vote = %v, want %v", client.CurrentVote, vote)
+	}
+}
 
-		if client.CurrentVote == nil || *client.CurrentVote != vote {
-			t.Errorf("Vote() client vote = %v, want %v", client.CurrentVote, vote)
-		}
-	})
+func testRoomVoteRejectsOffDeck(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	t.Run("should reject vote that is not a card of the deck", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
+	vote := "4"
+	client := &Client{ID: "client1", IsSpectator: false}
 
-		vote := "4"
-		client := &Client{ID: "client1", IsSpectator: false}
+	mockCC := NewMockClientCollection(ctrl)
+	mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
+	mockCC.EXPECT().First().Return(client, true)
 
-		mockCC := NewMockClientCollection(ctrl)
-		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
-		mockCC.EXPECT().First().Return(client, true)
+	room := NewRoom(mockCC)
+	room.Reveal = false
+	client.room = room
 
-		room := NewRoom(mockCC)
-		room.Reveal = false
-		client.room = room
+	err := room.Vote(ctx, "client1", &vote)
+	if !errors.Is(err, domainerror.ErrVoteNotInDeck) {
+		t.Fatalf("Vote() error = %v, want %v", err, domainerror.ErrVoteNotInDeck)
+	}
+	if client.CurrentVote != nil {
+		t.Errorf("Vote() client vote = %v, want nil", client.CurrentVote)
+	}
+}
 
-		err := room.Vote(ctx, "client1", &vote)
-		if !errors.Is(err, domainerror.ErrVoteNotInDeck) {
-			t.Fatalf("Vote() error = %v, want %v", err, domainerror.ErrVoteNotInDeck)
-		}
-		if client.CurrentVote != nil {
-			t.Errorf("Vote() client vote = %v, want nil", client.CurrentVote)
-		}
-	})
+func testRoomVoteClearsEmptyVote(t *testing.T) {
+	tests := []struct {
+		name string
+		vote *string
+	}{
+		{name: "nil vote", vote: nil},
+		{name: "empty vote", vote: lo.ToPtr("")},
+	}
 
-	t.Run("should clear the vote when vote is nil or empty", func(t *testing.T) {
-		tests := []struct {
-			name string
-			vote *string
-		}{
-			{name: "nil vote", vote: nil},
-			{name: "empty vote", vote: lo.ToPtr("")},
-		}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assertRoomVoteCleared(t, test.vote)
+		})
+	}
+}
 
-		for _, test := range tests {
-			t.Run(test.name, func(t *testing.T) {
-				ctrl := gomock.NewController(t)
-				defer ctrl.Finish()
+func assertRoomVoteCleared(t *testing.T, vote *string) {
+	t.Helper()
 
-				existingVote := "5"
-				client := &Client{ID: "client1", IsSpectator: false, CurrentVote: &existingVote, HasVoted: true}
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-				mockCC := NewMockClientCollection(ctrl)
-				mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC).Times(2) // getClient + checkReveal
-				mockCC.EXPECT().First().Return(client, true)
-				mockCC.EXPECT().Values().Return([]*Client{client}).AnyTimes()
+	existingVote := "5"
+	client := &Client{ID: "client1", IsSpectator: false, CurrentVote: &existingVote, HasVoted: true}
 
-				room := NewRoom(mockCC)
-				room.Reveal = false
-				client.room = room
+	mockCC := NewMockClientCollection(ctrl)
+	mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC).Times(2) // getClient + checkReveal
+	mockCC.EXPECT().First().Return(client, true)
+	mockCC.EXPECT().Values().Return([]*Client{client}).AnyTimes()
 
-				if err := room.Vote(ctx, "client1", test.vote); err != nil {
-					t.Fatalf("Vote() error = %v", err)
-				}
-				if client.HasVoted {
-					t.Error("Vote() HasVoted = true, want false")
-				}
-				if client.VotedAt != nil {
-					t.Errorf("Vote() VotedAt = %v, want nil", client.VotedAt)
-				}
-				if client.CurrentVote != nil && *client.CurrentVote != "" {
-					t.Errorf("Vote() client vote = %v, want cleared", client.CurrentVote)
-				}
-			})
-		}
-	})
+	room := NewRoom(mockCC)
+	room.Reveal = false
+	client.room = room
+
+	if err := room.Vote(ctx, "client1", vote); err != nil {
+		t.Fatalf("Vote() error = %v", err)
+	}
+	if client.HasVoted {
+		t.Error("Vote() HasVoted = true, want false")
+	}
+	if client.VotedAt != nil {
+		t.Errorf("Vote() VotedAt = %v, want nil", client.VotedAt)
+	}
+	if client.CurrentVote != nil && *client.CurrentVote != "" {
+		t.Errorf("Vote() client vote = %v, want cleared", client.CurrentVote)
+	}
 }
 
 func TestRoom_UpdateClientName(t *testing.T) {

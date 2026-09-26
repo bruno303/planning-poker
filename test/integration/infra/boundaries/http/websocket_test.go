@@ -553,80 +553,102 @@ func TestWebSocketTshirtDeckVoting(t *testing.T) {
 	ts := integration.NewTestServer(t)
 	defer ts.Close()
 
-	tshirtDeck, ok := entity.DeckByID("tshirt")
-	if !ok {
-		t.Fatal("tshirt deck preset not found")
-	}
+	tshirtDeck := requireTshirtDeck(t)
+	roomID := createRoomWithPreset(t, ts, "tshirt")
 
-	httpClient := integration.NewHTTPClient(ts.Server.URL)
-	var created struct {
-		RoomID string `json:"roomId"`
-	}
-	resp, err := httpClient.PostJSON(t, "/planning/rooms", map[string]string{"deckPreset": "tshirt"}, &created)
-	if err != nil {
-		t.Fatalf("failed to create tshirt room: %v", err)
-	}
-	integration.AssertStatus(t, resp, http.StatusCreated)
-	if created.RoomID == "" {
-		t.Fatal("expected a room ID in the response")
-	}
-
-	conn1 := connectWebSocket(t, ts, created.RoomID)
+	conn1 := connectWebSocket(t, ts, roomID)
 	defer closeAndWait(conn1)
 	clientID1 := getClientID(t, conn1)
 
-	conn2 := connectWebSocket(t, ts, created.RoomID)
+	conn2 := connectWebSocket(t, ts, roomID)
 	defer closeAndWait(conn2)
 	clientID2 := getClientID(t, conn2)
 	// Client1 receives the broadcast when client2 joins
 	consumeMessages(t, conn1)
 
 	t.Run("off-deck vote is rejected", func(t *testing.T) {
-		send(t, conn1, bus.WebSocketMessage{
-			Type:    "vote",
-			Payload: bus.VotePayload{Vote: "5"},
-		})
-
-		send(t, conn2, bus.WebSocketMessage{
-			Type:    "vote",
-			Payload: bus.VotePayload{Vote: "M"},
-		})
-
-		msgs := readMessages(t, conn1, conn2)
-		for _, msg := range msgs {
-			if msg["reveal"] != false {
-				t.Fatal("room should not reveal while the first client has not cast a valid vote")
-			}
-			assertDeckState(t, msg, tshirtDeck)
-
-			hasVoted := participantHasVoted(t, msg["participants"])
-			if hasVoted[clientID1] {
-				t.Fatal("off-deck vote was accepted by the tshirt room")
-			}
-			if !hasVoted[clientID2] {
-				t.Fatal("on-deck vote was not recorded")
-			}
-		}
+		assertOffDeckVoteRejected(t, conn1, conn2, clientID1, clientID2, tshirtDeck)
 	})
 
 	t.Run("broadcast carries tshirt deck and string most common votes", func(t *testing.T) {
-		send(t, conn1, bus.WebSocketMessage{
-			Type:    "vote",
-			Payload: bus.VotePayload{Vote: "S"},
-		})
-
-		msgs := readMessages(t, conn1, conn2)
-		for _, msg := range msgs {
-			if msg["reveal"] != true {
-				t.Fatal("votes should be revealed after both clients vote")
-			}
-			assertDeckState(t, msg, tshirtDeck)
-			assertStringVotes(t, msg["mostAppearingVotes"], "S", "M")
-			if msg["result"] != nil {
-				t.Errorf("expected no numeric result for tshirt votes, got %v", msg["result"])
-			}
-		}
+		assertTshirtRevealBroadcast(t, conn1, conn2, tshirtDeck)
 	})
+}
+
+func requireTshirtDeck(t *testing.T) entity.Deck {
+	t.Helper()
+
+	deck, ok := entity.DeckByID("tshirt")
+	if !ok {
+		t.Fatal("tshirt deck preset not found")
+	}
+	return deck
+}
+
+func createRoomWithPreset(t *testing.T, ts *integration.TestServer, preset string) string {
+	t.Helper()
+
+	httpClient := integration.NewHTTPClient(ts.Server.URL)
+	var created struct {
+		RoomID string `json:"roomId"`
+	}
+	resp, err := httpClient.PostJSON(t, "/planning/rooms", map[string]string{"deckPreset": preset}, &created)
+	if err != nil {
+		t.Fatalf("failed to create %s room: %v", preset, err)
+	}
+	integration.AssertStatus(t, resp, http.StatusCreated)
+	if created.RoomID == "" {
+		t.Fatal("expected a room ID in the response")
+	}
+	return created.RoomID
+}
+
+func assertOffDeckVoteRejected(t *testing.T, conn1 *websocket.Conn, conn2 *websocket.Conn, clientID1 string, clientID2 string, deck entity.Deck) {
+	t.Helper()
+
+	send(t, conn1, bus.WebSocketMessage{
+		Type:    "vote",
+		Payload: bus.VotePayload{Vote: "5"},
+	})
+	send(t, conn2, bus.WebSocketMessage{
+		Type:    "vote",
+		Payload: bus.VotePayload{Vote: "M"},
+	})
+
+	for _, msg := range readMessages(t, conn1, conn2) {
+		if msg["reveal"] != false {
+			t.Fatal("room should not reveal while the first client has not cast a valid vote")
+		}
+		assertDeckState(t, msg, deck)
+
+		hasVoted := participantHasVoted(t, msg["participants"])
+		if hasVoted[clientID1] {
+			t.Fatal("off-deck vote was accepted by the tshirt room")
+		}
+		if !hasVoted[clientID2] {
+			t.Fatal("on-deck vote was not recorded")
+		}
+	}
+}
+
+func assertTshirtRevealBroadcast(t *testing.T, conn1 *websocket.Conn, conn2 *websocket.Conn, deck entity.Deck) {
+	t.Helper()
+
+	send(t, conn1, bus.WebSocketMessage{
+		Type:    "vote",
+		Payload: bus.VotePayload{Vote: "S"},
+	})
+
+	for _, msg := range readMessages(t, conn1, conn2) {
+		if msg["reveal"] != true {
+			t.Fatal("votes should be revealed after both clients vote")
+		}
+		assertDeckState(t, msg, deck)
+		assertStringVotes(t, msg["mostAppearingVotes"], "S", "M")
+		if msg["result"] != nil {
+			t.Errorf("expected no numeric result for tshirt votes, got %v", msg["result"])
+		}
+	}
 }
 
 func assertDeckState(t *testing.T, msg map[string]any, deck entity.Deck) {
