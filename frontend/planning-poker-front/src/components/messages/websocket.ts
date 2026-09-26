@@ -65,17 +65,19 @@ export interface Story {
   id: string;
   name: string;
   result?: number;
-  mostAppearingVotes: number[] | null;
+  mostAppearingVotes: Array<string | number> | null;
   voted: boolean;
 }
 
 export interface RoomState {
   type: 'room-state';
   startedAt?: string;
+  deck?: string[];
+  deckPreset?: string;
   currentStory: string;
   reveal: boolean;
   result?: number;
-  mostAppearingVotes: number[] | null;
+  mostAppearingVotes: Array<string | number> | null;
   consensus?: ConsensusLevel;
   lowestVote?: number;
   highestVote?: number;
@@ -101,12 +103,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function isNumberArray(value: unknown): value is number[] {
-  return Array.isArray(value) && value.every((item) => typeof item === 'number');
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }
 
-function isNullableNumberArray(value: unknown): value is number[] | null {
-  return value === null || isNumberArray(value);
+function isOptionalStringArray(value: Record<string, unknown>, key: string): boolean {
+  return !(key in value) || isStringArray(value[key]);
+}
+
+function isMostAppearingVotes(value: unknown): value is Array<string | number> | null {
+  return value === null ||
+    (Array.isArray(value) && value.every((item) => typeof item === 'string' || typeof item === 'number'));
 }
 
 function isStory(value: unknown): value is Story {
@@ -117,7 +124,7 @@ function isStory(value: unknown): value is Story {
   return (
     typeof value.id === 'string' &&
     typeof value.name === 'string' &&
-    isNullableNumberArray(value.mostAppearingVotes) &&
+    isMostAppearingVotes(value.mostAppearingVotes) &&
     typeof value.voted === 'boolean' &&
     (!('result' in value) || typeof value.result === 'number')
   );
@@ -168,7 +175,7 @@ export function isRoomState(value: unknown): value is RoomState {
   if (
     typeof value.currentStory !== 'string' ||
     typeof value.reveal !== 'boolean' ||
-     !isNullableNumberArray(value.mostAppearingVotes) ||
+     !isMostAppearingVotes(value.mostAppearingVotes) ||
     typeof value.roomVersion !== 'number' ||
     !Array.isArray(value.participants)
   ) {
@@ -191,6 +198,8 @@ export function isRoomState(value: unknown): value is RoomState {
     );
   }) &&
     hasOptionalTimestamp(value, 'startedAt') &&
+    isOptionalStringArray(value, 'deck') &&
+    (!('deckPreset' in value) || typeof value.deckPreset === 'string') &&
     hasOptionalNumber(value, 'result') &&
     (!('consensus' in value) || value.consensus === 'High' || value.consensus === 'Medium' || value.consensus === 'Low' || value.consensus === 'Unavailable') &&
     hasOptionalNumber(value, 'lowestVote') &&

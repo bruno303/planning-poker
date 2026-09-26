@@ -5,10 +5,12 @@ import { isRFC3339Timestamp, isRoomState, type RoomState } from './websocket';
 const validRoomState: RoomState = {
   type: 'room-state',
   startedAt: '2026-09-03T12:00:00Z',
+  deck: ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'],
+  deckPreset: 'fibonacci',
   currentStory: 'Estimate the story',
   reveal: true,
   result: 5,
-  mostAppearingVotes: [5, 8],
+  mostAppearingVotes: ['5', '8'],
   consensus: 'Medium',
   lowestVote: 3,
   highestVote: 8,
@@ -29,7 +31,7 @@ const validRoomState: RoomState = {
     id: 'story-1',
     name: 'A backlog story',
     result: 8,
-    mostAppearingVotes: [8],
+    mostAppearingVotes: ['8'],
     voted: true,
   }],
   currentStoryIndex: 0,
@@ -41,6 +43,14 @@ describe('isRoomState', () => {
     expect(isRoomState(validRoomState)).toBe(true);
   });
 
+  it('accepts numeric most-appearing votes from legacy payloads', () => {
+    expect(isRoomState({
+      ...validRoomState,
+      mostAppearingVotes: [5, 8],
+      stories: [{ ...validRoomState.stories?.[0], mostAppearingVotes: [8] }],
+    })).toBe(true);
+  });
+
   it('accepts null slice values emitted for empty backend collections', () => {
     expect(isRoomState({
       ...validRoomState,
@@ -49,12 +59,14 @@ describe('isRoomState', () => {
     })).toBe(true);
   });
 
-  it('accepts legacy states without timestamp fields', () => {
+  it('accepts legacy states without deck and timestamp fields', () => {
     const legacyState: RoomState = {
       ...validRoomState,
       participants: validRoomState.participants.map((participant) => ({ ...participant })),
     };
     delete legacyState.startedAt;
+    delete legacyState.deck;
+    delete legacyState.deckPreset;
     delete legacyState.participants[0].votedAt;
 
     expect(isRoomState(legacyState)).toBe(true);
@@ -62,7 +74,11 @@ describe('isRoomState', () => {
 
   it.each([
     ['required field', 'currentStory', null],
-    ['vote array member', 'mostAppearingVotes', ['5']],
+    ['vote array member', 'mostAppearingVotes', [null]],
+    ['non-string vote member', 'mostAppearingVotes', ['5', true]],
+    ['optional deck', 'deck', 'fibonacci'],
+    ['deck card', 'deck', ['5', 8]],
+    ['optional deck preset', 'deckPreset', 4],
     ['participant member', 'participants', [{ ...validRoomState.participants[0], hasVoted: 'yes' }]],
     ['optional number', 'result', '5'],
     ['optional consensus', 'consensus', 'Unknown'],

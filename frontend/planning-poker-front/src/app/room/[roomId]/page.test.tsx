@@ -41,6 +41,7 @@ vi.mock('@/components/focusableInput/focusableInput', () => ({ default: (props: 
 
 const roomState = (overrides = {}) => ({
   type: 'room-state', currentStory: 'Implement feature', reveal: false, mostAppearingVotes: [], roomVersion: 4,
+  deck: ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'], deckPreset: 'fibonacci',
   participants: [
     { id: 'me', name: 'Ada', vote: null, hasVoted: false, isSpectator: false, isOwner: true },
     { id: 'other', name: 'Bob', vote: '5', hasVoted: true, isSpectator: false, isOwner: false },
@@ -104,7 +105,9 @@ describe('room page', () => {
       result: undefined,
       consensus: undefined,
       stories: null,
-      mostAppearingVotes: null,
+      mostAppearingVotes: [5, '8'],
+      deck: undefined,
+      deckPreset: undefined,
       participants: [{ ...roomState().participants[0], votedAt: undefined }],
     }) as Parameters<typeof normalizeRoomState>[0]);
 
@@ -113,9 +116,15 @@ describe('room page', () => {
       result: null,
       consensus: null,
       stories: [],
-      mostAppearingVotes: [],
+      mostAppearingVotes: ['5', '8'],
+      deck: [],
+      deckPreset: null,
       participants: [{ votedAt: null }],
       roomVersion: 4,
+    });
+
+    expect(normalizeRoomState(roomState({ mostAppearingVotes: null }) as Parameters<typeof normalizeRoomState>[0])).toMatchObject({
+      mostAppearingVotes: [],
     });
   });
 
@@ -355,9 +364,10 @@ describe('room page', () => {
     const ws = socketRef.current!;
     act(() => ws.onopen?.());
     act(() => ws.onmessage?.({ data: JSON.stringify({ type: 'update-client-id', clientId: 'me' }) }));
-     act(() => ws.onmessage?.({ data: JSON.stringify(roomState({ reveal: true, result: 5.5, consensus: 'High', lowestVote: 3, highestVote: 8, voteRange: 5, voteSpread: 2, nonNumericVoteCount: 1, mostAppearingVotes: [5] })) }));
+     act(() => ws.onmessage?.({ data: JSON.stringify(roomState({ reveal: true, result: 5.5, consensus: 'High', lowestVote: 3, highestVote: 8, voteRange: 5, voteSpread: 2, nonNumericVoteCount: 1, mostAppearingVotes: ['5'] })) }));
      expect(screen.getByText('Results Summary')).toBeTruthy();
      expect(screen.getByText('Consensus: High')).toBeTruthy();
+     expect(screen.getByText('Most Common: 5')).toBeTruthy();
     act(() => ws.onmessage?.({ data: JSON.stringify({ type: 'stale-command' }) }));
     act(() => ws.onmessage?.({ data: '{bad json' }));
     expect(pushError).toHaveBeenCalledWith('Room changed; review and try again.');

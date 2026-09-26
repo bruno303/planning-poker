@@ -20,6 +20,7 @@ const emptySnapshot: RoomSnapshot = {
   currentStory: '', reveal: false, result: null, mostAppearingVotes: [], consensus: null,
   lowestVote: null, highestVote: null, voteRange: null, voteSpread: null, nonNumericVoteCount: 0,
   participants: [], startedAt: null, backlogMode: false, stories: [], currentStoryIndex: 0, roomVersion: null,
+  deck: [], deckPreset: null,
 };
 
 declare global {

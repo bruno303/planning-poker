@@ -57,6 +57,18 @@ export const styles = {
     transition: 'border-color 0.2s',
     boxSizing: 'border-box' as const
   },
+  select: {
+    width: '100%',
+    padding: '0.75rem',
+    border: '2px solid #e5e7eb',
+    borderRadius: '0.5rem',
+    fontSize: '1rem',
+    outline: 'none',
+    transition: 'border-color 0.2s',
+    boxSizing: 'border-box' as const,
+    backgroundColor: 'white',
+    color: '#1f2937'
+  },
   error: {
     backgroundColor: '#fef2f2',
     color: '#dc2626',

@@ -10,11 +10,15 @@ export function getExtremeVotes(
   }
 
   const trimmedVote = vote.trim();
-  if (!/^[+-]?\d+$/.test(trimmedVote)) {
+  if (trimmedVote === '') {
     return [];
   }
 
   const numericVote = Number(trimmedVote);
+  if (!Number.isFinite(numericVote)) {
+    return [];
+  }
+
   const extremes: ExtremeVote[] = [];
   if (numericVote === lowestVote) {
     extremes.push('lowest');

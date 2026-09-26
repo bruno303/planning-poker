@@ -2,6 +2,7 @@
 
 import { useLogger } from '@/context/logger/loggerContext';
 import { useToast } from '@/context/toast/toastContext';
+import { FALLBACK_DECK, fetchDeckPresets, type DeckPreset } from '@/lib/decks';
 import { Loader2, LogIn, Plus } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
@@ -25,6 +26,8 @@ export default function PlanningPokerHome() {
   const params = useParams<{ roomId?: string }>();
   const [roomCode, setRoomCode] = useState('');
   const [userName, setUserName] = useState('');
+  const [deckPresets, setDeckPresets] = useState<DeckPreset[]>([FALLBACK_DECK]);
+  const [selectedDeckId, setSelectedDeckId] = useState(FALLBACK_DECK.id);
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const nameInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -41,6 +44,22 @@ export default function PlanningPokerHome() {
 
   useEffect(() => { nameInputRef.current?.focus(); }, []);
 
+  useEffect(() => {
+    if (hasRoomParam) return;
+    let cancelled = false;
+
+    fetchDeckPresets().then((decks) => {
+      if (cancelled) return;
+      setDeckPresets(decks);
+      setSelectedDeckId(decks[0]?.id ?? FALLBACK_DECK.id);
+      if (decks.length === 1 && decks[0].id === FALLBACK_DECK.id) {
+        logger.warn('Failed to load voting decks; using the fallback deck');
+      }
+    });
+
+    return () => { cancelled = true; };
+  }, [hasRoomParam, logger]);
+
   const handleCreateRoom = async () => {
     if (!userName.trim()) {
       logger.warn('Validation failed', { reason: 'Name not informed' });
@@ -50,7 +69,11 @@ export default function PlanningPokerHome() {
 
     try {
       setIsCreating(true);
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/planning/rooms`, { method: 'POST' });
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/planning/rooms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deckPreset: selectedDeckId }),
+      });
       if (!res.ok) {
         throw new Error('Failed to create room on server');
       }
@@ -132,6 +155,19 @@ export default function PlanningPokerHome() {
               onKeyDown={async (e) => await handleEnterPressed(e)}
             />
           </div>
+          {!hasRoomParam && (
+            <div style={styles.inputGroup}>
+              <label htmlFor="deck-preset" style={styles.label}>Voting deck</label>
+              <select
+                id="deck-preset"
+                value={selectedDeckId}
+                onChange={(e) => setSelectedDeckId(e.target.value)}
+                style={styles.select}
+              >
+                {deckPresets.map((deck) => <option key={deck.id} value={deck.id}>{deck.name}</option>)}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Buttons */}

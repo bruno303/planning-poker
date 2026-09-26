@@ -16,7 +16,7 @@ export type RoomSnapshot = {
   currentStory: string;
   reveal: boolean;
   result: number | null;
-  mostAppearingVotes: number[];
+  mostAppearingVotes: string[];
   consensus: ConsensusLevel | null;
   lowestVote: number | null;
   highestVote: number | null;
@@ -29,6 +29,8 @@ export type RoomSnapshot = {
   stories: Story[];
   currentStoryIndex: number;
   roomVersion: number | null;
+  deck: string[];
+  deckPreset: string | null;
 };
 
 export function normalizeRoomState(state: RoomState): RoomSnapshot {
@@ -36,7 +38,7 @@ export function normalizeRoomState(state: RoomState): RoomSnapshot {
     currentStory: state.currentStory,
     reveal: state.reveal,
     result: state.result ?? null,
-    mostAppearingVotes: state.mostAppearingVotes ?? [],
+    mostAppearingVotes: (state.mostAppearingVotes ?? []).map(String),
     consensus: state.consensus ?? null,
     lowestVote: state.lowestVote ?? null,
     highestVote: state.highestVote ?? null,
@@ -52,5 +54,7 @@ export function normalizeRoomState(state: RoomState): RoomSnapshot {
     stories: state.stories ?? [],
     currentStoryIndex: state.currentStoryIndex ?? 0,
     roomVersion: state.roomVersion,
+    deck: state.deck ?? [],
+    deckPreset: state.deckPreset ?? null,
   };
 }
