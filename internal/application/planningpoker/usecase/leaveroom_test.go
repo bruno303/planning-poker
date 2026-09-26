@@ -31,7 +31,7 @@ func TestNewLeaveRoomUseCase(t *testing.T) {
 	}
 }
 
-func TestLeaveRoomUseCase_Execute_Success_RoomExists(t *testing.T) {
+func TestLeaveRoomUseCase_Execute_LastLocalClient_RoomExists_DecrementsUsersAndRooms(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -53,6 +53,8 @@ func TestLeaveRoomUseCase_Execute_Success_RoomExists(t *testing.T) {
 			return fn(ctx)
 		})
 
+	mockHub.EXPECT().GetBus(senderID).Return(nil, true)
+	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(1)
 	mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(nil)
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(nil)
@@ -70,11 +72,100 @@ func TestLeaveRoomUseCase_Execute_Success_RoomExists(t *testing.T) {
 	}
 
 	calls := metricMeter.getCalls()
-	if countMetricCallsWithValue(calls, metric.PlanningPokerActiveUsersMetric, -1) != 1 {
-		t.Fatalf("expected one active user decrement, got %d", countMetricCallsWithValue(calls, metric.PlanningPokerActiveUsersMetric, -1))
+	assertMetricCallSequence(t, calls,
+		expectedMetricCall{name: metric.PlanningPokerActiveUsersMetric, value: -1},
+		expectedMetricCall{name: metric.PlanningPokerActiveRoomsMetric, value: -1},
+	)
+}
+
+func TestLeaveRoomUseCase_Execute_NonLastLocalClient_DecrementsOnlyActiveUsers(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	mockHub := domain.NewMockHub(ctrl)
+	mockLockManager := lock.NewMockLockManager(ctrl)
+	testMetric, metricMeter := newTestPlanningPokerMetric(ctrl)
+
+	roomID := "room123"
+	senderID := "client123"
+	room := &entity.Room{
+		ID:      roomID,
+		Clients: clientcollection.New(),
 	}
-	if countMetricCallsWithValue(calls, metric.PlanningPokerActiveRoomsMetric, -1) != 0 {
-		t.Fatalf("expected no active room decrements, got %d", countMetricCallsWithValue(calls, metric.PlanningPokerActiveRoomsMetric, -1))
+
+	mockLockManager.EXPECT().
+		ExecuteWithLock(gomock.Any(), roomID, gomock.Any()).
+		DoAndReturn(func(ctx context.Context, key string, fn func(context.Context) error) error {
+			return fn(ctx)
+		})
+
+	mockHub.EXPECT().GetBus(senderID).Return(nil, true)
+	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(2)
+	mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(nil)
+	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
+	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(nil)
+
+	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, testMetric)
+	cmd := LeaveRoomCommand{
+		RoomID:   roomID,
+		SenderID: senderID,
+	}
+
+	err := uc.Execute(ctx, cmd)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	calls := metricMeter.getCalls()
+	assertMetricCallSequence(t, calls,
+		expectedMetricCall{name: metric.PlanningPokerActiveUsersMetric, value: -1},
+	)
+}
+
+func TestLeaveRoomUseCase_Execute_NoLocalBus_DuplicateLeave_EmitsNoMetrics(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	mockHub := domain.NewMockHub(ctrl)
+	mockLockManager := lock.NewMockLockManager(ctrl)
+	testMetric, metricMeter := newTestPlanningPokerMetric(ctrl)
+
+	roomID := "room123"
+	senderID := "client123"
+	room := &entity.Room{
+		ID:      roomID,
+		Clients: clientcollection.New(),
+	}
+
+	mockLockManager.EXPECT().
+		ExecuteWithLock(gomock.Any(), roomID, gomock.Any()).
+		DoAndReturn(func(ctx context.Context, key string, fn func(context.Context) error) error {
+			return fn(ctx)
+		})
+
+	mockHub.EXPECT().GetBus(senderID).Return(nil, false)
+	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(0)
+	mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(nil)
+	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
+	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(nil)
+
+	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, testMetric)
+	cmd := LeaveRoomCommand{
+		RoomID:   roomID,
+		SenderID: senderID,
+	}
+
+	err := uc.Execute(ctx, cmd)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if calls := metricMeter.getCalls(); len(calls) != 0 {
+		t.Fatalf("expected no metric changes for duplicate leave without local bus, got %d calls", len(calls))
 	}
 }
 
@@ -96,6 +187,8 @@ func TestLeaveRoomUseCase_Execute_WhenRoomIsMissingAfterRemove_DecrementsRoomMet
 			return fn(ctx)
 		})
 
+	mockHub.EXPECT().GetBus(senderID).Return(nil, true)
+	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(1)
 	mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(nil)
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, domain.ErrRoomNotFound)
 
@@ -137,6 +230,8 @@ func TestLeaveRoomUseCase_Execute_RemoveClientError(t *testing.T) {
 			return fn(ctx)
 		})
 
+	mockHub.EXPECT().GetBus(senderID).Return(nil, false)
+	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(0)
 	mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(expectedError)
 
 	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, mockMetric)
@@ -179,6 +274,8 @@ func TestLeaveRoomUseCase_Execute_BroadcastError(t *testing.T) {
 			return fn(ctx)
 		})
 
+	mockHub.EXPECT().GetBus(senderID).Return(nil, true)
+	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(1)
 	mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(nil)
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(expectedError)
@@ -218,6 +315,8 @@ func TestLeaveRoomUseCase_Execute_LoadRoomErrorAfterRemove_ReturnsErrorWithoutDe
 			return fn(ctx)
 		})
 
+	mockHub.EXPECT().GetBus(senderID).Return(nil, true)
+	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(2)
 	mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(nil)
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, expectedError)
 

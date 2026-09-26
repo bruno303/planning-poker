@@ -62,6 +62,7 @@ func (uc *adminKickClientUseCase) Execute(ctx context.Context, cmd AdminKickClie
 		if err := bus.Send(ctx, dto.NewKickNotification()); err != nil {
 			uc.logger.Error(ctx, "Failed to send kick notification to client", err)
 		}
+		bus.Detach()
 		if err := bus.Close(); err != nil {
 			uc.logger.Error(ctx, "Failed to close WebSocket bus for client", err)
 		}

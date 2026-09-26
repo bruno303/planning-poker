@@ -231,6 +231,44 @@ func (c *MockHubGetBusCall) DoAndReturn(f func(string) (Bus, bool)) *MockHubGetB
 	return c
 }
 
+// GetClientsOfRoom mocks base method.
+func (m *MockHub) GetClientsOfRoom(roomID string) int {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetClientsOfRoom", roomID)
+	ret0, _ := ret[0].(int)
+	return ret0
+}
+
+// GetClientsOfRoom indicates an expected call of GetClientsOfRoom.
+func (mr *MockHubMockRecorder) GetClientsOfRoom(roomID any) *MockHubGetClientsOfRoomCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClientsOfRoom", reflect.TypeOf((*MockHub)(nil).GetClientsOfRoom), roomID)
+	return &MockHubGetClientsOfRoomCall{Call: call}
+}
+
+// MockHubGetClientsOfRoomCall wrap *gomock.Call
+type MockHubGetClientsOfRoomCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockHubGetClientsOfRoomCall) Return(arg0 int) *MockHubGetClientsOfRoomCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockHubGetClientsOfRoomCall) Do(f func(string) int) *MockHubGetClientsOfRoomCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockHubGetClientsOfRoomCall) DoAndReturn(f func(string) int) *MockHubGetClientsOfRoomCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // LoadRoom mocks base method.
 func (m *MockHub) LoadRoom(ctx context.Context, roomID string) (*entity.Room, error) {
 	m.ctrl.T.Helper()

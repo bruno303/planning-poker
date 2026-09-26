@@ -193,14 +193,27 @@ func (h *RedisHub) AddClient(c *entity.Client) {
 func (h *RedisHub) AddBus(ctx context.Context, clientID string, bus domain.Bus) error {
 	h.busMux.Lock()
 	defer h.busMux.Unlock()
-	h.buses[clientID] = bus
+	oldBus, hadOldBus := h.buses[clientID]
+	oldRoomID := ""
+	if hadOldBus {
+		oldRoomID = oldBus.RoomID()
+	}
 	roomID := bus.RoomID()
+	h.buses[clientID] = bus
+	if oldRoomID != "" && oldRoomID != roomID {
+		h.roomClientCounts[oldRoomID]--
+		if h.roomClientCounts[oldRoomID] <= 0 {
+			delete(h.roomClientCounts, oldRoomID)
+		}
+	}
 	if roomID == "" {
 		h.logger.Warn(ctx, "Bus for client %s has empty RoomID", clientID)
 		return nil
 	}
 
-	h.roomClientCounts[roomID]++
+	if !hadOldBus || oldRoomID != roomID {
+		h.roomClientCounts[roomID]++
+	}
 	_, exists := h.roomSubs.Load(roomID)
 	if !exists {
 		subscribeCtx, cancel := context.WithTimeout(ctx, subscribeTimeout)
@@ -208,10 +221,19 @@ func (h *RedisHub) AddBus(ctx context.Context, clientID string, bus domain.Bus) 
 		if _, err := sub.Receive(subscribeCtx); err != nil {
 			cancel()
 			_ = sub.Close()
-			delete(h.buses, clientID)
-			h.roomClientCounts[roomID]--
-			if h.roomClientCounts[roomID] == 0 {
+			if hadOldBus {
+				h.buses[clientID] = oldBus
+			} else {
+				delete(h.buses, clientID)
+			}
+			if !hadOldBus || oldRoomID != roomID {
+				h.roomClientCounts[roomID]--
+			}
+			if h.roomClientCounts[roomID] <= 0 {
 				delete(h.roomClientCounts, roomID)
+			}
+			if oldRoomID != "" && oldRoomID != roomID {
+				h.roomClientCounts[oldRoomID]++
 			}
 			h.logger.Error(ctx, fmt.Sprintf("Failed to confirm pub/sub subscription for room %s", roomID), err)
 			return fmt.Errorf("confirm pub/sub subscription for room %s: %w", roomID, err)

@@ -50,6 +50,7 @@ func TestAdminKickClientUseCase_Execute_Success(t *testing.T) {
 	mockHub.EXPECT().GetBus(clientID).Return(mockBus, true)
 	mockLeaveRoom.EXPECT().Execute(ctx, LeaveRoomCommand{RoomID: roomID, SenderID: clientID}).Return(nil)
 	mockBus.EXPECT().Send(ctx, dto.NewKickNotification()).Return(nil)
+	mockBus.EXPECT().Detach()
 	mockBus.EXPECT().Close().Return(nil)
 
 	uc := NewAdminKickClientUseCase(mockLeaveRoom, mockHub)
@@ -227,6 +228,7 @@ func TestAdminKickClientUseCase_Execute_BusCloseError(t *testing.T) {
 	mockHub.EXPECT().GetBus(clientID).Return(mockBus, true)
 	mockLeaveRoom.EXPECT().Execute(ctx, LeaveRoomCommand{RoomID: roomID, SenderID: clientID}).Return(nil)
 	mockBus.EXPECT().Send(ctx, dto.NewKickNotification()).Return(nil)
+	mockBus.EXPECT().Detach()
 	mockBus.EXPECT().Close().Return(errors.New("close error"))
 
 	uc := NewAdminKickClientUseCase(mockLeaveRoom, mockHub)
@@ -259,6 +261,7 @@ func TestAdminKickClientUseCase_Execute_SendError(t *testing.T) {
 	mockHub.EXPECT().GetBus(clientID).Return(mockBus, true)
 	mockLeaveRoom.EXPECT().Execute(ctx, LeaveRoomCommand{RoomID: roomID, SenderID: clientID}).Return(nil)
 	mockBus.EXPECT().Send(ctx, dto.NewKickNotification()).Return(errors.New("send error"))
+	mockBus.EXPECT().Detach()
 	mockBus.EXPECT().Close().Return(nil)
 
 	uc := NewAdminKickClientUseCase(mockLeaveRoom, mockHub)

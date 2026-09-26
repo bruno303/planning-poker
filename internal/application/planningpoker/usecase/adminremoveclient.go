@@ -59,6 +59,7 @@ func (uc *adminRemoveClientUseCase) Execute(ctx context.Context, cmd AdminRemove
 	// GetBus is called before leaveRoom because leaveRoom -> hub.RemoveClient -> RemoveBus
 	// would remove the bus from the hub's map, making GetBus return nil afterwards.
 	if busExists {
+		bus.Detach()
 		if err := bus.Close(); err != nil {
 			uc.logger.Error(ctx, "Failed to close WebSocket bus for client", err)
 		}

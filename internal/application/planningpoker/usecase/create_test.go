@@ -17,12 +17,11 @@ func TestCreateRoomUseCase_Execute_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctx := context.Background()
 	mockHub := domain.NewMockHub(ctrl)
-	planningPokerMetric, recorder := newTestPlanningPokerMetric(ctrl)
 	room := &entity.Room{ID: "room-123", Clients: clientcollection.New()}
 
 	mockHub.EXPECT().NewRoom(ctx).Return(room, nil)
 
-	uc := NewCreateRoomUseCase(mockHub, planningPokerMetric)
+	uc := NewCreateRoomUseCase(mockHub)
 
 	got, err := uc.Execute(ctx)
 
@@ -32,22 +31,17 @@ func TestCreateRoomUseCase_Execute_Success(t *testing.T) {
 	if got.RoomID != room.ID {
 		t.Fatalf("expected room ID %q, got %q", room.ID, got.RoomID)
 	}
-	assertMetricCallSequence(t, recorder.getCalls(), expectedMetricCall{
-		name:  "planning_poker_active_rooms",
-		value: 1,
-	})
 }
 
 func TestCreateRoomUseCase_Execute_WhenHubFails_ReturnsErrorWithoutMetric(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctx := context.Background()
 	mockHub := domain.NewMockHub(ctrl)
-	planningPokerMetric, recorder := newTestPlanningPokerMetric(ctrl)
 	wantErr := errors.New("redis unavailable")
 
 	mockHub.EXPECT().NewRoom(ctx).Return(nil, wantErr)
 
-	uc := NewCreateRoomUseCase(mockHub, planningPokerMetric)
+	uc := NewCreateRoomUseCase(mockHub)
 
 	got, err := uc.Execute(ctx)
 
@@ -56,9 +50,6 @@ func TestCreateRoomUseCase_Execute_WhenHubFails_ReturnsErrorWithoutMetric(t *tes
 	}
 	if got != (CreateRoomOutput{}) {
 		t.Fatalf("expected empty output, got %#v", got)
-	}
-	if calls := recorder.getCalls(); len(calls) != 0 {
-		t.Fatalf("expected no metric calls, got %d", len(calls))
 	}
 }
 

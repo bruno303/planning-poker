@@ -20,6 +20,7 @@ type InMemoryHub struct {
 	Buses          map[string]domain.Bus
 	logger         log.Logger
 	roomMu         sync.Mutex
+	busMu          sync.RWMutex
 	saved          map[string]*entity.Room
 	removed        map[string]chan struct{}
 	removedClients map[string]chan struct{}
@@ -141,16 +142,34 @@ func (h *InMemoryHub) AddClient(c *entity.Client) {
 }
 
 func (h *InMemoryHub) AddBus(_ context.Context, clientID string, bus domain.Bus) error {
+	h.busMu.Lock()
+	defer h.busMu.Unlock()
 	h.Buses[clientID] = bus
 	return nil
 }
 
+func (h *InMemoryHub) GetClientsOfRoom(roomID string) int {
+	h.busMu.RLock()
+	defer h.busMu.RUnlock()
+	count := 0
+	for _, bus := range h.Buses {
+		if bus.RoomID() == roomID {
+			count++
+		}
+	}
+	return count
+}
+
 func (h *InMemoryHub) GetBus(clientID string) (domain.Bus, bool) {
+	h.busMu.RLock()
+	defer h.busMu.RUnlock()
 	bus, ok := h.Buses[clientID]
 	return bus, ok
 }
 
 func (h *InMemoryHub) RemoveBus(_ context.Context, clientID string) {
+	h.busMu.Lock()
+	defer h.busMu.Unlock()
 	delete(h.Buses, clientID)
 }
 

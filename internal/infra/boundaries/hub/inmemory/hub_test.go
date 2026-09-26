@@ -154,6 +154,37 @@ func TestAddAndGetBus(t *testing.T) {
 	}
 }
 
+func TestGetClientsOfRoomTracksBusReplacementAndRemoval(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	hub := NewHub()
+	makeBus := func(roomID string) domain.Bus {
+		bus := domain.NewMockBus(ctrl)
+		bus.EXPECT().RoomID().Return(roomID).AnyTimes()
+		return bus
+	}
+	ctx := context.Background()
+	if err := hub.AddBus(ctx, "one", makeBus("room")); err != nil {
+		t.Fatal(err)
+	}
+	if err := hub.AddBus(ctx, "two", makeBus("room")); err != nil {
+		t.Fatal(err)
+	}
+	if got := hub.GetClientsOfRoom("room"); got != 2 {
+		t.Fatalf("got %d clients, want 2", got)
+	}
+	if err := hub.AddBus(ctx, "one", makeBus("room")); err != nil {
+		t.Fatal(err)
+	}
+	if got := hub.GetClientsOfRoom("room"); got != 2 {
+		t.Fatalf("got %d clients after replacement, want 2", got)
+	}
+	hub.RemoveBus(ctx, "one")
+	hub.RemoveBus(ctx, "two")
+	if got := hub.GetClientsOfRoom("room"); got != 0 {
+		t.Fatalf("got %d clients after removal, want 0", got)
+	}
+}
+
 func TestRemoveBus(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
