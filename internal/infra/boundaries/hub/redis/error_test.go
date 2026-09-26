@@ -34,7 +34,7 @@ func TestRedisHub_NewRoom_WhenSaveFailsReturnsError(t *testing.T) {
 	mockRedis.EXPECT().Set(gomock.Any(), gomock.Any(), gomock.Any(), twentyFourHours).Return(statusCmd)
 
 	hub := newErrorTestHub(mockRedis)
-	room, err := hub.NewRoom(context.Background())
+	room, err := hub.NewRoom(context.Background(), entity.DefaultDeck())
 
 	assert.Nil(t, room)
 	assert.ErrorIs(t, err, wantErr)

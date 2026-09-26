@@ -120,6 +120,7 @@ func TestJoinRoomUseCase_Execute_AutoCreatesMissingRoom(t *testing.T) {
 	roomID := "nonexistent"
 	room := &entity.Room{
 		ID:      roomID,
+		Deck:    entity.DefaultDeck(),
 		Clients: clientcollection.New(),
 	}
 
@@ -130,7 +131,7 @@ func TestJoinRoomUseCase_Execute_AutoCreatesMissingRoom(t *testing.T) {
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, domain.ErrRoomNotFound)
-	mockHub.EXPECT().NewRoomWithID(ctx, roomID).Return(room, nil)
+	mockHub.EXPECT().NewRoomWithID(ctx, roomID, entity.DefaultDeck()).Return(room, nil)
 	mockHub.EXPECT().AddClient(gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(nil)
@@ -159,6 +160,9 @@ func TestJoinRoomUseCase_Execute_AutoCreatesMissingRoom(t *testing.T) {
 	}
 	if !output.Client.IsOwner {
 		t.Fatal("expected first auto-created room client to be owner")
+	}
+	if output.Room.Deck.ID != entity.DefaultDeck().ID {
+		t.Fatalf("expected auto-created room to use the default deck, got %q", output.Room.Deck.ID)
 	}
 
 	calls := metricMeter.getCalls()
@@ -238,7 +242,7 @@ func TestJoinRoomUseCase_Execute_AutoCreateRoomError(t *testing.T) {
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, domain.ErrRoomNotFound)
-	mockHub.EXPECT().NewRoomWithID(ctx, roomID).Return(nil, expectedError)
+	mockHub.EXPECT().NewRoomWithID(ctx, roomID, entity.DefaultDeck()).Return(nil, expectedError)
 
 	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric)
 	cmd := JoinRoomCommand{
@@ -344,7 +348,7 @@ func TestJoinRoomUseCase_Execute_SendErrorOnAutoCreatedRoom_RollsBackJoinInitial
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, domain.ErrRoomNotFound)
-	mockHub.EXPECT().NewRoomWithID(ctx, roomID).Return(room, nil)
+	mockHub.EXPECT().NewRoomWithID(ctx, roomID, entity.DefaultDeck()).Return(room, nil)
 	mockHub.EXPECT().AddClient(gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(expectedError)
@@ -400,7 +404,7 @@ func TestJoinRoomUseCase_Execute_SendErrorOnAutoCreatedRoom_DoesNotReloadRoomOrE
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, domain.ErrRoomNotFound)
-	mockHub.EXPECT().NewRoomWithID(ctx, roomID).Return(room, nil)
+	mockHub.EXPECT().NewRoomWithID(ctx, roomID, entity.DefaultDeck()).Return(room, nil)
 	mockHub.EXPECT().AddClient(gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(expectedError)
@@ -459,7 +463,7 @@ func TestJoinRoomUseCase_Execute_SendErrorWhenRollbackCleanupFails_DoesNotDecrem
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, domain.ErrRoomNotFound)
-	mockHub.EXPECT().NewRoomWithID(ctx, roomID).Return(room, nil)
+	mockHub.EXPECT().NewRoomWithID(ctx, roomID, entity.DefaultDeck()).Return(room, nil)
 	mockHub.EXPECT().AddClient(gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(sendErr)
@@ -581,7 +585,7 @@ func TestJoinRoomUseCase_Execute_BroadcastErrorAfterSendOnAutoCreatedRoom_DoesNo
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, domain.ErrRoomNotFound)
-	mockHub.EXPECT().NewRoomWithID(ctx, roomID).Return(room, nil)
+	mockHub.EXPECT().NewRoomWithID(ctx, roomID, entity.DefaultDeck()).Return(room, nil)
 	mockHub.EXPECT().AddClient(gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(nil)

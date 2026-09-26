@@ -90,7 +90,7 @@ func (uc JoinRoomUseCase) loadOrCreateRoom(ctx context.Context, cmd JoinRoomComm
 		return nil, false, fmt.Errorf("failed to load room %s: %w", cmd.RoomID, err)
 	}
 
-	room, err = uc.hub.NewRoomWithID(ctx, cmd.RoomID)
+	room, err = uc.hub.NewRoomWithID(ctx, cmd.RoomID, entity.DefaultDeck())
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to auto-create room %s: %w", cmd.RoomID, err)
 	}

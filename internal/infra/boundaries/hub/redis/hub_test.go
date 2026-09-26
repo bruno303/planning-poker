@@ -151,7 +151,7 @@ func TestRedisHub_NewRoomWithID(t *testing.T) {
 		roomClientCounts: make(map[string]int),
 	}
 
-	room, err := hub.NewRoomWithID(context.Background(), "room-explicit")
+	room, err := hub.NewRoomWithID(context.Background(), "room-explicit", entity.DefaultDeck())
 	assert.NoError(t, err)
 	assert.NotNil(t, room)
 	assert.Equal(t, "room-explicit", room.ID)

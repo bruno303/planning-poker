@@ -28,14 +28,16 @@ func TestNewRoomStateCommand(t *testing.T) {
 	room := entity.NewRoomWithIDAndStartedAt("room1", clientCollection, startedAt)
 	room.CurrentStory = "Story 1"
 	room.Reveal = true
-	room.Result = lo.ToPtr(float32(5))
-	room.MostAppearingVotes = []int{1, 2}
-	room.Consensus = "Medium"
-	room.LowestVote = lo.ToPtr(3)
-	room.HighestVote = lo.ToPtr(8)
-	room.VoteRange = lo.ToPtr(5)
-	room.VoteSpread = lo.ToPtr(2)
-	room.NonNumericVoteCount = 1
+	room.Round = entity.RoundResult{
+		Average:         lo.ToPtr(5.0),
+		MostCommon:      []string{"1", "2"},
+		Consensus:       "Medium",
+		Lowest:          lo.ToPtr(3.0),
+		Highest:         lo.ToPtr(8.0),
+		Range:           lo.ToPtr(5.0),
+		Spread:          lo.ToPtr(2),
+		NonNumericCount: 1,
+	}
 	room.BacklogMode = true
 	room.RoomVersion = 4
 	got := NewRoomStateCommand(room)
@@ -48,18 +50,20 @@ func TestNewRoomStateCommand(t *testing.T) {
 			{ID: "1", Name: "Alice", Vote: &vote, HasVoted: true, VotedAt: &votedAt, IsSpectator: false, IsOwner: true},
 			{ID: "2", Name: "Bob", Vote: nil, HasVoted: false, IsSpectator: true, IsOwner: false},
 		},
-		Result:              lo.ToPtr(float32(5)),
-		MostAppearingVotes:  []int{1, 2},
+		Result:              lo.ToPtr(5.0),
+		MostAppearingVotes:  []string{"1", "2"},
 		Consensus:           "Medium",
-		LowestVote:          lo.ToPtr(3),
-		HighestVote:         lo.ToPtr(8),
-		VoteRange:           lo.ToPtr(5),
+		LowestVote:          lo.ToPtr(3.0),
+		HighestVote:         lo.ToPtr(8.0),
+		VoteRange:           lo.ToPtr(5.0),
 		VoteSpread:          lo.ToPtr(2),
 		NonNumericVoteCount: 1,
 		BacklogMode:         true,
 		Stories:             []Story{},
 		CurrentStoryIndex:   0,
 		RoomVersion:         4,
+		Deck:                entity.DefaultDeck().Cards,
+		DeckPreset:          "fibonacci",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("NewRoomStateCommand() = %+v, want %+v", got, want)

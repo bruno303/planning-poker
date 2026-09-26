@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"planning-poker/internal/domain"
+	"planning-poker/internal/domain/entity"
 	redishub "planning-poker/internal/infra/boundaries/hub/redis"
 	"planning-poker/test/integration"
 )
@@ -28,7 +29,7 @@ func TestIntegration_RoomLifecycle(t *testing.T) {
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
 
-	room, err := hub.NewRoom(context.Background())
+	room, err := hub.NewRoom(context.Background(), entity.DefaultDeck())
 	assert.NoError(t, err)
 	assert.NotNil(t, room)
 	assert.NotEmpty(t, room.ID)
@@ -58,6 +59,42 @@ func TestIntegration_RoomLifecycle(t *testing.T) {
 	assert.ErrorIs(t, err, domain.ErrRoomNotFound)
 }
 
+func TestIntegration_RoomDeckRoundTrip(t *testing.T) {
+	client := setupRedisClient(t)
+	defer client.Close()
+
+	hub, err := redishub.NewRedisHub(context.Background(), client)
+	assert.NoError(t, err)
+
+	tshirtDeck, ok := entity.DeckByID("tshirt")
+	assert.True(t, ok)
+
+	room, err := hub.NewRoom(context.Background(), tshirtDeck)
+	assert.NoError(t, err)
+
+	persisted, err := hub.LoadRoom(context.Background(), room.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, "tshirt", persisted.Deck.ID)
+	assert.Equal(t, tshirtDeck.Cards, persisted.Deck.Cards)
+}
+
+func TestIntegration_LoadRoomWithLegacyRecordDefaultsDeckToFibonacci(t *testing.T) {
+	client := setupRedisClient(t)
+	defer client.Close()
+
+	hub, err := redishub.NewRedisHub(context.Background(), client)
+	assert.NoError(t, err)
+
+	legacyRoom := `{"id":"room-legacy-deck","clients":[],"backlogMode":true,"stories":[]}`
+	err = client.Set(context.Background(), "planning-poker:room:room-legacy-deck", legacyRoom, 24*time.Hour).Err()
+	assert.NoError(t, err)
+
+	room, err := hub.LoadRoom(context.Background(), "room-legacy-deck")
+	assert.NoError(t, err)
+	assert.Equal(t, "fibonacci", room.Deck.ID)
+	assert.Equal(t, entity.DefaultDeck().Cards, room.Deck.Cards)
+}
+
 func TestIntegration_RemoveClient_WhenRoomIsAlreadyMissing_CleansUpAndSucceeds(t *testing.T) {
 	client := setupRedisClient(t)
 	defer client.Close()
@@ -66,7 +103,7 @@ func TestIntegration_RemoveClient_WhenRoomIsAlreadyMissing_CleansUpAndSucceeds(t
 	assert.NoError(t, err)
 	defer func() { _ = hub.Close() }()
 
-	room, err := hub.NewRoom(context.Background())
+	room, err := hub.NewRoom(context.Background(), entity.DefaultDeck())
 	assert.NoError(t, err)
 
 	client1 := room.NewClient("client-missing-room-1")
@@ -96,7 +133,7 @@ func TestIntegration_RoomTTLExpiry(t *testing.T) {
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
 
-	room, err := hub.NewRoom(context.Background())
+	room, err := hub.NewRoom(context.Background(), entity.DefaultDeck())
 	assert.NoError(t, err)
 	assert.NotNil(t, room)
 
@@ -116,7 +153,7 @@ func TestIntegration_GetBus(t *testing.T) {
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
 
-	room, err := hub.NewRoom(context.Background())
+	room, err := hub.NewRoom(context.Background(), entity.DefaultDeck())
 	assert.NoError(t, err)
 	assert.NotNil(t, room)
 
@@ -143,7 +180,7 @@ func TestIntegration_PubSubInvalidMessage(t *testing.T) {
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
 
-	room, err := hub.NewRoom(context.Background())
+	room, err := hub.NewRoom(context.Background(), entity.DefaultDeck())
 	assert.NoError(t, err)
 	assert.NotNil(t, room)
 
@@ -196,7 +233,7 @@ func TestIntegration_PubSubUnsubscribe(t *testing.T) {
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
 
-	room, err := hub.NewRoom(context.Background())
+	room, err := hub.NewRoom(context.Background(), entity.DefaultDeck())
 	assert.NoError(t, err)
 	assert.NotNil(t, room)
 
@@ -243,7 +280,7 @@ func TestIntegration_BroadcastToRoom(t *testing.T) {
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
 
-	room, err := hub.NewRoom(context.Background())
+	room, err := hub.NewRoom(context.Background(), entity.DefaultDeck())
 	assert.NoError(t, err)
 	assert.NotNil(t, room)
 
@@ -285,11 +322,11 @@ func TestIntegration_GetRooms(t *testing.T) {
 	assert.Empty(t, rooms)
 
 	// Create multiple rooms
-	room1, err := hub.NewRoom(context.Background())
+	room1, err := hub.NewRoom(context.Background(), entity.DefaultDeck())
 	assert.NoError(t, err)
-	room2, err := hub.NewRoom(context.Background())
+	room2, err := hub.NewRoom(context.Background(), entity.DefaultDeck())
 	assert.NoError(t, err)
-	room3, err := hub.NewRoom(context.Background())
+	room3, err := hub.NewRoom(context.Background(), entity.DefaultDeck())
 	assert.NoError(t, err)
 
 	// Get all rooms
@@ -313,15 +350,15 @@ func TestIntegration_SaveRoom(t *testing.T) {
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
 
-	room, err := hub.NewRoom(context.Background())
+	room, err := hub.NewRoom(context.Background(), entity.DefaultDeck())
 	assert.NoError(t, err)
 	assert.NotNil(t, room)
 
 	// Modify room state
 	room.CurrentStory = "Updated Story"
 	room.Reveal = true
-	result := float32(5.5)
-	room.Result = &result
+	result := 5.5
+	room.Round = entity.RoundResult{Average: &result, MostCommon: []string{"5"}}
 
 	// Save the room
 	err = hub.SaveRoom(context.Background(), room)
@@ -332,8 +369,9 @@ func TestIntegration_SaveRoom(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "Updated Story", retrieved.CurrentStory)
 	assert.True(t, retrieved.Reveal)
-	assert.NotNil(t, retrieved.Result)
-	assert.Equal(t, float32(5.5), *retrieved.Result)
+	assert.NotNil(t, retrieved.Round.Average)
+	assert.Equal(t, 5.5, *retrieved.Round.Average)
+	assert.Equal(t, []string{"5"}, retrieved.Round.MostCommon)
 }
 
 func TestIntegration_Close(t *testing.T) {
@@ -343,7 +381,7 @@ func TestIntegration_Close(t *testing.T) {
 	hub, err := redishub.NewRedisHub(context.Background(), client)
 	assert.NoError(t, err)
 
-	room, err := hub.NewRoom(context.Background())
+	room, err := hub.NewRoom(context.Background(), entity.DefaultDeck())
 	assert.NoError(t, err)
 	client1 := room.NewClient("client-close-1")
 	room.Clients.Add(client1)

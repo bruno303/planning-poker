@@ -88,9 +88,9 @@ func (h *RedisHub) Close() error {
 	return nil
 }
 
-func (h *RedisHub) NewRoom(ctx context.Context) (*entity.Room, error) {
+func (h *RedisHub) NewRoom(ctx context.Context, deck entity.Deck) (*entity.Room, error) {
 	room, err := trace.Trace(ctx, trace.NameConfig("RedisHub", "NewRoom"), func(ctx context.Context) (any, error) {
-		room := entity.NewRoom(clientcollection.New())
+		room := entity.NewRoomWithDeck(clientcollection.New(), deck)
 		if err := h.saveInitialRoom(ctx, room); err != nil {
 			h.logger.Error(ctx, "Failed to save new room to Redis", err)
 			return nil, err
@@ -105,9 +105,9 @@ func (h *RedisHub) NewRoom(ctx context.Context) (*entity.Room, error) {
 	return room.(*entity.Room), nil
 }
 
-func (h *RedisHub) NewRoomWithID(ctx context.Context, roomID string) (*entity.Room, error) {
+func (h *RedisHub) NewRoomWithID(ctx context.Context, roomID string, deck entity.Deck) (*entity.Room, error) {
 	room, err := trace.Trace(ctx, trace.NameConfig("RedisHub", "NewRoomWithID"), func(ctx context.Context) (any, error) {
-		room := entity.NewRoomWithID(roomID, clientcollection.New())
+		room := entity.NewRoomWithIDAndDeck(roomID, clientcollection.New(), deck)
 		if err := h.saveInitialRoom(ctx, room); err != nil {
 			h.logger.Error(ctx, "Failed to save new room to Redis", err)
 			return nil, err

@@ -14,8 +14,8 @@ type (
 	Story struct {
 		ID                 string   `json:"id"`
 		Name               string   `json:"name"`
-		Result             *float32 `json:"result,omitempty"`
-		MostAppearingVotes []int    `json:"mostAppearingVotes"`
+		Result             *float64 `json:"result,omitempty"`
+		MostAppearingVotes []string `json:"mostAppearingVotes"`
 		Voted              bool     `json:"voted"`
 	}
 
@@ -24,12 +24,12 @@ type (
 		StartedAt           *time.Time    `json:"startedAt,omitempty"`
 		CurrentStory        string        `json:"currentStory"`
 		Reveal              bool          `json:"reveal"`
-		Result              *float32      `json:"result,omitempty"`
-		MostAppearingVotes  []int         `json:"mostAppearingVotes"`
+		Result              *float64      `json:"result,omitempty"`
+		MostAppearingVotes  []string      `json:"mostAppearingVotes"`
 		Consensus           string        `json:"consensus,omitempty"`
-		LowestVote          *int          `json:"lowestVote,omitempty"`
-		HighestVote         *int          `json:"highestVote,omitempty"`
-		VoteRange           *int          `json:"voteRange,omitempty"`
+		LowestVote          *float64      `json:"lowestVote,omitempty"`
+		HighestVote         *float64      `json:"highestVote,omitempty"`
+		VoteRange           *float64      `json:"voteRange,omitempty"`
 		VoteSpread          *int          `json:"voteSpread,omitempty"`
 		NonNumericVoteCount int           `json:"nonNumericVoteCount,omitempty"`
 		Participants        []Participant `json:"participants"`
@@ -37,6 +37,8 @@ type (
 		Stories             []Story       `json:"stories"`
 		CurrentStoryIndex   int           `json:"currentStoryIndex"`
 		RoomVersion         uint64        `json:"roomVersion"`
+		Deck                []string      `json:"deck"`
+		DeckPreset          string        `json:"deckPreset,omitempty"`
 	}
 	Participant struct {
 		ID          string     `json:"id"`
@@ -65,18 +67,20 @@ func NewRoomStateCommand(room *entity.Room) RoomState {
 		CurrentStory:        room.EffectiveCurrentStory(),
 		Reveal:              room.Reveal,
 		Participants:        MapToParticipants(room.Clients.Values()),
-		Result:              room.Result,
-		MostAppearingVotes:  room.MostAppearingVotes,
-		Consensus:           room.Consensus,
-		LowestVote:          room.LowestVote,
-		HighestVote:         room.HighestVote,
-		VoteRange:           room.VoteRange,
-		VoteSpread:          room.VoteSpread,
-		NonNumericVoteCount: room.NonNumericVoteCount,
+		Result:              room.Round.Average,
+		MostAppearingVotes:  room.Round.MostCommon,
+		Consensus:           room.Round.Consensus,
+		LowestVote:          room.Round.Lowest,
+		HighestVote:         room.Round.Highest,
+		VoteRange:           room.Round.Range,
+		VoteSpread:          room.Round.Spread,
+		NonNumericVoteCount: room.Round.NonNumericCount,
 		BacklogMode:         room.BacklogMode,
 		Stories:             mapStories(room.Stories),
 		CurrentStoryIndex:   room.CurrentStoryIndex,
 		RoomVersion:         room.RoomVersion,
+		Deck:                append([]string(nil), room.Deck.Cards...),
+		DeckPreset:          room.Deck.ID,
 	}
 }
 

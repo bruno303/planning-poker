@@ -2,6 +2,8 @@ package http_test
 
 import (
 	"fmt"
+	"net/http"
+	"planning-poker/internal/domain/entity"
 	"planning-poker/internal/infra/bus"
 	"planning-poker/test/integration"
 	"strings"
@@ -210,6 +212,9 @@ func TestWebSocketVoting(t *testing.T) {
 		if !ok || result != 6.5 {
 			t.Errorf("expected result 6.5, got %v", msgs[0]["result"])
 		}
+
+		// Most appearing votes are strings ordered by deck position
+		assertStringVotes(t, msgs[0]["mostAppearingVotes"], "5", "8")
 	})
 }
 
@@ -540,7 +545,146 @@ func testAllClientsAutoReveal(t *testing.T, connections ...*websocket.Conn) {
 		if result < expectedResult-0.001 || result > expectedResult+0.001 {
 			t.Errorf("expected result %.2f, got %.2f", expectedResult, result)
 		}
+		assertStringVotes(t, msg["mostAppearingVotes"], "3", "5", "8")
 	}
+}
+
+func TestWebSocketTshirtDeckVoting(t *testing.T) {
+	ts := integration.NewTestServer(t)
+	defer ts.Close()
+
+	tshirtDeck, ok := entity.DeckByID("tshirt")
+	if !ok {
+		t.Fatal("tshirt deck preset not found")
+	}
+
+	httpClient := integration.NewHTTPClient(ts.Server.URL)
+	var created struct {
+		RoomID string `json:"roomId"`
+	}
+	resp, err := httpClient.PostJSON(t, "/planning/rooms", map[string]string{"deckPreset": "tshirt"}, &created)
+	if err != nil {
+		t.Fatalf("failed to create tshirt room: %v", err)
+	}
+	integration.AssertStatus(t, resp, http.StatusCreated)
+	if created.RoomID == "" {
+		t.Fatal("expected a room ID in the response")
+	}
+
+	conn1 := connectWebSocket(t, ts, created.RoomID)
+	defer closeAndWait(conn1)
+	clientID1 := getClientID(t, conn1)
+
+	conn2 := connectWebSocket(t, ts, created.RoomID)
+	defer closeAndWait(conn2)
+	clientID2 := getClientID(t, conn2)
+	// Client1 receives the broadcast when client2 joins
+	consumeMessages(t, conn1)
+
+	t.Run("off-deck vote is rejected", func(t *testing.T) {
+		send(t, conn1, bus.WebSocketMessage{
+			Type:    "vote",
+			Payload: bus.VotePayload{Vote: "5"},
+		})
+
+		send(t, conn2, bus.WebSocketMessage{
+			Type:    "vote",
+			Payload: bus.VotePayload{Vote: "M"},
+		})
+
+		msgs := readMessages(t, conn1, conn2)
+		for _, msg := range msgs {
+			if msg["reveal"] != false {
+				t.Fatal("room should not reveal while the first client has not cast a valid vote")
+			}
+			assertDeckState(t, msg, tshirtDeck)
+
+			hasVoted := participantHasVoted(t, msg["participants"])
+			if hasVoted[clientID1] {
+				t.Fatal("off-deck vote was accepted by the tshirt room")
+			}
+			if !hasVoted[clientID2] {
+				t.Fatal("on-deck vote was not recorded")
+			}
+		}
+	})
+
+	t.Run("broadcast carries tshirt deck and string most common votes", func(t *testing.T) {
+		send(t, conn1, bus.WebSocketMessage{
+			Type:    "vote",
+			Payload: bus.VotePayload{Vote: "S"},
+		})
+
+		msgs := readMessages(t, conn1, conn2)
+		for _, msg := range msgs {
+			if msg["reveal"] != true {
+				t.Fatal("votes should be revealed after both clients vote")
+			}
+			assertDeckState(t, msg, tshirtDeck)
+			assertStringVotes(t, msg["mostAppearingVotes"], "S", "M")
+			if msg["result"] != nil {
+				t.Errorf("expected no numeric result for tshirt votes, got %v", msg["result"])
+			}
+		}
+	})
+}
+
+func assertDeckState(t *testing.T, msg map[string]any, deck entity.Deck) {
+	t.Helper()
+
+	if msg["deckPreset"] != deck.ID {
+		t.Errorf("deckPreset = %v, want %q", msg["deckPreset"], deck.ID)
+	}
+	cards, ok := msg["deck"].([]any)
+	if !ok {
+		t.Fatalf("deck = %#v, want an array of cards", msg["deck"])
+	}
+	if len(cards) != len(deck.Cards) {
+		t.Fatalf("deck has %d cards, want %d", len(cards), len(deck.Cards))
+	}
+	for i, card := range cards {
+		if card != deck.Cards[i] {
+			t.Errorf("deck[%d] = %v, want %q", i, card, deck.Cards[i])
+		}
+	}
+}
+
+func assertStringVotes(t *testing.T, raw any, expected ...string) {
+	t.Helper()
+
+	votes, ok := raw.([]any)
+	if !ok {
+		t.Fatalf("mostAppearingVotes = %#v, want %v", raw, expected)
+	}
+	if len(votes) != len(expected) {
+		t.Fatalf("mostAppearingVotes = %v, want %v", votes, expected)
+	}
+	for i, vote := range votes {
+		label, ok := vote.(string)
+		if !ok {
+			t.Fatalf("mostAppearingVotes[%d] = %#v, want string %q", i, vote, expected[i])
+		}
+		if label != expected[i] {
+			t.Errorf("mostAppearingVotes[%d] = %q, want %q", i, label, expected[i])
+		}
+	}
+}
+
+func participantHasVoted(t *testing.T, raw any) map[string]bool {
+	t.Helper()
+
+	participants, ok := raw.([]any)
+	if !ok {
+		t.Fatalf("participants = %#v, want an array", raw)
+	}
+	hasVoted := make(map[string]bool, len(participants))
+	for _, p := range participants {
+		participant := p.(map[string]any)
+		id, _ := participant["id"].(string)
+		voted, _ := participant["hasVoted"].(bool)
+		hasVoted[id] = voted
+	}
+	return hasVoted
 }
 
 func TestWebSocketReconnectionWithClientId(t *testing.T) {

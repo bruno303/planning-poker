@@ -5,16 +5,18 @@ import (
 	"errors"
 	"planning-poker/internal/domain"
 	"planning-poker/internal/domain/entity"
+	"reflect"
 	"sync"
 	"testing"
 
+	"github.com/samber/lo"
 	"go.uber.org/mock/gomock"
 )
 
 func TestNewRoom(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
-	room, err := hub.NewRoom(ctx)
+	room, err := hub.NewRoom(ctx, entity.DefaultDeck())
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -37,7 +39,7 @@ func TestNewRoomWithID(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
 
-	room, err := hub.NewRoomWithID(ctx, "room-123")
+	room, err := hub.NewRoomWithID(ctx, "room-123", entity.DefaultDeck())
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -56,7 +58,7 @@ func TestNewRoomWithID(t *testing.T) {
 func TestLoadRoom(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
-	room, err := hub.NewRoom(ctx)
+	room, err := hub.NewRoom(ctx, entity.DefaultDeck())
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -78,11 +80,11 @@ func TestLoadRoom(t *testing.T) {
 func TestRemoveRoom(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
-	room1, err := hub.NewRoom(ctx)
+	room1, err := hub.NewRoom(ctx, entity.DefaultDeck())
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	room2, err := hub.NewRoom(ctx)
+	room2, err := hub.NewRoom(ctx, entity.DefaultDeck())
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -198,7 +200,7 @@ func TestRemoveClient_Success(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
 
-	room, err := hub.NewRoom(ctx)
+	room, err := hub.NewRoom(ctx, entity.DefaultDeck())
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -233,7 +235,7 @@ func TestRemoveClient_RefreshesSavedSnapshotWithoutAdvancingRoomVersion(t *testi
 	ctx := context.Background()
 	hub := NewHub()
 
-	room, err := hub.NewRoomWithID(ctx, "room")
+	room, err := hub.NewRoomWithID(ctx, "room", entity.DefaultDeck())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -297,7 +299,7 @@ func TestRemoveClient_EmptyRoomRemoval(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
 
-	room, err := hub.NewRoom(ctx)
+	room, err := hub.NewRoom(ctx, entity.DefaultDeck())
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -332,7 +334,7 @@ func TestBroadcastToRoom_Success(t *testing.T) {
 	defer ctrl.Finish()
 
 	hub := NewHub()
-	room, err := hub.NewRoom(ctx)
+	room, err := hub.NewRoom(ctx, entity.DefaultDeck())
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -380,7 +382,7 @@ func TestBroadcastToRoom_BusNotFound(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
 
-	room, err := hub.NewRoom(ctx)
+	room, err := hub.NewRoom(ctx, entity.DefaultDeck())
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -404,7 +406,7 @@ func TestBroadcastToRoom_SendError(t *testing.T) {
 	defer ctrl.Finish()
 
 	hub := NewHub()
-	room, err := hub.NewRoom(ctx)
+	room, err := hub.NewRoom(ctx, entity.DefaultDeck())
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -441,15 +443,15 @@ func TestGetRooms(t *testing.T) {
 	}
 
 	// Add rooms
-	room1, err := hub.NewRoom(ctx)
+	room1, err := hub.NewRoom(ctx, entity.DefaultDeck())
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	room2, err := hub.NewRoom(ctx)
+	room2, err := hub.NewRoom(ctx, entity.DefaultDeck())
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	room3, err := hub.NewRoom(ctx)
+	room3, err := hub.NewRoom(ctx, entity.DefaultDeck())
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -484,7 +486,7 @@ func TestInterfaceCompliance(t *testing.T) {
 func TestSaveRoom(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
-	room, err := hub.NewRoom(ctx)
+	room, err := hub.NewRoom(ctx, entity.DefaultDeck())
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -523,7 +525,7 @@ func TestSaveRoom_RejectsStaleVersion(t *testing.T) {
 
 func TestSaveRoomIfVersion_StaleMutationDoesNotChangeStoredRoom(t *testing.T) {
 	hub := NewHub()
-	room, err := hub.NewRoom(context.Background())
+	room, err := hub.NewRoom(context.Background(), entity.DefaultDeck())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -550,7 +552,7 @@ func TestSaveRoomIfVersion_StaleMutationDoesNotChangeStoredRoom(t *testing.T) {
 
 func TestSaveRoomIfVersion_StaleMutationPreservesJoinedClient(t *testing.T) {
 	hub := NewHub()
-	room, err := hub.NewRoom(context.Background())
+	room, err := hub.NewRoom(context.Background(), entity.DefaultDeck())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -582,7 +584,7 @@ func TestSaveRoomIfVersion_StaleMutationPreservesJoinedClient(t *testing.T) {
 
 func TestSaveRoomIfVersion_StaleMutationDoesNotResurrectRemovedClient(t *testing.T) {
 	hub := NewHub()
-	room, err := hub.NewRoom(context.Background())
+	room, err := hub.NewRoom(context.Background(), entity.DefaultDeck())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -614,7 +616,7 @@ func TestSaveRoomIfVersion_StaleMutationDoesNotResurrectRemovedClient(t *testing
 
 func TestSaveRoomIfVersion_DoesNotResurrectRemovedRoom(t *testing.T) {
 	hub := NewHub()
-	room, err := hub.NewRoom(context.Background())
+	room, err := hub.NewRoom(context.Background(), entity.DefaultDeck())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -638,7 +640,7 @@ func TestSaveRoomIfVersion_DoesNotResurrectRemovedRoom(t *testing.T) {
 
 func TestSaveRoomIfVersion_SerializesConcurrentSaves(t *testing.T) {
 	hub := NewHub()
-	baseline, _ := hub.NewRoomWithID(context.Background(), "room")
+	baseline, _ := hub.NewRoomWithID(context.Background(), "room", entity.DefaultDeck())
 	var wg sync.WaitGroup
 	results := make(chan error, 2)
 	for i := 0; i < 2; i++ {
@@ -668,7 +670,7 @@ func TestSaveRoomIfVersion_SerializesConcurrentSaves(t *testing.T) {
 
 func TestSaveRoomIfVersion_RejectsStaleNoOpAndTracksSuccessfulSave(t *testing.T) {
 	hub := NewHub()
-	room, err := hub.NewRoom(context.Background())
+	room, err := hub.NewRoom(context.Background(), entity.DefaultDeck())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -693,5 +695,41 @@ func TestSaveRoomIfVersion_RejectsStaleNoOpAndTracksSuccessfulSave(t *testing.T)
 	expectedVersion = 1
 	if err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion); err != nil {
 		t.Fatalf("expected subsequent conditional save to succeed, got %v", err)
+	}
+}
+
+func TestCloneRoom_DeepCopiesRoundResult(t *testing.T) {
+	room := entity.NewRoom(nil)
+	room.Round = entity.RoundResult{
+		Average:         lo.ToPtr(6.5),
+		MostCommon:      []string{"3", "☕"},
+		Consensus:       "Medium",
+		Lowest:          lo.ToPtr(3.0),
+		Highest:         lo.ToPtr(13.0),
+		Range:           lo.ToPtr(10.0),
+		Spread:          lo.ToPtr(3),
+		NonNumericCount: 1,
+	}
+	room.Stories = []entity.Story{{
+		ID:                 "story-1",
+		Name:               "Story",
+		Result:             lo.ToPtr(6.5),
+		MostAppearingVotes: []string{"3"},
+		Voted:              true,
+	}}
+
+	clone := cloneRoom(room)
+
+	if !reflect.DeepEqual(clone.Round, room.Round) {
+		t.Fatalf("round result was not copied: got %+v, want %+v", clone.Round, room.Round)
+	}
+
+	clone.Round.MostCommon[0] = "mutated"
+	clone.Stories[0].MostAppearingVotes[0] = "mutated"
+	if room.Round.MostCommon[0] != "3" {
+		t.Fatal("round most common votes share memory with the original room")
+	}
+	if room.Stories[0].MostAppearingVotes[0] != "3" {
+		t.Fatal("story most appearing votes share memory with the original room")
 	}
 }

@@ -11,8 +11,8 @@ type (
 		AddClient(c *entity.Client)
 		RemoveClient(ctx context.Context, clientID string, roomID string) error
 
-		NewRoom(ctx context.Context) (*entity.Room, error)
-		NewRoomWithID(ctx context.Context, roomID string) (*entity.Room, error)
+		NewRoom(ctx context.Context, deck entity.Deck) (*entity.Room, error)
+		NewRoomWithID(ctx context.Context, roomID string, deck entity.Deck) (*entity.Room, error)
 		LoadRoom(ctx context.Context, roomID string) (*entity.Room, error)
 		RemoveRoom(roomID string)
 		SaveRoom(ctx context.Context, room *entity.Room) error

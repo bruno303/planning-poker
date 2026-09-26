@@ -2,9 +2,11 @@ package entity
 
 import (
 	"context"
-	"math"
+	"errors"
 	"reflect"
 	"testing"
+
+	"planning-poker/internal/domain/domainerror"
 
 	"github.com/samber/lo"
 	"go.uber.org/mock/gomock"
@@ -32,12 +34,8 @@ func TestRoom_RevealWithNoValidVotes(t *testing.T) {
 	room.reveal(true)
 
 	// The result should be nil when there are no valid numeric votes
-	if room.Result != nil {
-		if math.IsNaN(float64(*room.Result)) || math.IsInf(float64(*room.Result), 0) {
-			t.Errorf("expected Result to be nil when no valid numeric votes, got NaN or Inf: %v", *room.Result)
-		} else {
-			t.Errorf("expected Result to be nil when no valid numeric votes, got: %v", *room.Result)
-		}
+	if room.Round.Average != nil {
+		t.Errorf("expected Round.Average to be nil when no valid numeric votes, got: %v", *room.Round.Average)
 	}
 }
 
@@ -63,10 +61,10 @@ func TestRoom_RevealWithSingleValidVote(t *testing.T) {
 	room.reveal(true)
 
 	// The result should be 5
-	if room.Result == nil {
-		t.Errorf("expected Result to be 5, got nil")
-	} else if *room.Result != 5 {
-		t.Errorf("expected Result to be 5, got: %v", *room.Result)
+	if room.Round.Average == nil {
+		t.Errorf("expected Round.Average to be 5, got nil")
+	} else if *room.Round.Average != 5 {
+		t.Errorf("expected Round.Average to be 5, got: %v", *room.Round.Average)
 	}
 }
 
@@ -100,10 +98,10 @@ func TestRoom_RevealWithMixedVotes(t *testing.T) {
 	room.reveal(true)
 
 	// The result should be 3 (average of only the valid vote)
-	if room.Result == nil {
-		t.Errorf("expected Result to be 3, got nil")
-	} else if *room.Result != 3 {
-		t.Errorf("expected Result to be 3, got: %v", *room.Result)
+	if room.Round.Average == nil {
+		t.Errorf("expected Round.Average to be 3, got nil")
+	} else if *room.Round.Average != 3 {
+		t.Errorf("expected Round.Average to be 3, got: %v", *room.Round.Average)
 	}
 }
 
@@ -137,12 +135,8 @@ func TestRoom_RevealWithAllInvalidVotes(t *testing.T) {
 	room.reveal(true)
 
 	// The result should be nil when there are no valid numeric votes
-	if room.Result != nil {
-		if math.IsNaN(float64(*room.Result)) || math.IsInf(float64(*room.Result), 0) {
-			t.Errorf("expected Result to be nil when no valid numeric votes, got NaN or Inf: %v", *room.Result)
-		} else {
-			t.Errorf("expected Result to be nil when no valid numeric votes, got: %v", *room.Result)
-		}
+	if room.Round.Average != nil {
+		t.Errorf("expected Round.Average to be nil when no valid numeric votes, got: %v", *room.Round.Average)
 	}
 }
 
@@ -176,107 +170,10 @@ func TestRoom_RevealWithSpectators(t *testing.T) {
 	room.reveal(true)
 
 	// The result should be 5 (only Alice's vote counts)
-	if room.Result == nil {
-		t.Errorf("expected Result to be 5, got nil")
-	} else if *room.Result != 5 {
-		t.Errorf("expected Result to be 5, got: %v", *room.Result)
-	}
-}
-
-func TestCalculateConsensus(t *testing.T) {
-	tests := []struct {
-		name       string
-		votes      []int
-		consensus  string
-		lowest     *int
-		highest    *int
-		voteRange  *int
-		voteSpread *int
-	}{
-		{
-			name:      "no numeric votes",
-			consensus: consensusUnavailable,
-		},
-		{
-			name:       "single vote",
-			votes:      []int{5},
-			consensus:  consensusHigh,
-			lowest:     lo.ToPtr(5),
-			highest:    lo.ToPtr(5),
-			voteRange:  lo.ToPtr(0),
-			voteSpread: lo.ToPtr(0),
-		},
-		{
-			name:       "strong majority on adjacent estimates",
-			votes:      []int{3, 5, 5},
-			consensus:  consensusHigh,
-			lowest:     lo.ToPtr(3),
-			highest:    lo.ToPtr(5),
-			voteRange:  lo.ToPtr(2),
-			voteSpread: lo.ToPtr(1),
-		},
-		{
-			name:       "modest two-step spread",
-			votes:      []int{3, 5, 8},
-			consensus:  consensusMedium,
-			lowest:     lo.ToPtr(3),
-			highest:    lo.ToPtr(8),
-			voteRange:  lo.ToPtr(5),
-			voteSpread: lo.ToPtr(2),
-		},
-		{
-			name:       "large spread",
-			votes:      []int{3, 13},
-			consensus:  consensusLow,
-			lowest:     lo.ToPtr(3),
-			highest:    lo.ToPtr(13),
-			voteRange:  lo.ToPtr(10),
-			voteSpread: lo.ToPtr(3),
-		},
-		{
-			name:      "unknown ordered values",
-			votes:     []int{4, 5},
-			consensus: consensusUnavailable,
-			lowest:    lo.ToPtr(4),
-			highest:   lo.ToPtr(5),
-			voteRange: lo.ToPtr(1),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			consensus, lowest, highest, voteRange, voteSpread := calculateConsensus(tt.votes)
-			assertConsensus(t,
-				consensusResult{consensus, lowest, highest, voteRange, voteSpread},
-				consensusResult{tt.consensus, tt.lowest, tt.highest, tt.voteRange, tt.voteSpread},
-			)
-		})
-	}
-}
-
-type consensusResult struct {
-	consensus                  string
-	lowest, highest, voteRange *int
-	voteSpread                 *int
-}
-
-func assertConsensus(t *testing.T, got, want consensusResult) {
-	t.Helper()
-
-	if got.consensus != want.consensus {
-		t.Errorf("consensus = %q, want %q", got.consensus, want.consensus)
-	}
-	if !reflect.DeepEqual(got.lowest, want.lowest) {
-		t.Errorf("lowest = %v, want %v", got.lowest, want.lowest)
-	}
-	if !reflect.DeepEqual(got.highest, want.highest) {
-		t.Errorf("highest = %v, want %v", got.highest, want.highest)
-	}
-	if !reflect.DeepEqual(got.voteRange, want.voteRange) {
-		t.Errorf("vote range = %v, want %v", got.voteRange, want.voteRange)
-	}
-	if !reflect.DeepEqual(got.voteSpread, want.voteSpread) {
-		t.Errorf("vote spread = %v, want %v", got.voteSpread, want.voteSpread)
+	if room.Round.Average == nil {
+		t.Errorf("expected Round.Average to be 5, got nil")
+	} else if *room.Round.Average != 5 {
+		t.Errorf("expected Round.Average to be 5, got: %v", *room.Round.Average)
 	}
 }
 
@@ -298,20 +195,20 @@ func TestRoom_RevealCalculatesConsensusAndCountsSpecialVotes(t *testing.T) {
 	room := NewRoom(mockCC)
 	room.reveal(true)
 
-	if room.Consensus != consensusLow {
-		t.Errorf("consensus = %q, want %q", room.Consensus, consensusLow)
+	if room.Round.Consensus != consensusLow {
+		t.Errorf("consensus = %q, want %q", room.Round.Consensus, consensusLow)
 	}
-	if !reflect.DeepEqual(room.LowestVote, lo.ToPtr(3)) {
-		t.Errorf("lowest vote = %v, want 3", room.LowestVote)
+	if !reflect.DeepEqual(room.Round.Lowest, lo.ToPtr(3.0)) {
+		t.Errorf("lowest vote = %v, want 3", room.Round.Lowest)
 	}
-	if !reflect.DeepEqual(room.HighestVote, lo.ToPtr(13)) {
-		t.Errorf("highest vote = %v, want 13", room.HighestVote)
+	if !reflect.DeepEqual(room.Round.Highest, lo.ToPtr(13.0)) {
+		t.Errorf("highest vote = %v, want 13", room.Round.Highest)
 	}
-	if room.NonNumericVoteCount != 2 {
-		t.Errorf("non-numeric vote count = %d, want 2", room.NonNumericVoteCount)
+	if room.Round.NonNumericCount != 2 {
+		t.Errorf("non-numeric vote count = %d, want 2", room.Round.NonNumericCount)
 	}
-	if !reflect.DeepEqual(room.MostAppearingVotes, []int{3}) {
-		t.Errorf("most appearing votes = %v, want [3]", room.MostAppearingVotes)
+	if !reflect.DeepEqual(room.Round.MostCommon, []string{"3"}) {
+		t.Errorf("most appearing votes = %v, want [3]", room.Round.MostCommon)
 	}
 }
 
@@ -326,10 +223,8 @@ func TestRoom_HideVotesClearsConsensusMetrics(t *testing.T) {
 	room.reveal(true)
 	room.reveal(false)
 
-	if room.Result != nil || room.MostAppearingVotes != nil || room.Consensus != "" ||
-		room.LowestVote != nil || room.HighestVote != nil || room.VoteRange != nil ||
-		room.VoteSpread != nil || room.NonNumericVoteCount != 0 {
-		t.Fatalf("consensus metrics were not cleared: %+v", room)
+	if !reflect.DeepEqual(room.Round, RoundResult{}) {
+		t.Fatalf("consensus metrics were not cleared: %+v", room.Round)
 	}
 }
 
@@ -361,12 +256,16 @@ func TestNewRoom(t *testing.T) {
 		t.Error("NewRoom() Reveal = true, want false")
 	}
 
-	if room.Result != nil {
-		t.Errorf("NewRoom() Result = %v, want nil", room.Result)
+	if room.Round.Average != nil {
+		t.Errorf("NewRoom() Round.Average = %v, want nil", room.Round.Average)
 	}
 
 	if !room.BacklogMode {
 		t.Error("NewRoom() BacklogMode = false, want true")
+	}
+
+	if !reflect.DeepEqual(room.Deck, DefaultDeck()) {
+		t.Errorf("NewRoom() Deck = %+v, want default fibonacci deck", room.Deck)
 	}
 }
 
@@ -394,9 +293,67 @@ func TestNewRoomWithID(t *testing.T) {
 		t.Error("NewRoomWithID() BacklogMode = false, want true")
 	}
 
+	if !reflect.DeepEqual(room.Deck, DefaultDeck()) {
+		t.Errorf("NewRoomWithID() Deck = %+v, want default fibonacci deck", room.Deck)
+	}
+
 	client := room.NewClient("client1")
 	if !client.IsOwner {
 		t.Fatal("expected first client in explicit room to be owner")
+	}
+}
+
+func TestNewRoomWithDeck(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tshirtDeck, ok := DeckByID("tshirt")
+	if !ok {
+		t.Fatal("tshirt deck preset not found")
+	}
+
+	mockCC := NewMockClientCollection(ctrl)
+
+	room := NewRoomWithDeck(mockCC, tshirtDeck)
+
+	if room == nil {
+		t.Fatal("NewRoomWithDeck() returned nil")
+	}
+	if room.ID == "" {
+		t.Error("NewRoomWithDeck() ID is empty")
+	}
+	if room.Clients != mockCC {
+		t.Error("NewRoomWithDeck() Clients not set correctly")
+	}
+	if !reflect.DeepEqual(room.Deck, tshirtDeck) {
+		t.Errorf("NewRoomWithDeck() Deck = %+v, want %+v", room.Deck, tshirtDeck)
+	}
+}
+
+func TestNewRoomWithIDAndDeck(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tshirtDeck, ok := DeckByID("tshirt")
+	if !ok {
+		t.Fatal("tshirt deck preset not found")
+	}
+
+	mockCC := NewMockClientCollection(ctrl)
+
+	room := NewRoomWithIDAndDeck("room-123", mockCC, tshirtDeck)
+
+	if room == nil {
+		t.Fatal("NewRoomWithIDAndDeck() returned nil")
+	}
+	if room.ID != "room-123" {
+		t.Fatalf("NewRoomWithIDAndDeck() ID = %v, want room-123", room.ID)
+	}
+	if room.Clients != mockCC {
+		t.Error("NewRoomWithIDAndDeck() Clients not set correctly")
+	}
+	if !reflect.DeepEqual(room.Deck, tshirtDeck) {
+		t.Errorf("NewRoomWithIDAndDeck() Deck = %+v, want %+v", room.Deck, tshirtDeck)
 	}
 }
 
@@ -940,6 +897,103 @@ func TestRoom_Vote(t *testing.T) {
 			t.Error("Vote() expected error for nonexistent client")
 		}
 	})
+
+	t.Run("should accept on-deck vote for a non-default deck", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		vote := "M"
+		client := &Client{ID: "client1", IsSpectator: false}
+
+		mockCC := NewMockClientCollection(ctrl)
+		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC).Times(2) // getClient + checkReveal
+		mockCC.EXPECT().First().Return(client, true)
+		mockCC.EXPECT().Values().Return([]*Client{client}).AnyTimes()
+
+		tshirtDeck, ok := DeckByID("tshirt")
+		if !ok {
+			t.Fatal("tshirt deck preset not found")
+		}
+
+		room := NewRoomWithDeck(mockCC, tshirtDeck)
+		room.Reveal = false
+		client.room = room
+
+		err := room.Vote(ctx, "client1", &vote)
+		if err != nil {
+			t.Errorf("Vote() error = %v", err)
+		}
+
+		if client.CurrentVote == nil || *client.CurrentVote != vote {
+			t.Errorf("Vote() client vote = %v, want %v", client.CurrentVote, vote)
+		}
+	})
+
+	t.Run("should reject vote that is not a card of the deck", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		vote := "4"
+		client := &Client{ID: "client1", IsSpectator: false}
+
+		mockCC := NewMockClientCollection(ctrl)
+		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
+		mockCC.EXPECT().First().Return(client, true)
+
+		room := NewRoom(mockCC)
+		room.Reveal = false
+		client.room = room
+
+		err := room.Vote(ctx, "client1", &vote)
+		if !errors.Is(err, domainerror.ErrVoteNotInDeck) {
+			t.Fatalf("Vote() error = %v, want %v", err, domainerror.ErrVoteNotInDeck)
+		}
+		if client.CurrentVote != nil {
+			t.Errorf("Vote() client vote = %v, want nil", client.CurrentVote)
+		}
+	})
+
+	t.Run("should clear the vote when vote is nil or empty", func(t *testing.T) {
+		tests := []struct {
+			name string
+			vote *string
+		}{
+			{name: "nil vote", vote: nil},
+			{name: "empty vote", vote: lo.ToPtr("")},
+		}
+
+		for _, test := range tests {
+			t.Run(test.name, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+
+				existingVote := "5"
+				client := &Client{ID: "client1", IsSpectator: false, CurrentVote: &existingVote, HasVoted: true}
+
+				mockCC := NewMockClientCollection(ctrl)
+				mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC).Times(2) // getClient + checkReveal
+				mockCC.EXPECT().First().Return(client, true)
+				mockCC.EXPECT().Values().Return([]*Client{client}).AnyTimes()
+
+				room := NewRoom(mockCC)
+				room.Reveal = false
+				client.room = room
+
+				if err := room.Vote(ctx, "client1", test.vote); err != nil {
+					t.Fatalf("Vote() error = %v", err)
+				}
+				if client.HasVoted {
+					t.Error("Vote() HasVoted = true, want false")
+				}
+				if client.VotedAt != nil {
+					t.Errorf("Vote() VotedAt = %v, want nil", client.VotedAt)
+				}
+				if client.CurrentVote != nil && *client.CurrentVote != "" {
+					t.Errorf("Vote() client vote = %v, want cleared", client.CurrentVote)
+				}
+			})
+		}
+	})
 }
 
 func TestRoom_UpdateClientName(t *testing.T) {
@@ -1004,12 +1058,12 @@ func TestRoom_MostAppearingVotes(t *testing.T) {
 		room := NewRoom(mockCC)
 		room.reveal(true)
 
-		if len(room.MostAppearingVotes) != 1 {
-			t.Errorf("Expected 1 most appearing vote, got %v", len(room.MostAppearingVotes))
+		if len(room.Round.MostCommon) != 1 {
+			t.Errorf("Expected 1 most appearing vote, got %v", len(room.Round.MostCommon))
 		}
 
-		if len(room.MostAppearingVotes) > 0 && room.MostAppearingVotes[0] != 5 {
-			t.Errorf("Expected most appearing vote to be 5, got %v", room.MostAppearingVotes[0])
+		if len(room.Round.MostCommon) > 0 && room.Round.MostCommon[0] != "5" {
+			t.Errorf("Expected most appearing vote to be 5, got %v", room.Round.MostCommon[0])
 		}
 	})
 
@@ -1027,8 +1081,8 @@ func TestRoom_MostAppearingVotes(t *testing.T) {
 		room.reveal(true)
 
 		// Both votes appear once, so both should be in the list
-		if len(room.MostAppearingVotes) != 2 {
-			t.Errorf("Expected 2 most appearing votes, got %v", len(room.MostAppearingVotes))
+		if len(room.Round.MostCommon) != 2 {
+			t.Errorf("Expected 2 most appearing votes, got %v", len(room.Round.MostCommon))
 		}
 	})
 }

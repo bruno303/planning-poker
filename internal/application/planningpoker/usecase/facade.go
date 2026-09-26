@@ -13,7 +13,7 @@ type (
 		LeaveRoom         UseCase[LeaveRoomCommand]
 		JoinRoom          UseCaseR[JoinRoomCommand, *JoinRoomOutput]
 		CreateClient      UseCaseO[CreateClientOutput]
-		CreateRoom        UseCaseO[CreateRoomOutput]
+		CreateRoom        UseCaseR[CreateRoomCommand, CreateRoomOutput]
 		ToggleBacklogMode UseCase[ToggleBacklogModeCommand]
 		AddStory          UseCase[AddStoryCommand]
 		RemoveStory       UseCase[RemoveStoryCommand]

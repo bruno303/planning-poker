@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -27,43 +26,47 @@ type (
 	}
 
 	Room struct {
-		ID                  string
-		startedAt           time.Time
-		Clients             ClientCollection
-		CurrentStory        string
-		Reveal              bool
-		Result              *float32
-		MostAppearingVotes  []int
-		Consensus           string
-		LowestVote          *int
-		HighestVote         *int
-		VoteRange           *int
-		VoteSpread          *int
-		NonNumericVoteCount int
-		BacklogMode         bool
-		Stories             []Story
-		CurrentStoryIndex   int
-		RoomVersion         uint64
+		ID                string
+		Deck              Deck
+		startedAt         time.Time
+		Clients           ClientCollection
+		CurrentStory      string
+		Reveal            bool
+		Round             RoundResult
+		BacklogMode       bool
+		Stories           []Story
+		CurrentStoryIndex int
+		RoomVersion       uint64
 	}
 )
 
 func NewRoom(clients ClientCollection) *Room {
-	return NewRoomWithID(uuid.NewString(), clients)
+	return NewRoomWithDeck(clients, DefaultDeck())
+}
+
+func NewRoomWithDeck(clients ClientCollection, deck Deck) *Room {
+	return NewRoomWithIDAndDeck(uuid.NewString(), clients, deck)
 }
 
 func NewRoomWithID(id string, clients ClientCollection) *Room {
-	return NewRoomWithIDAndStartedAt(id, clients, time.Now().UTC())
+	return NewRoomWithIDAndDeck(id, clients, DefaultDeck())
+}
+
+func NewRoomWithIDAndDeck(id string, clients ClientCollection, deck Deck) *Room {
+	room := NewRoomWithIDAndStartedAt(id, clients, time.Now().UTC())
+	room.Deck = deck.Clone()
+	return room
 }
 
 // NewRoomWithIDAndStartedAt creates a room with a persisted start time.
 func NewRoomWithIDAndStartedAt(id string, clients ClientCollection, startedAt time.Time) *Room {
 	return &Room{
 		ID:           id,
+		Deck:         DefaultDeck(),
 		startedAt:    startedAt.UTC(),
 		Clients:      clients,
 		CurrentStory: "",
 		Reveal:       false,
-		Result:       nil,
 		BacklogMode:  true,
 	}
 }
@@ -491,149 +494,28 @@ func (r *Room) reveal(reveal bool) {
 	r.Reveal = reveal
 
 	if !reveal {
-		r.clearConsensus()
+		r.Round = RoundResult{}
 		return
 	}
 
-	metrics := r.collectVotes()
-	r.MostAppearingVotes = mostAppearingVotes(metrics.counts, getMostVoteCount(metrics.counts))
-
-	if metrics.count > 0 {
-		r.Result = lo.ToPtr(metrics.sum / metrics.count)
-	} else {
-		r.Result = nil
-	}
-
-	r.Consensus, r.LowestVote, r.HighestVote, r.VoteRange, r.VoteSpread = calculateConsensus(metrics.values)
-	r.NonNumericVoteCount = metrics.nonNumericCount
+	r.Round = EvaluateVotes(r.Deck, r.voterCards())
 	if r.BacklogMode && r.CurrentStoryIndex >= 0 && r.CurrentStoryIndex < len(r.Stories) {
-		r.Stories[r.CurrentStoryIndex].Result = r.Result
-		r.Stories[r.CurrentStoryIndex].MostAppearingVotes = r.MostAppearingVotes
+		r.Stories[r.CurrentStoryIndex].Result = r.Round.Average
+		r.Stories[r.CurrentStoryIndex].MostAppearingVotes = r.Round.MostCommon
 		r.Stories[r.CurrentStoryIndex].Voted = true
 	}
 }
 
-type voteMetrics struct {
-	sum             float32
-	count           float32
-	counts          map[int]int
-	values          []int
-	nonNumericCount int
-}
-
-func (r *Room) collectVotes() voteMetrics {
-	metrics := voteMetrics{counts: make(map[int]int)}
-
-	for _, client := range r.Clients.Values() {
-		if client.IsSpectator || client.CurrentVote == nil {
+func (r *Room) voterCards() []string {
+	clients := r.Clients.Values()
+	cards := make([]string, 0, len(clients))
+	for _, client := range clients {
+		if client.IsSpectator || client.CurrentVote == nil || *client.CurrentVote == "" {
 			continue
 		}
-
-		vote, err := strconv.Atoi(*client.CurrentVote)
-		if err != nil {
-			metrics.nonNumericCount++
-			continue
-		}
-
-		metrics.sum += float32(vote)
-		metrics.count++
-		metrics.counts[vote]++
-		metrics.values = append(metrics.values, vote)
+		cards = append(cards, *client.CurrentVote)
 	}
-
-	return metrics
-}
-
-func mostAppearingVotes(votes map[int]int, mostVoteCount int) []int {
-	mostVotes := make([]int, 0)
-	for vote, count := range votes {
-		if count == mostVoteCount {
-			mostVotes = append(mostVotes, vote)
-		}
-	}
-	slices.Sort(mostVotes)
-
-	return mostVotes
-}
-
-func getMostVoteCount(voteMap map[int]int) int {
-	var mostVoteCount int
-	for _, count := range voteMap {
-		if count > mostVoteCount {
-			mostVoteCount = count
-		}
-	}
-
-	return mostVoteCount
-}
-
-const (
-	consensusHigh        = "High"
-	consensusMedium      = "Medium"
-	consensusLow         = "Low"
-	consensusUnavailable = "Unavailable"
-)
-
-var planningPokerDeck = []int{0, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89}
-
-func calculateConsensus(votes []int) (string, *int, *int, *int, *int) {
-	if len(votes) == 0 {
-		return consensusUnavailable, nil, nil, nil, nil
-	}
-
-	minVote, maxVote := votes[0], votes[0]
-	voteCounts := make(map[int]int, len(votes))
-	for _, vote := range votes {
-		voteCounts[vote]++
-		if vote < minVote {
-			minVote = vote
-		}
-		if vote > maxVote {
-			maxVote = vote
-		}
-	}
-
-	voteRange := maxVote - minVote
-	minPosition, minKnown := deckPosition(minVote)
-	maxPosition, maxKnown := deckPosition(maxVote)
-	var spread *int
-	if minKnown && maxKnown {
-		deckSpread := maxPosition - minPosition
-		spread = lo.ToPtr(deckSpread)
-	}
-
-	mostVoteCount := getMostVoteCount(voteCounts)
-	strongMajority := mostVoteCount >= (2*len(votes)+2)/3
-	consensus := consensusUnavailable
-	if spread != nil {
-		consensus = consensusLow
-	}
-	switch {
-	case minVote == maxVote:
-		consensus = consensusHigh
-	case spread != nil && strongMajority && *spread <= 1:
-		consensus = consensusHigh
-	case spread != nil && *spread <= 2:
-		consensus = consensusMedium
-	}
-
-	return consensus, lo.ToPtr(minVote), lo.ToPtr(maxVote), lo.ToPtr(voteRange), spread
-}
-
-func deckPosition(vote int) (int, bool) {
-	position, ok := slices.BinarySearch(planningPokerDeck, vote)
-	return position, ok
-}
-
-func (r *Room) clearConsensus() {
-	r.Result = nil
-	r.MostAppearingVotes = nil
-	r.Consensus = ""
-	r.LowestVote = nil
-	r.HighestVote = nil
-	r.VoteRange = nil
-	r.VoteSpread = nil
-	r.NonNumericVoteCount = 0
+	return cards
 }
 
 func (r *Room) IsEmpty() bool {
@@ -650,6 +532,9 @@ func (r *Room) Vote(ctx context.Context, clientID string, vote *string) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+	}
+	if vote != nil && *vote != "" && !r.Deck.Contains(*vote) {
+		return fmt.Errorf("vote %q: %w", *vote, domainerror.ErrVoteNotInDeck)
 	}
 
 	client.Vote(ctx, vote)

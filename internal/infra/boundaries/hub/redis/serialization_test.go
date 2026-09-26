@@ -2,6 +2,7 @@ package redis
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 
@@ -18,17 +19,21 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 	originalRoom.CurrentStory = "User Story #42"
 	originalRoom.RoomVersion = 7
 	originalRoom.Reveal = false
-	originalRoom.Consensus = "Medium"
-	originalRoom.LowestVote = lo.ToPtr(3)
-	originalRoom.HighestVote = lo.ToPtr(8)
-	originalRoom.VoteRange = lo.ToPtr(5)
-	originalRoom.VoteSpread = lo.ToPtr(2)
-	originalRoom.NonNumericVoteCount = 1
+	originalRoom.Round = entity.RoundResult{
+		Average:         lo.ToPtr(5.5),
+		MostCommon:      []string{"3", "☕"},
+		Consensus:       "Medium",
+		Lowest:          lo.ToPtr(3.0),
+		Highest:         lo.ToPtr(8.0),
+		Range:           lo.ToPtr(5.0),
+		Spread:          lo.ToPtr(2),
+		NonNumericCount: 1,
+	}
 	originalRoom.Stories = []entity.Story{{
 		ID:                 "story-1",
 		Name:               "Backlog story",
-		Result:             lo.ToPtr(float32(8)),
-		MostAppearingVotes: []int{8},
+		Result:             lo.ToPtr(8.0),
+		MostAppearingVotes: []string{"8", "☕"},
 		Voted:              true,
 	}}
 
@@ -79,17 +84,8 @@ func assertSerializedRoomProperties(t *testing.T, originalRoom, deserializedRoom
 	if deserializedRoom.Reveal != originalRoom.Reveal {
 		t.Errorf("Expected reveal %v, got %v", originalRoom.Reveal, deserializedRoom.Reveal)
 	}
-	if deserializedRoom.Consensus != originalRoom.Consensus {
-		t.Errorf("Expected consensus %q, got %q", originalRoom.Consensus, deserializedRoom.Consensus)
-	}
-	if *deserializedRoom.LowestVote != *originalRoom.LowestVote ||
-		*deserializedRoom.HighestVote != *originalRoom.HighestVote ||
-		*deserializedRoom.VoteRange != *originalRoom.VoteRange ||
-		*deserializedRoom.VoteSpread != *originalRoom.VoteSpread {
-		t.Errorf("numeric consensus metrics were not preserved")
-	}
-	if deserializedRoom.NonNumericVoteCount != originalRoom.NonNumericVoteCount {
-		t.Errorf("Expected non-numeric vote count %d, got %d", originalRoom.NonNumericVoteCount, deserializedRoom.NonNumericVoteCount)
+	if !reflect.DeepEqual(deserializedRoom.Round, originalRoom.Round) {
+		t.Errorf("round result was not preserved: got %+v, want %+v", deserializedRoom.Round, originalRoom.Round)
 	}
 	if deserializedRoom.RoomVersion != originalRoom.RoomVersion {
 		t.Errorf("Expected room version %d, got %d", originalRoom.RoomVersion, deserializedRoom.RoomVersion)
@@ -104,6 +100,9 @@ func assertSerializedStories(t *testing.T, deserializedRoom *entity.Room) {
 	}
 	if deserializedRoom.Stories[0].Result == nil || *deserializedRoom.Stories[0].Result != 8 || !deserializedRoom.Stories[0].Voted {
 		t.Fatalf("story estimate was not preserved: %+v", deserializedRoom.Stories[0])
+	}
+	if !reflect.DeepEqual(deserializedRoom.Stories[0].MostAppearingVotes, []string{"8", "☕"}) {
+		t.Fatalf("story most appearing votes were not preserved: %+v", deserializedRoom.Stories[0].MostAppearingVotes)
 	}
 }
 
@@ -158,6 +157,88 @@ func TestDeserializeRoomRejectsStoryWithoutID(t *testing.T) {
 
 	if _, err := DeserializeRoom(data, clientcollection.New()); err == nil {
 		t.Fatal("DeserializeRoom accepted a story without an ID")
+	}
+}
+
+func TestDeserializeRoomConvertsLegacyNumericMostAppearingVotes(t *testing.T) {
+	data := []byte(`{"id":"room-legacy","clients":[],"backlogMode":true,"result":6.5,"mostAppearingVotes":[3,5],"stories":[{"id":"story-legacy","name":"Legacy story","mostAppearingVotes":[5],"voted":true}]}`)
+
+	room, err := DeserializeRoom(data, clientcollection.New())
+	if err != nil {
+		t.Fatalf("DeserializeRoom returned error for legacy record: %v", err)
+	}
+	if !reflect.DeepEqual(room.Round.MostCommon, []string{"3", "5"}) {
+		t.Fatalf("legacy most appearing votes = %v, want [3 5]", room.Round.MostCommon)
+	}
+	if room.Round.Average == nil || *room.Round.Average != 6.5 {
+		t.Fatalf("legacy average = %v, want 6.5", room.Round.Average)
+	}
+	if len(room.Stories) != 1 || !reflect.DeepEqual(room.Stories[0].MostAppearingVotes, []string{"5"}) {
+		t.Fatalf("legacy story most appearing votes = %+v, want [5]", room.Stories)
+	}
+
+	serialized, err := SerializeRoom(room)
+	if err != nil {
+		t.Fatalf("SerializeRoom returned error: %v", err)
+	}
+	var wire struct {
+		MostAppearingVotes []any `json:"mostAppearingVotes"`
+	}
+	if err := json.Unmarshal(serialized, &wire); err != nil {
+		t.Fatalf("serialized legacy room is invalid JSON: %v", err)
+	}
+	for _, vote := range wire.MostAppearingVotes {
+		if _, ok := vote.(string); !ok {
+			t.Fatalf("serialized legacy vote %v is not a string", vote)
+		}
+	}
+}
+
+func TestSerializeDeserializeRoomPreservesDeck(t *testing.T) {
+	tshirtDeck, ok := entity.DeckByID("tshirt")
+	if !ok {
+		t.Fatal("tshirt deck preset not found")
+	}
+	originalRoom := entity.NewRoomWithIDAndDeck("room-deck", clientcollection.New(), tshirtDeck)
+
+	data, err := SerializeRoom(originalRoom)
+	if err != nil {
+		t.Fatalf("Failed to serialize room: %v", err)
+	}
+
+	var wire struct {
+		Deck       []string `json:"deck"`
+		DeckPreset string   `json:"deckPreset"`
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		t.Fatalf("serialized room is invalid JSON: %v", err)
+	}
+	if wire.DeckPreset != "tshirt" {
+		t.Errorf("serialized deckPreset = %q, want tshirt", wire.DeckPreset)
+	}
+	if !reflect.DeepEqual(wire.Deck, tshirtDeck.Cards) {
+		t.Errorf("serialized deck = %v, want %v", wire.Deck, tshirtDeck.Cards)
+	}
+
+	deserializedRoom, err := DeserializeRoom(data, clientcollection.New())
+	if err != nil {
+		t.Fatalf("Failed to deserialize room: %v", err)
+	}
+
+	if !reflect.DeepEqual(deserializedRoom.Deck, tshirtDeck) {
+		t.Errorf("deserialized deck = %+v, want %+v", deserializedRoom.Deck, tshirtDeck)
+	}
+}
+
+func TestDeserializeRoomDefaultsMissingDeckToFibonacci(t *testing.T) {
+	data := []byte(`{"id":"room-legacy","clients":[],"backlogMode":true,"stories":[]}`)
+
+	room, err := DeserializeRoom(data, clientcollection.New())
+	if err != nil {
+		t.Fatalf("DeserializeRoom returned error for legacy record: %v", err)
+	}
+	if !reflect.DeepEqual(room.Deck, entity.DefaultDeck()) {
+		t.Fatalf("legacy room deck = %+v, want default fibonacci deck", room.Deck)
 	}
 }
 

@@ -39,9 +39,9 @@ func NewHub() *InMemoryHub {
 	}
 }
 
-func (h *InMemoryHub) NewRoom(ctx context.Context) (*entity.Room, error) {
+func (h *InMemoryHub) NewRoom(ctx context.Context, deck entity.Deck) (*entity.Room, error) {
 	room, _ := trace.Trace(ctx, trace.NameConfig("InMemoryHub", "NewRoom"), func(ctx context.Context) (any, error) {
-		room := entity.NewRoom(clientcollection.New())
+		room := entity.NewRoomWithDeck(clientcollection.New(), deck)
 		h.roomMu.Lock()
 		h.Rooms[room.ID] = room
 		h.saved[room.ID] = cloneRoom(room)
@@ -53,9 +53,9 @@ func (h *InMemoryHub) NewRoom(ctx context.Context) (*entity.Room, error) {
 	return room.(*entity.Room), nil
 }
 
-func (h *InMemoryHub) NewRoomWithID(ctx context.Context, roomID string) (*entity.Room, error) {
+func (h *InMemoryHub) NewRoomWithID(ctx context.Context, roomID string, deck entity.Deck) (*entity.Room, error) {
 	room, _ := trace.Trace(ctx, trace.NameConfig("InMemoryHub", "NewRoomWithID"), func(ctx context.Context) (any, error) {
-		room := entity.NewRoomWithID(roomID, clientcollection.New())
+		room := entity.NewRoomWithIDAndDeck(roomID, clientcollection.New(), deck)
 		h.roomMu.Lock()
 		h.Rooms[room.ID] = room
 		h.saved[room.ID] = cloneRoom(room)
@@ -248,20 +248,14 @@ func (h *InMemoryHub) SaveRoomIfVersion(_ context.Context, room *entity.Room, ex
 func cloneRoom(room *entity.Room) *entity.Room {
 	clone := entity.NewRoomWithIDAndStartedAt(room.ID, clientcollection.New(), room.StartedAt())
 	clone.CurrentStory = room.CurrentStory
+	clone.Deck = room.Deck.Clone()
 	clone.Reveal = room.Reveal
-	clone.Result = cloneFloat32(room.Result)
-	clone.MostAppearingVotes = append([]int(nil), room.MostAppearingVotes...)
-	clone.Consensus = room.Consensus
-	clone.LowestVote = cloneInt(room.LowestVote)
-	clone.HighestVote = cloneInt(room.HighestVote)
-	clone.VoteRange = cloneInt(room.VoteRange)
-	clone.VoteSpread = cloneInt(room.VoteSpread)
-	clone.NonNumericVoteCount = room.NonNumericVoteCount
+	clone.Round = cloneRoundResult(room.Round)
 	clone.BacklogMode = room.BacklogMode
 	clone.Stories = append([]entity.Story(nil), room.Stories...)
 	for i := range clone.Stories {
-		clone.Stories[i].Result = cloneFloat32(room.Stories[i].Result)
-		clone.Stories[i].MostAppearingVotes = append([]int(nil), room.Stories[i].MostAppearingVotes...)
+		clone.Stories[i].Result = cloneFloat64(room.Stories[i].Result)
+		clone.Stories[i].MostAppearingVotes = append([]string(nil), room.Stories[i].MostAppearingVotes...)
 	}
 	clone.CurrentStoryIndex = room.CurrentStoryIndex
 	clone.RoomVersion = room.RoomVersion
@@ -295,12 +289,23 @@ func cloneInt(value *int) *int {
 	return &cloned
 }
 
-func cloneFloat32(value *float32) *float32 {
+func cloneFloat64(value *float64) *float64 {
 	if value == nil {
 		return nil
 	}
 	cloned := *value
 	return &cloned
+}
+
+func cloneRoundResult(round entity.RoundResult) entity.RoundResult {
+	cloned := round
+	cloned.Average = cloneFloat64(round.Average)
+	cloned.MostCommon = append([]string(nil), round.MostCommon...)
+	cloned.Lowest = cloneFloat64(round.Lowest)
+	cloned.Highest = cloneFloat64(round.Highest)
+	cloned.Range = cloneFloat64(round.Range)
+	cloned.Spread = cloneInt(round.Spread)
+	return cloned
 }
 
 func (h *InMemoryHub) BroadcastToRoom(ctx context.Context, roomID string, message any) error {

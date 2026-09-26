@@ -39,6 +39,7 @@ func TestVoteUseCase_Execute_Success(t *testing.T) {
 	vote := "5"
 	room := &entity.Room{
 		ID:      roomID,
+		Deck:    entity.DefaultDeck(),
 		Clients: clientcollection.New(),
 	}
 
@@ -81,6 +82,7 @@ func TestVoteUseCase_Execute_SaveRoomError(t *testing.T) {
 	vote := "5"
 	room := &entity.Room{
 		ID:      roomID,
+		Deck:    entity.DefaultDeck(),
 		Clients: clientcollection.New(),
 	}
 
@@ -161,6 +163,7 @@ func TestVoteUseCase_Execute_BroadcastError(t *testing.T) {
 	vote := "5"
 	room := &entity.Room{
 		ID:      roomID,
+		Deck:    entity.DefaultDeck(),
 		Clients: clientcollection.New(),
 	}
 

@@ -2,14 +2,18 @@ package usecase
 
 import (
 	"context"
+	"fmt"
 	"planning-poker/internal/application/planningpoker/metric"
 	"planning-poker/internal/domain"
+	"planning-poker/internal/domain/domainerror"
+	"planning-poker/internal/domain/entity"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
 )
 
 type (
-	CreateRoomOutput struct {
+	CreateRoomCommand struct{ DeckID string }
+	CreateRoomOutput  struct {
 		RoomID string
 	}
 	CreateRoomUseCase struct {
@@ -19,7 +23,7 @@ type (
 	}
 )
 
-var _ UseCaseO[CreateRoomOutput] = (*CreateRoomUseCase)(nil)
+var _ UseCaseR[CreateRoomCommand, CreateRoomOutput] = (*CreateRoomUseCase)(nil)
 
 func NewCreateRoomUseCase(hub domain.Hub, metric metric.PlanningPokerMetric) CreateRoomUseCase {
 	return CreateRoomUseCase{
@@ -29,8 +33,16 @@ func NewCreateRoomUseCase(hub domain.Hub, metric metric.PlanningPokerMetric) Cre
 	}
 }
 
-func (uc CreateRoomUseCase) Execute(ctx context.Context) (CreateRoomOutput, error) {
-	room, err := uc.hub.NewRoom(ctx)
+func (uc CreateRoomUseCase) Execute(ctx context.Context, cmd CreateRoomCommand) (CreateRoomOutput, error) {
+	deck := entity.DefaultDeck()
+	if cmd.DeckID != "" {
+		var ok bool
+		deck, ok = entity.DeckByID(cmd.DeckID)
+		if !ok {
+			return CreateRoomOutput{}, fmt.Errorf("%s %q: %w", domainerror.ErrUnknownDeck, cmd.DeckID, domainerror.ErrUnknownDeck)
+		}
+	}
+	room, err := uc.hub.NewRoom(ctx, deck)
 	if err != nil {
 		return CreateRoomOutput{}, err
 	}

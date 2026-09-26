@@ -1,5 +1,10 @@
 basePath: /
 definitions:
+  http.CreateRoomRequest:
+    properties:
+      deckPreset:
+        type: string
+    type: object
   http.CreateRoomResponse:
     properties:
       roomId:
@@ -300,13 +305,23 @@ paths:
       consumes:
       - application/json
       description: Creates a new planning poker room and returns its ID
+      parameters:
+      - description: Room options
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/http.CreateRoomRequest'
       produces:
       - application/json
       responses:
-        "200":
-          description: OK
+        "201":
+          description: Created
           schema:
             $ref: '#/definitions/http.CreateRoomResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
