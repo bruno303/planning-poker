@@ -105,6 +105,37 @@ func saveResultCmd() *redis.Cmd {
 	return cmd
 }
 
+func TestRedisHub_AddBusReplacementKeepsRoomCountsAccurate(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockRedis := NewMockRedisClient(ctrl)
+	roomID := "count-room"
+	hub := &RedisHub{client: mockRedis, logger: log.NewLogger("test"), buses: make(map[string]domain.Bus), closeCh: make(chan struct{}), roomClientCounts: make(map[string]int)}
+	hub.roomSubs.Store(roomID, nil)
+	newBus := func(room string) domain.Bus {
+		bus := domain.NewMockBus(ctrl)
+		bus.EXPECT().RoomID().Return(room).AnyTimes()
+		return bus
+	}
+	assert.NoError(t, hub.AddBus(context.Background(), "one", newBus(roomID)))
+	assert.NoError(t, hub.AddBus(context.Background(), "two", newBus(roomID)))
+	assert.Equal(t, 2, hub.GetClientsOfRoom(roomID))
+	assert.NoError(t, hub.AddBus(context.Background(), "one", newBus(roomID)))
+	assert.Equal(t, 2, hub.GetClientsOfRoom(roomID))
+
+	// Moving a bus to another room requires a subscription for the destination.
+	otherID := "other-room"
+	hub.roomSubs.Store(otherID, nil)
+	assert.NoError(t, hub.AddBus(context.Background(), "one", newBus(otherID)))
+	assert.Equal(t, 1, hub.GetClientsOfRoom(roomID))
+	assert.Equal(t, 1, hub.GetClientsOfRoom(otherID))
+	hub.roomSubs.Delete(otherID)
+	hub.RemoveBus(context.Background(), "one")
+	assert.Zero(t, hub.GetClientsOfRoom(otherID))
+	hub.roomSubs.Delete(roomID)
+	hub.RemoveBus(context.Background(), "two")
+	assert.Zero(t, hub.GetClientsOfRoom(roomID))
+}
+
 func TestRedisHub_LoadRoomRejectsStoryWithoutID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

@@ -172,6 +172,77 @@ func TestRedisHub_AddBus_WithEmptyRoomIDDoesNotSubscribe(t *testing.T) {
 	assert.Equal(t, mockBus, got)
 }
 
+func newFailingPubSub(t *testing.T, roomID string) *redis.PubSub {
+	t.Helper()
+	pubsubClient := redis.NewClient(&redis.Options{Addr: "127.0.0.1:0"})
+	pubsub := pubsubClient.Subscribe(context.Background(), pubsubChannel+roomID)
+	t.Cleanup(func() {
+		_ = pubsub.Close()
+		_ = pubsubClient.Close()
+	})
+	return pubsub
+}
+
+func TestRedisHub_AddBus_SubscriptionFailureRestoresPreviousBusAndCounts(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockRedis := NewMockRedisClient(ctrl)
+	clientID := "client-move"
+	oldRoomID := "room-old"
+	newRoomID := "room-new"
+
+	oldBus := domain.NewMockBus(ctrl)
+	oldBus.EXPECT().RoomID().Return(oldRoomID).AnyTimes()
+	newBus := domain.NewMockBus(ctrl)
+	newBus.EXPECT().RoomID().Return(newRoomID)
+
+	mockRedis.EXPECT().Subscribe(gomock.Any(), pubsubChannel+newRoomID).Return(newFailingPubSub(t, newRoomID))
+
+	hub := newErrorTestHub(mockRedis)
+	hub.buses[clientID] = oldBus
+	hub.roomClientCounts[oldRoomID] = 1
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := hub.AddBus(ctx, clientID, newBus)
+
+	assert.Error(t, err)
+	got, ok := hub.GetBus(clientID)
+	assert.True(t, ok)
+	assert.Equal(t, oldBus, got)
+	assert.Equal(t, 1, hub.GetClientsOfRoom(oldRoomID), "old room count must be restored, not leaked")
+	assert.Zero(t, hub.GetClientsOfRoom(newRoomID), "failed call must not leak a count for the destination room")
+}
+
+func TestRedisHub_AddBus_SubscriptionFailureOnSameRoomReplacementKeepsCounts(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockRedis := NewMockRedisClient(ctrl)
+	clientID := "client-same-room"
+	roomID := "room-same"
+
+	oldBus := domain.NewMockBus(ctrl)
+	oldBus.EXPECT().RoomID().Return(roomID).AnyTimes()
+	newBus := domain.NewMockBus(ctrl)
+	newBus.EXPECT().RoomID().Return(roomID)
+
+	mockRedis.EXPECT().Subscribe(gomock.Any(), pubsubChannel+roomID).Return(newFailingPubSub(t, roomID))
+
+	hub := newErrorTestHub(mockRedis)
+	hub.buses[clientID] = oldBus
+	hub.roomClientCounts[roomID] = 1
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := hub.AddBus(ctx, clientID, newBus)
+
+	assert.Error(t, err)
+	got, ok := hub.GetBus(clientID)
+	assert.True(t, ok)
+	assert.Equal(t, oldBus, got)
+	assert.Equal(t, 1, hub.GetClientsOfRoom(roomID), "failed same-room replacement must not change the count")
+}
+
 func TestRedisHub_FindClientByID_WhenRedisFailsReturnsNotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockRedis := NewMockRedisClient(ctrl)

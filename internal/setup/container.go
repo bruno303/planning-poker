@@ -162,7 +162,7 @@ func newUsecases(hub domain.Hub, lockManager lock.LockManager, metric metric.Pla
 	leaveRoomUseCase := usecase.NewLeaveRoomUseCase(hub, lockManager, metric)
 	joinRoomUseCase := usecase.NewJoinRoomUseCase(hub, lockManager, metric)
 	createClientUseCase := usecase.NewCreateClientUseCase(hub, metric)
-	createRoomUseCase := usecase.NewCreateRoomUseCase(hub, metric)
+	createRoomUseCase := usecase.NewCreateRoomUseCase(hub)
 	toggleBacklogModeUseCase := usecase.NewToggleBacklogModeUseCase(hub, lockManager)
 	addStoryUseCase := usecase.NewAddStoryUseCase(hub, lockManager)
 	removeStoryUseCase := usecase.NewRemoveStoryUseCase(hub, lockManager)

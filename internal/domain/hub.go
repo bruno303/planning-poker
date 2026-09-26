@@ -20,6 +20,9 @@ type (
 		BroadcastToRoom(ctx context.Context, roomID string, message any) error
 
 		GetBus(clientID string) (Bus, bool)
+		// GetClientsOfRoom returns the number of clients with an active bus in roomID on
+		// this instance (local only; not a cluster-wide count).
+		GetClientsOfRoom(roomID string) int
 		AddBus(ctx context.Context, clientID string, bus Bus) error
 		RemoveBus(ctx context.Context, clientID string)
 	}
