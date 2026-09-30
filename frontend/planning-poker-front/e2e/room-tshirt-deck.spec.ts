@@ -24,9 +24,11 @@ test('creates a T-shirt deck room and preserves its deck for everyone and after 
     }
     await owner.getByRole('button', { name: '?', exact: true }).click();
     await guest.getByRole('button', { name: '☕', exact: true }).click();
-    await expect(owner.getByText('2/2', { exact: true })).toBeVisible();
-    await owner.getByRole('button', { name: 'Reveal Votes' }).click();
-    await expect(owner.getByText('Most Common: ?, ☕')).toBeVisible();
+    // The final vote automatically reveals the results for both participants.
+    for (const page of [owner, guest]) {
+      await expect(page.getByText('2/2', { exact: true })).toBeVisible();
+      await expect(page.getByText('Most Common: ?, ☕')).toBeVisible();
+    }
     await owner.reload();
     for (const label of labels) await expect(owner.getByRole('button', { name: label, exact: true })).toBeVisible();
   } finally {
