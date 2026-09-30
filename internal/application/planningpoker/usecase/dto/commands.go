@@ -1,13 +1,14 @@
 package dto
 
 import (
+	"slices"
+	"strconv"
+	"strings"
 	"time"
 
-	"planning-poker/internal/domain/entity"
-	"slices"
-	"strings"
-
 	"github.com/samber/lo"
+
+	"planning-poker/internal/domain/entity"
 )
 
 type (
@@ -15,16 +16,26 @@ type (
 		ID                 string   `json:"id"`
 		Name               string   `json:"name"`
 		Result             *float32 `json:"result,omitempty"`
+		MostCommonVotes    []string `json:"mostCommonVotes"`
 		MostAppearingVotes []int    `json:"mostAppearingVotes"`
 		Voted              bool     `json:"voted"`
 	}
 
+	VotingDeck struct {
+		ID    entity.DeckID   `json:"id"`
+		Name  string          `json:"name"`
+		Kind  entity.DeckKind `json:"kind"`
+		Cards []string        `json:"cards"`
+	}
+
 	RoomState struct {
 		Type                string        `json:"type"`
+		Deck                VotingDeck    `json:"deck"`
 		StartedAt           *time.Time    `json:"startedAt,omitempty"`
 		CurrentStory        string        `json:"currentStory"`
 		Reveal              bool          `json:"reveal"`
 		Result              *float32      `json:"result,omitempty"`
+		MostCommonVotes     []string      `json:"mostCommonVotes"`
 		MostAppearingVotes  []int         `json:"mostAppearingVotes"`
 		Consensus           string        `json:"consensus,omitempty"`
 		LowestVote          *int          `json:"lowestVote,omitempty"`
@@ -59,14 +70,17 @@ type (
 )
 
 func NewRoomStateCommand(room *entity.Room) RoomState {
+	deck := room.Deck()
 	return RoomState{
 		Type:                "room-state",
+		Deck:                VotingDeck{ID: deck.ID, Name: deck.Name, Kind: deck.Kind, Cards: deck.CardValues()},
 		StartedAt:           entity.OptionalUTCTime(room.StartedAt()),
 		CurrentStory:        room.EffectiveCurrentStory(),
 		Reveal:              room.Reveal,
 		Participants:        MapToParticipants(room.Clients.Values()),
 		Result:              room.Result,
-		MostAppearingVotes:  room.MostAppearingVotes,
+		MostCommonVotes:     nonNilVotes(room.MostCommonVotes),
+		MostAppearingVotes:  legacyNumericModes(deck, room.MostCommonVotes),
 		Consensus:           room.Consensus,
 		LowestVote:          room.LowestVote,
 		HighestVote:         room.HighestVote,
@@ -74,7 +88,7 @@ func NewRoomStateCommand(room *entity.Room) RoomState {
 		VoteSpread:          room.VoteSpread,
 		NonNumericVoteCount: room.NonNumericVoteCount,
 		BacklogMode:         room.BacklogMode,
-		Stories:             mapStories(room.Stories),
+		Stories:             mapStories(room.Stories, deck),
 		CurrentStoryIndex:   room.CurrentStoryIndex,
 		RoomVersion:         room.RoomVersion,
 	}
@@ -93,16 +107,34 @@ func NewKickNotification() KickNotification {
 	}
 }
 
-func mapStories(stories []entity.Story) []Story {
+func mapStories(stories []entity.Story, deck entity.Deck) []Story {
 	return lo.Map(stories, func(s entity.Story, _ int) Story {
 		return Story{
 			ID:                 s.ID,
 			Name:               s.Name,
 			Result:             s.Result,
-			MostAppearingVotes: s.MostAppearingVotes,
+			MostCommonVotes:    nonNilVotes(s.MostCommonVotes),
+			MostAppearingVotes: legacyNumericModes(deck, s.MostCommonVotes),
 			Voted:              s.Voted,
 		}
 	})
+}
+
+func nonNilVotes(votes []string) []string {
+	return append([]string{}, votes...)
+}
+
+func legacyNumericModes(deck entity.Deck, votes []string) []int {
+	if deck.Kind != entity.DeckKindNumeric {
+		return []int{}
+	}
+	var result []int
+	for _, vote := range votes {
+		if numericVote, err := strconv.Atoi(vote); err == nil {
+			result = append(result, numericVote)
+		}
+	}
+	return result
 }
 
 func MapToParticipants(clients []*entity.Client) []Participant {

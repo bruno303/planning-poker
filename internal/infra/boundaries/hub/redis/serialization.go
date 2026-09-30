@@ -3,6 +3,7 @@ package redis
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
@@ -12,19 +13,22 @@ import (
 
 type (
 	SerializedStory struct {
-		ID                 string   `json:"id,omitempty"`
-		Name               string   `json:"name"`
-		Result             *float32 `json:"result,omitempty"`
-		MostAppearingVotes []int    `json:"mostAppearingVotes"`
-		Voted              bool     `json:"voted"`
+		ID                 string    `json:"id,omitempty"`
+		Name               string    `json:"name"`
+		Result             *float32  `json:"result,omitempty"`
+		MostCommonVotes    *[]string `json:"mostCommonVotes,omitempty"`
+		MostAppearingVotes []int     `json:"mostAppearingVotes"`
+		Voted              bool      `json:"voted"`
 	}
 	SerializedRoom struct {
 		ID                  string             `json:"id"`
+		DeckID              entity.DeckID      `json:"deckId,omitempty"`
 		StartedAt           *time.Time         `json:"startedAt,omitempty"`
 		Clients             []SerializedClient `json:"clients"`
 		CurrentStory        string             `json:"currentStory"`
 		Reveal              bool               `json:"reveal"`
 		Result              *float32           `json:"result,omitempty"`
+		MostCommonVotes     *[]string          `json:"mostCommonVotes,omitempty"`
 		MostAppearingVotes  []int              `json:"mostAppearingVotes"`
 		Consensus           string             `json:"consensus,omitempty"`
 		LowestVote          *int               `json:"lowestVote,omitempty"`
@@ -80,12 +84,14 @@ func SerializeRoom(room *entity.Room) ([]byte, error) {
 
 	serialized := SerializedRoom{
 		ID:                  room.ID,
+		DeckID:              room.DeckID(),
 		StartedAt:           entity.OptionalUTCTime(room.StartedAt()),
 		Clients:             clients,
 		CurrentStory:        room.CurrentStory,
 		Reveal:              room.Reveal,
 		Result:              room.Result,
-		MostAppearingVotes:  room.MostAppearingVotes,
+		MostCommonVotes:     serializeMostCommonVotes(room.MostCommonVotes),
+		MostAppearingVotes:  legacyNumericModes(room.Deck(), room.MostCommonVotes),
 		Consensus:           room.Consensus,
 		LowestVote:          room.LowestVote,
 		HighestVote:         room.HighestVote,
@@ -93,7 +99,7 @@ func SerializeRoom(room *entity.Room) ([]byte, error) {
 		VoteSpread:          room.VoteSpread,
 		NonNumericVoteCount: room.NonNumericVoteCount,
 		BacklogMode:         room.BacklogMode,
-		Stories:             serializeStories(room.Stories),
+		Stories:             serializeStories(room.Stories, room.Deck()),
 		CurrentStoryIndex:   room.CurrentStoryIndex,
 		RoomVersion:         room.RoomVersion,
 	}
@@ -101,16 +107,46 @@ func SerializeRoom(room *entity.Room) ([]byte, error) {
 	return json.Marshal(serialized)
 }
 
-func serializeStories(stories []entity.Story) []SerializedStory {
+func serializeStories(stories []entity.Story, deck entity.Deck) []SerializedStory {
 	result := make([]SerializedStory, len(stories))
 	for i, s := range stories {
 		result[i] = SerializedStory{
 			ID:                 s.ID,
 			Name:               s.Name,
 			Result:             s.Result,
-			MostAppearingVotes: s.MostAppearingVotes,
+			MostCommonVotes:    serializeMostCommonVotes(s.MostCommonVotes),
+			MostAppearingVotes: legacyNumericModes(deck, s.MostCommonVotes),
 			Voted:              s.Voted,
 		}
+	}
+	return result
+}
+
+func serializeMostCommonVotes(votes []string) *[]string {
+	copied := append([]string{}, votes...)
+	return &copied
+}
+
+func legacyNumericModes(deck entity.Deck, votes []string) []int {
+	if deck.Kind != entity.DeckKindNumeric {
+		return []int{}
+	}
+	var result []int
+	for _, vote := range votes {
+		if numericVote, err := strconv.Atoi(vote); err == nil {
+			result = append(result, numericVote)
+		}
+	}
+	return result
+}
+
+func canonicalModes(modes *[]string, legacy []int) []string {
+	if modes != nil {
+		return append([]string{}, (*modes)...)
+	}
+	result := make([]string, len(legacy))
+	for i, vote := range legacy {
+		result[i] = strconv.Itoa(vote)
 	}
 	return result
 }
@@ -125,15 +161,19 @@ func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 		return nil, err
 	}
 
-	room := entity.NewRoomWithIDAndStartedAt(
+	room, err := entity.NewRoomWithIDAndStartedAtAndDeckID(
 		serialized.ID,
 		clientCollection,
 		entity.UTCTimeOrZero(serialized.StartedAt),
+		serialized.DeckID,
 	)
+	if err != nil {
+		return nil, fmt.Errorf("invalid room deck: %w", err)
+	}
 	room.CurrentStory = serialized.CurrentStory
 	room.Reveal = serialized.Reveal
 	room.Result = serialized.Result
-	room.MostAppearingVotes = serialized.MostAppearingVotes
+	room.MostCommonVotes = canonicalModes(serialized.MostCommonVotes, serialized.MostAppearingVotes)
 	room.Consensus = serialized.Consensus
 	room.LowestVote = serialized.LowestVote
 	room.HighestVote = serialized.HighestVote
@@ -159,11 +199,11 @@ func deserializeStories(stories []SerializedStory) ([]entity.Story, error) {
 			return nil, fmt.Errorf("story at index %d is missing an ID", i)
 		}
 		result[i] = entity.Story{
-			ID:                 s.ID,
-			Name:               s.Name,
-			Result:             s.Result,
-			MostAppearingVotes: s.MostAppearingVotes,
-			Voted:              s.Voted,
+			ID:              s.ID,
+			Name:            s.Name,
+			Result:          s.Result,
+			MostCommonVotes: canonicalModes(s.MostCommonVotes, s.MostAppearingVotes),
+			Voted:           s.Voted,
 		}
 	}
 	return result, nil

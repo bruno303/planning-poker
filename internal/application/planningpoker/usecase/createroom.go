@@ -2,13 +2,19 @@ package usecase
 
 import (
 	"context"
-	"planning-poker/internal/application/planningpoker/metric"
-	"planning-poker/internal/domain"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
+
+	"planning-poker/internal/application/planningpoker/metric"
+	"planning-poker/internal/domain"
+	"planning-poker/internal/domain/entity"
 )
 
 type (
+	CreateRoomCommand struct {
+		DeckID entity.DeckID
+	}
+
 	CreateRoomOutput struct {
 		RoomID string
 	}
@@ -19,7 +25,7 @@ type (
 	}
 )
 
-var _ UseCaseO[CreateRoomOutput] = (*CreateRoomUseCase)(nil)
+var _ UseCaseR[CreateRoomCommand, CreateRoomOutput] = (*CreateRoomUseCase)(nil)
 
 func NewCreateRoomUseCase(hub domain.Hub, metric metric.PlanningPokerMetric) CreateRoomUseCase {
 	return CreateRoomUseCase{
@@ -29,8 +35,13 @@ func NewCreateRoomUseCase(hub domain.Hub, metric metric.PlanningPokerMetric) Cre
 	}
 }
 
-func (uc CreateRoomUseCase) Execute(ctx context.Context) (CreateRoomOutput, error) {
-	room, err := uc.hub.NewRoom(ctx)
+func (uc CreateRoomUseCase) Execute(ctx context.Context, cmd CreateRoomCommand) (CreateRoomOutput, error) {
+	deck, err := entity.GetDeck(cmd.DeckID)
+	if err != nil {
+		return CreateRoomOutput{}, err
+	}
+
+	room, err := uc.hub.NewRoom(ctx, deck.ID)
 	if err != nil {
 		return CreateRoomOutput{}, err
 	}

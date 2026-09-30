@@ -79,7 +79,7 @@ func TestRoomReorderStory(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			room, owner, _ := newBacklogRoom([]entity.Story{
 				{ID: "a", Name: "A"},
-				{ID: "b", Name: "B", Result: lo.ToPtr(float32(5)), MostAppearingVotes: []int{5}, Voted: true},
+				{ID: "b", Name: "B", Result: lo.ToPtr(float32(5)), MostCommonVotes: []string{"5"}, Voted: true},
 				{ID: "c", Name: "C"},
 				{ID: "d", Name: "D"},
 			}, 1)
@@ -117,7 +117,7 @@ func assertEstimatedStory(t *testing.T, room *entity.Room) {
 			continue
 		}
 		story := room.Stories[i]
-		if story.Result == nil || *story.Result != 5 || !reflect.DeepEqual(story.MostAppearingVotes, []int{5}) || !story.Voted {
+		if story.Result == nil || *story.Result != 5 || !reflect.DeepEqual(story.MostCommonVotes, []string{"5"}) || !story.Voted {
 			t.Fatal("estimated result was not preserved during reorder")
 		}
 		return
@@ -157,7 +157,7 @@ func TestRoomSelectStoryResetsActiveVotingAndPreservesEstimates(t *testing.T) {
 	room, owner, participant := newBacklogRoom([]entity.Story{
 		{ID: "current", Name: "Current"},
 		{ID: "pending", Name: "Pending"},
-		{ID: "estimated", Name: "Estimated", Result: &estimatedResult, MostAppearingVotes: []int{8}, Voted: true},
+		{ID: "estimated", Name: "Estimated", Result: &estimatedResult, MostCommonVotes: []string{"8"}, Voted: true},
 	}, 0)
 	vote := "5"
 	owner.CurrentVote = &vote

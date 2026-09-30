@@ -29,7 +29,7 @@ func TestNewRoomStateCommand(t *testing.T) {
 	room.CurrentStory = "Story 1"
 	room.Reveal = true
 	room.Result = lo.ToPtr(float32(5))
-	room.MostAppearingVotes = []int{1, 2}
+	room.MostCommonVotes = []string{"1", "2"}
 	room.Consensus = "Medium"
 	room.LowestVote = lo.ToPtr(3)
 	room.HighestVote = lo.ToPtr(8)
@@ -41,6 +41,7 @@ func TestNewRoomStateCommand(t *testing.T) {
 	got := NewRoomStateCommand(room)
 	want := RoomState{
 		Type:         "room-state",
+		Deck:         VotingDeck{ID: entity.DeckIDFibonacci, Name: "Fibonacci", Kind: entity.DeckKindNumeric, Cards: []string{"0", "1", "2", "3", "5", "8", "13", "21", "34", "55", "89", "?", "☕"}},
 		StartedAt:    &startedAt,
 		CurrentStory: "Story 1",
 		Reveal:       true,
@@ -49,6 +50,7 @@ func TestNewRoomStateCommand(t *testing.T) {
 			{ID: "2", Name: "Bob", Vote: nil, HasVoted: false, IsSpectator: true, IsOwner: false},
 		},
 		Result:              lo.ToPtr(float32(5)),
+		MostCommonVotes:     []string{"1", "2"},
 		MostAppearingVotes:  []int{1, 2},
 		Consensus:           "Medium",
 		LowestVote:          lo.ToPtr(3),
@@ -63,6 +65,26 @@ func TestNewRoomStateCommand(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("NewRoomStateCommand() = %+v, want %+v", got, want)
+	}
+}
+
+func TestNewRoomStateCommandProjectsCategoricalModesWithoutNumericEstimates(t *testing.T) {
+	room, err := entity.NewRoomWithDeckID(clientcollection.New(), entity.DeckIDTShirt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	room.MostCommonVotes = []string{"M", "L"}
+	room.Stories = []entity.Story{{ID: "story-1", Name: "Story", MostCommonVotes: []string{"M", "L"}, Voted: true}}
+
+	state := NewRoomStateCommand(room)
+	if state.Deck.ID != entity.DeckIDTShirt || state.Deck.Kind != entity.DeckKindCategorical || !reflect.DeepEqual(state.Deck.Cards, []string{"XS", "S", "M", "L", "XL", "XXL", "?", "☕"}) {
+		t.Fatalf("categorical deck descriptor = %+v", state.Deck)
+	}
+	if !reflect.DeepEqual(state.MostCommonVotes, []string{"M", "L"}) || len(state.MostAppearingVotes) != 0 {
+		t.Fatalf("categorical room modes = %v legacy numeric modes = %v", state.MostCommonVotes, state.MostAppearingVotes)
+	}
+	if len(state.Stories) != 1 || !reflect.DeepEqual(state.Stories[0].MostCommonVotes, []string{"M", "L"}) || len(state.Stories[0].MostAppearingVotes) != 0 {
+		t.Fatalf("categorical story state = %+v", state.Stories)
 	}
 }
 

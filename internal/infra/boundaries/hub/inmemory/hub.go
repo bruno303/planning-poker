@@ -4,14 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"planning-poker/internal/domain"
-	"planning-poker/internal/domain/entity"
-	"planning-poker/internal/infra/boundaries/hub/clientcollection"
 	"sync"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
 	"github.com/bruno303/go-toolkit/pkg/trace"
 	"github.com/samber/lo"
+
+	"planning-poker/internal/domain"
+	"planning-poker/internal/domain/entity"
+	"planning-poker/internal/infra/boundaries/hub/clientcollection"
 )
 
 type InMemoryHub struct {
@@ -39,9 +40,19 @@ func NewHub() *InMemoryHub {
 	}
 }
 
-func (h *InMemoryHub) NewRoom(ctx context.Context) (*entity.Room, error) {
-	room, _ := trace.Trace(ctx, trace.NameConfig("InMemoryHub", "NewRoom"), func(ctx context.Context) (any, error) {
-		room := entity.NewRoom(clientcollection.New())
+func (h *InMemoryHub) NewRoom(ctx context.Context, deckIDs ...entity.DeckID) (*entity.Room, error) {
+	if len(deckIDs) > 1 {
+		return nil, fmt.Errorf("NewRoom accepts at most one deck ID")
+	}
+	deckID := entity.DefaultDeckID
+	if len(deckIDs) == 1 {
+		deckID = deckIDs[0]
+	}
+	value, err := trace.Trace(ctx, trace.NameConfig("InMemoryHub", "NewRoom"), func(ctx context.Context) (any, error) {
+		room, err := entity.NewRoomWithDeckID(clientcollection.New(), deckID)
+		if err != nil {
+			return nil, err
+		}
 		h.roomMu.Lock()
 		h.Rooms[room.ID] = room
 		h.saved[room.ID] = cloneRoom(room)
@@ -50,7 +61,10 @@ func (h *InMemoryHub) NewRoom(ctx context.Context) (*entity.Room, error) {
 		return room, nil
 	})
 
-	return room.(*entity.Room), nil
+	if err != nil {
+		return nil, err
+	}
+	return value.(*entity.Room), nil
 }
 
 func (h *InMemoryHub) NewRoomWithID(ctx context.Context, roomID string) (*entity.Room, error) {
@@ -246,11 +260,11 @@ func (h *InMemoryHub) SaveRoomIfVersion(_ context.Context, room *entity.Room, ex
 }
 
 func cloneRoom(room *entity.Room) *entity.Room {
-	clone := entity.NewRoomWithIDAndStartedAt(room.ID, clientcollection.New(), room.StartedAt())
+	clone, _ := entity.NewRoomWithIDAndStartedAtAndDeckID(room.ID, clientcollection.New(), room.StartedAt(), room.DeckID())
 	clone.CurrentStory = room.CurrentStory
 	clone.Reveal = room.Reveal
 	clone.Result = cloneFloat32(room.Result)
-	clone.MostAppearingVotes = append([]int(nil), room.MostAppearingVotes...)
+	clone.MostCommonVotes = append([]string(nil), room.MostCommonVotes...)
 	clone.Consensus = room.Consensus
 	clone.LowestVote = cloneInt(room.LowestVote)
 	clone.HighestVote = cloneInt(room.HighestVote)
@@ -261,7 +275,7 @@ func cloneRoom(room *entity.Room) *entity.Room {
 	clone.Stories = append([]entity.Story(nil), room.Stories...)
 	for i := range clone.Stories {
 		clone.Stories[i].Result = cloneFloat32(room.Stories[i].Result)
-		clone.Stories[i].MostAppearingVotes = append([]int(nil), room.Stories[i].MostAppearingVotes...)
+		clone.Stories[i].MostCommonVotes = append([]string(nil), room.Stories[i].MostCommonVotes...)
 	}
 	clone.CurrentStoryIndex = room.CurrentStoryIndex
 	clone.RoomVersion = room.RoomVersion

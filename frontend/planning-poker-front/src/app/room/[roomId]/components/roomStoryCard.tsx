@@ -3,6 +3,7 @@
 import BacklogModal from '@/components/backlogModal/backlogModal';
 import FocusableComponent from '@/components/focusableInput/focusableInput';
 import { RoomClock } from '@/components/roomClock/roomClock';
+import type { DeckKind } from '@/lib/deck';
 import { ChevronLeft, ChevronRight, List } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { Story } from '@/components/messages/websocket';
@@ -10,6 +11,7 @@ import { styles } from '../page.styles';
 
 type Props = Readonly<{
   currentStory: string;
+  deckKind: DeckKind;
   startedAt: string | null;
   backlogMode: boolean;
   stories: Story[];
@@ -25,7 +27,7 @@ type Props = Readonly<{
   onNextStory: () => void;
 }>;
 
-export default function RoomStoryCard({ currentStory, startedAt, backlogMode, stories, currentStoryIndex, snapshotIdentity, amIAdmin, onUpdateStory, onRemoveStory, onAddStory, onSelectStory, onReorderStory, onPreviousStory, onNextStory }: Props) {
+export default function RoomStoryCard({ currentStory, deckKind, startedAt, backlogMode, stories, currentStoryIndex, snapshotIdentity, amIAdmin, onUpdateStory, onRemoveStory, onAddStory, onSelectStory, onReorderStory, onPreviousStory, onNextStory }: Props) {
   const [draft, setDraft] = useState(currentStory);
   const [editing, setEditing] = useState(false);
   const [showBacklog, setShowBacklog] = useState(false);
@@ -76,6 +78,6 @@ export default function RoomStoryCard({ currentStory, startedAt, backlogMode, st
         </div>
       </div>
     </div>
-     {showBacklog && <BacklogModal stories={stories} currentStoryIndex={currentStoryIndex} amIAdmin={amIAdmin} onClose={() => setShowBacklog(false)} onAddStory={addStory} onRemoveStory={onRemoveStory} onSelectStory={onSelectStory} onReorderStory={onReorderStory} />}
+     {showBacklog && <BacklogModal stories={stories} deckKind={deckKind} currentStoryIndex={currentStoryIndex} amIAdmin={amIAdmin} onClose={() => setShowBacklog(false)} onAddStory={addStory} onRemoveStory={onRemoveStory} onSelectStory={onSelectStory} onReorderStory={onReorderStory} />}
   </>);
 }

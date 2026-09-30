@@ -2,6 +2,7 @@ package redis
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 	originalRoom.CurrentStory = "User Story #42"
 	originalRoom.RoomVersion = 7
 	originalRoom.Reveal = false
+	originalRoom.MostCommonVotes = []string{"8"}
 	originalRoom.Consensus = "Medium"
 	originalRoom.LowestVote = lo.ToPtr(3)
 	originalRoom.HighestVote = lo.ToPtr(8)
@@ -25,11 +27,11 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 	originalRoom.VoteSpread = lo.ToPtr(2)
 	originalRoom.NonNumericVoteCount = 1
 	originalRoom.Stories = []entity.Story{{
-		ID:                 "story-1",
-		Name:               "Backlog story",
-		Result:             lo.ToPtr(float32(8)),
-		MostAppearingVotes: []int{8},
-		Voted:              true,
+		ID:              "story-1",
+		Name:            "Backlog story",
+		Result:          lo.ToPtr(float32(8)),
+		MostCommonVotes: []string{"8"},
+		Voted:           true,
 	}}
 
 	// Add some clients
@@ -94,6 +96,9 @@ func assertSerializedRoomProperties(t *testing.T, originalRoom, deserializedRoom
 	if deserializedRoom.RoomVersion != originalRoom.RoomVersion {
 		t.Errorf("Expected room version %d, got %d", originalRoom.RoomVersion, deserializedRoom.RoomVersion)
 	}
+	if deserializedRoom.DeckID() != originalRoom.DeckID() || !reflect.DeepEqual(deserializedRoom.MostCommonVotes, originalRoom.MostCommonVotes) {
+		t.Errorf("deck or canonical modes were not preserved: deck=%q modes=%v", deserializedRoom.DeckID(), deserializedRoom.MostCommonVotes)
+	}
 }
 
 func assertSerializedStories(t *testing.T, deserializedRoom *entity.Room) {
@@ -104,6 +109,9 @@ func assertSerializedStories(t *testing.T, deserializedRoom *entity.Room) {
 	}
 	if deserializedRoom.Stories[0].Result == nil || *deserializedRoom.Stories[0].Result != 8 || !deserializedRoom.Stories[0].Voted {
 		t.Fatalf("story estimate was not preserved: %+v", deserializedRoom.Stories[0])
+	}
+	if !reflect.DeepEqual(deserializedRoom.Stories[0].MostCommonVotes, []string{"8"}) {
+		t.Fatalf("story modes were not preserved: %v", deserializedRoom.Stories[0].MostCommonVotes)
 	}
 }
 
@@ -200,5 +208,62 @@ func TestDeserializeRoomSupportsLegacyRecordsWithoutTimestamps(t *testing.T) {
 	}
 	if _, ok := clientWire["votedAt"]; ok {
 		t.Fatal("legacy client unexpectedly gained votedAt")
+	}
+}
+
+func TestDeserializeRoomMigratesLegacyNumericModesAndDefaultsDeck(t *testing.T) {
+	data := []byte(`{"id":"room-legacy","mostAppearingVotes":[3,5],"backlogMode":true,"stories":[{"id":"story-1","name":"Story","mostAppearingVotes":[8],"voted":true}]}`)
+
+	room, err := DeserializeRoom(data, clientcollection.New())
+	if err != nil {
+		t.Fatalf("DeserializeRoom returned error: %v", err)
+	}
+	if room.DeckID() != entity.DeckIDFibonacci || !reflect.DeepEqual(room.MostCommonVotes, []string{"3", "5"}) {
+		t.Fatalf("legacy room migration produced deck=%q modes=%v", room.DeckID(), room.MostCommonVotes)
+	}
+	if !reflect.DeepEqual(room.Stories[0].MostCommonVotes, []string{"8"}) {
+		t.Fatalf("legacy story modes = %v", room.Stories[0].MostCommonVotes)
+	}
+}
+
+func TestDeserializeRoomCanonicalEmptyModesTakePrecedence(t *testing.T) {
+	data := []byte(`{"id":"room-legacy","mostCommonVotes":[],"mostAppearingVotes":[5],"backlogMode":true,"stories":[{"id":"story-1","name":"Story","mostCommonVotes":[],"mostAppearingVotes":[8]}]}`)
+
+	room, err := DeserializeRoom(data, clientcollection.New())
+	if err != nil {
+		t.Fatalf("DeserializeRoom returned error: %v", err)
+	}
+	if room.MostCommonVotes == nil || len(room.MostCommonVotes) != 0 || room.Stories[0].MostCommonVotes == nil || len(room.Stories[0].MostCommonVotes) != 0 {
+		t.Fatalf("explicit empty canonical modes lost precedence: room=%v story=%v", room.MostCommonVotes, room.Stories[0].MostCommonVotes)
+	}
+}
+
+func TestDeserializeRoomRejectsUnknownDeckID(t *testing.T) {
+	if _, err := DeserializeRoom([]byte(`{"id":"room-invalid","deckId":"custom"}`), clientcollection.New()); err == nil {
+		t.Fatal("DeserializeRoom accepted an unknown deck ID")
+	}
+}
+
+func TestSerializeRoomPersistsCategoricalDeckAndModes(t *testing.T) {
+	room, err := entity.NewRoomWithDeckID(clientcollection.New(), entity.DeckIDTShirt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	room.MostCommonVotes = []string{"M", "L"}
+	room.Stories = []entity.Story{{ID: "story-1", Name: "Story", MostCommonVotes: []string{"M", "L"}, Voted: true}}
+
+	data, err := SerializeRoom(room)
+	if err != nil {
+		t.Fatalf("SerializeRoom returned error: %v", err)
+	}
+	var wire SerializedRoom
+	if err := json.Unmarshal(data, &wire); err != nil {
+		t.Fatalf("serialized room is invalid JSON: %v", err)
+	}
+	if wire.DeckID != entity.DeckIDTShirt || wire.MostCommonVotes == nil || !reflect.DeepEqual(*wire.MostCommonVotes, []string{"M", "L"}) || len(wire.MostAppearingVotes) != 0 {
+		t.Fatalf("categorical room persistence = %+v", wire)
+	}
+	if wire.Stories[0].MostCommonVotes == nil || !reflect.DeepEqual(*wire.Stories[0].MostCommonVotes, []string{"M", "L"}) || len(wire.Stories[0].MostAppearingVotes) != 0 {
+		t.Fatalf("categorical story persistence = %+v", wire.Stories[0])
 	}
 }

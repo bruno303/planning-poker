@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+
 	"planning-poker/internal/domain/entity"
 )
 
@@ -11,7 +12,7 @@ type (
 		AddClient(c *entity.Client)
 		RemoveClient(ctx context.Context, clientID string, roomID string) error
 
-		NewRoom(ctx context.Context) (*entity.Room, error)
+		NewRoom(ctx context.Context, deckID ...entity.DeckID) (*entity.Room, error)
 		NewRoomWithID(ctx context.Context, roomID string) (*entity.Room, error)
 		LoadRoom(ctx context.Context, roomID string) (*entity.Room, error)
 		RemoveRoom(roomID string)

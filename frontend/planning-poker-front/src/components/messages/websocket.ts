@@ -1,4 +1,6 @@
 
+import { isVotingDeck, type VotingDeck } from '@/lib/deck';
+
 // WebSocket message types
 export type WebSocketMessageType =
   | 'vote'
@@ -65,16 +67,19 @@ export interface Story {
   id: string;
   name: string;
   result?: number;
+  mostCommonVotes?: string[];
   mostAppearingVotes: number[] | null;
   voted: boolean;
 }
 
 export interface RoomState {
   type: 'room-state';
+  deck?: VotingDeck;
   startedAt?: string;
   currentStory: string;
   reveal: boolean;
   result?: number;
+  mostCommonVotes?: string[];
   mostAppearingVotes: number[] | null;
   consensus?: ConsensusLevel;
   lowestVote?: number;
@@ -105,6 +110,10 @@ function isNumberArray(value: unknown): value is number[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'number');
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
 function isNullableNumberArray(value: unknown): value is number[] | null {
   return value === null || isNumberArray(value);
 }
@@ -118,6 +127,7 @@ function isStory(value: unknown): value is Story {
     typeof value.id === 'string' &&
     typeof value.name === 'string' &&
     isNullableNumberArray(value.mostAppearingVotes) &&
+    (!('mostCommonVotes' in value) || isStringArray(value.mostCommonVotes)) &&
     typeof value.voted === 'boolean' &&
     (!('result' in value) || typeof value.result === 'number')
   );
@@ -168,7 +178,9 @@ export function isRoomState(value: unknown): value is RoomState {
   if (
     typeof value.currentStory !== 'string' ||
     typeof value.reveal !== 'boolean' ||
-     !isNullableNumberArray(value.mostAppearingVotes) ||
+    !isNullableNumberArray(value.mostAppearingVotes) ||
+    ('deck' in value && !isVotingDeck(value.deck)) ||
+    ('mostCommonVotes' in value && !isStringArray(value.mostCommonVotes)) ||
     typeof value.roomVersion !== 'number' ||
     !Array.isArray(value.participants)
   ) {
@@ -199,7 +211,7 @@ export function isRoomState(value: unknown): value is RoomState {
     hasOptionalNumber(value, 'voteSpread') &&
     hasOptionalNumber(value, 'nonNumericVoteCount') &&
     (!('backlogMode' in value) || typeof value.backlogMode === 'boolean') &&
-     (!('stories' in value) || value.stories === null || (Array.isArray(value.stories) && value.stories.every(isStory))) &&
+    (!('stories' in value) || value.stories === null || (Array.isArray(value.stories) && value.stories.every(isStory))) &&
     (!('currentStoryIndex' in value) || typeof value.currentStoryIndex === 'number');
 }
 

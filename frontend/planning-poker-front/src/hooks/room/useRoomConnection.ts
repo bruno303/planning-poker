@@ -17,7 +17,7 @@ const RECONNECT_MAX_DELAY = 30000;
 const RECONNECT_MULTIPLIER = 2;
 
 const emptySnapshot: RoomSnapshot = {
-  currentStory: '', reveal: false, result: null, mostAppearingVotes: [], consensus: null,
+  deck: null, currentStory: '', reveal: false, result: null, mostAppearingVotes: [], mostCommonVotes: [], consensus: null,
   lowestVote: null, highestVote: null, voteRange: null, voteSpread: null, nonNumericVoteCount: 0,
   participants: [], startedAt: null, backlogMode: false, stories: [], currentStoryIndex: 0, roomVersion: null,
 };

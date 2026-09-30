@@ -4,10 +4,12 @@ import { isRFC3339Timestamp, isRoomState, type RoomState } from './websocket';
 
 const validRoomState: RoomState = {
   type: 'room-state',
+  deck: { id: 'fibonacci', name: 'Fibonacci', kind: 'numeric', cards: ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'] },
   startedAt: '2026-09-03T12:00:00Z',
   currentStory: 'Estimate the story',
   reveal: true,
   result: 5,
+  mostCommonVotes: ['5', '8'],
   mostAppearingVotes: [5, 8],
   consensus: 'Medium',
   lowestVote: 3,
@@ -29,6 +31,7 @@ const validRoomState: RoomState = {
     id: 'story-1',
     name: 'A backlog story',
     result: 8,
+    mostCommonVotes: ['8'],
     mostAppearingVotes: [8],
     voted: true,
   }],
@@ -60,9 +63,24 @@ describe('isRoomState', () => {
     expect(isRoomState(legacyState)).toBe(true);
   });
 
+  it('accepts legacy states without deck descriptors or string modes', () => {
+    const legacyState: RoomState = {
+      ...validRoomState,
+      participants: validRoomState.participants.map((participant) => ({ ...participant })),
+      stories: validRoomState.stories?.map((story) => ({ ...story })),
+    };
+    delete legacyState.deck;
+    delete legacyState.mostCommonVotes;
+    delete legacyState.stories?.[0].mostCommonVotes;
+
+    expect(isRoomState(legacyState)).toBe(true);
+  });
+
   it.each([
     ['required field', 'currentStory', null],
     ['vote array member', 'mostAppearingVotes', ['5']],
+    ['string mode member', 'mostCommonVotes', ['M', 8]],
+    ['deck descriptor', 'deck', { id: 'unknown', name: 'Unknown', kind: 'categorical', cards: ['M'] }],
     ['participant member', 'participants', [{ ...validRoomState.participants[0], hasVoted: 'yes' }]],
     ['optional number', 'result', '5'],
     ['optional consensus', 'consensus', 'Unknown'],
@@ -71,6 +89,7 @@ describe('isRoomState', () => {
     ['optional story member', 'stories', [{ ...validRoomState.stories?.[0], voted: 'yes' }]],
     ['optional story result', 'stories', [{ ...validRoomState.stories?.[0], result: null }]],
     ['optional story votes', 'stories', [{ ...validRoomState.stories?.[0], mostAppearingVotes: [null] }]],
+    ['optional story string votes', 'stories', [{ ...validRoomState.stories?.[0], mostCommonVotes: [5] }]],
     ['optional story index', 'currentStoryIndex', '0'],
     ['optional room timestamp', 'startedAt', 'not-a-timestamp'],
     ['optional participant timestamp', 'participants', [{ ...validRoomState.participants[0], votedAt: 'not-a-timestamp' }]],

@@ -6,6 +6,7 @@ import BacklogModal from './backlogModal';
 
 const renderBacklogModal = (overrides: Partial<{
   stories: Story[];
+  deckKind: 'numeric' | 'categorical';
   currentStoryIndex: number;
   amIAdmin: boolean;
   onClose: ReturnType<typeof vi.fn>;
@@ -16,6 +17,7 @@ const renderBacklogModal = (overrides: Partial<{
 }> = {}) => {
   const props = {
     stories: [] as Story[],
+    deckKind: 'numeric' as const,
     currentStoryIndex: 0,
     amIAdmin: false,
     onClose: vi.fn(),
@@ -29,6 +31,7 @@ const renderBacklogModal = (overrides: Partial<{
   render(
     <BacklogModal
       stories={props.stories}
+      deckKind={props.deckKind}
       currentStoryIndex={props.currentStoryIndex}
       amIAdmin={props.amIAdmin}
       onClose={props.onClose}
@@ -64,6 +67,19 @@ describe('BacklogModal', () => {
     expect(screen.getByText('Pending')).not.toBeNull();
     expect(screen.getByText('Estimated')).not.toBeNull();
     expect(screen.getByText('Avg: 6.5')).not.toBeNull();
+  });
+
+  it('shows all categorical modes and marks special-only estimates unavailable', () => {
+    const stories: Story[] = [
+      { id: 'shirt-story', name: 'T-shirt estimate', mostAppearingVotes: [], mostCommonVotes: ['M', 'L'], voted: true },
+      { id: 'special-only', name: 'Special-only estimate', mostAppearingVotes: [5], mostCommonVotes: [], voted: true },
+    ];
+
+    renderBacklogModal({ stories, deckKind: 'categorical' });
+
+    expect(screen.getByText('Estimate: M, L')).not.toBeNull();
+    expect(screen.getByText('Estimate unavailable')).not.toBeNull();
+    expect(screen.queryByText('Avg: 5.0')).toBeNull();
   });
 
   it('renders the backlog with native dialog semantics and resets native defaults', () => {

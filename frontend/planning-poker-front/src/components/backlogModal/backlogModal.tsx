@@ -3,10 +3,12 @@
 import { useEffect, useRef, useState, type DragEvent, type MouseEvent } from 'react';
 import { ChevronDown, ChevronUp, GripVertical, Plus, Trash2, X } from 'lucide-react';
 import type { Story } from '@/components/messages/websocket';
+import type { DeckKind } from '@/lib/deck';
 import { styles } from './backlogModal.styles';
 
 type BacklogModalProps = {
   stories: Story[];
+  deckKind: DeckKind;
   currentStoryIndex: number;
   amIAdmin: boolean;
   onClose: () => void;
@@ -18,6 +20,7 @@ type BacklogModalProps = {
 
 export default function BacklogModal({
   stories,
+  deckKind,
   currentStoryIndex,
   amIAdmin,
   onClose,
@@ -91,6 +94,15 @@ export default function BacklogModal({
     onReorderStory(storyId, targetIndex);
   };
 
+  const estimateFor = (story: Story) => {
+    if (deckKind === 'categorical') {
+      const votes = story.mostCommonVotes ?? (story.mostAppearingVotes ?? []).map(String);
+      return votes.length > 0 ? `Estimate: ${votes.join(', ')}` : 'Estimate unavailable';
+    }
+
+    return story.result != null ? `Avg: ${story.result.toFixed(1)}` : 'Estimate unavailable';
+  };
+
   return (
     <div style={styles.overlay} onClick={handleOverlayClick}>
       <dialog open style={styles.dialog} aria-label="Story Backlog">
@@ -144,9 +156,7 @@ export default function BacklogModal({
                   {story.voted && (
                     <span style={styles.backlogStoryTagEstimated}>Estimated</span>
                   )}
-                  {story.voted && story.result != null && (
-                    <span style={styles.backlogStoryTagVoted}>Avg: {story.result.toFixed(1)}</span>
-                  )}
+                  {story.voted && <span style={styles.backlogStoryTagVoted}>{estimateFor(story)}</span>}
                 </div>
                 <div style={styles.backlogStoryRight}>
                   {amIAdmin && !story.voted && index !== currentStoryIndex && (

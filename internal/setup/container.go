@@ -183,7 +183,7 @@ func newUsecases(hub domain.Hub, lockManager lock.LockManager, metric metric.Pla
 		LeaveRoom:         usecasedecorators.NewTraceableUseCase(leaveRoomUseCase, "LeaveRoomUseCase", "LeaveRoom"),
 		JoinRoom:          usecasedecorators.NewTraceableUseCaseR(joinRoomUseCase, "JoinRoomUseCase", "JoinRoom"),
 		CreateClient:      usecasedecorators.NewTraceableUseCaseO(createClientUseCase, "CreateClientUseCase", "CreateClient"),
-		CreateRoom:        usecasedecorators.NewTraceableUseCaseO(createRoomUseCase, "CreateRoomUseCase", "CreateRoom"),
+		CreateRoom:        usecasedecorators.NewTraceableUseCaseR(createRoomUseCase, "CreateRoomUseCase", "CreateRoom"),
 		ToggleBacklogMode: usecasedecorators.NewTraceableUseCase(toggleBacklogModeUseCase, "ToggleBacklogModeUseCase", "ToggleBacklogMode"),
 		AddStory:          usecasedecorators.NewTraceableUseCase(addStoryUseCase, "AddStoryUseCase", "AddStory"),
 		RemoveStory:       usecasedecorators.NewTraceableUseCase(removeStoryUseCase, "RemoveStoryUseCase", "RemoveStory"),

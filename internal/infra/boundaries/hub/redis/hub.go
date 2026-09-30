@@ -5,15 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"planning-poker/internal/domain"
-	"planning-poker/internal/domain/entity"
-	"planning-poker/internal/infra/boundaries/hub/clientcollection"
 	"sync"
 	"time"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
 	"github.com/bruno303/go-toolkit/pkg/trace"
 	"github.com/redis/go-redis/v9"
+
+	"planning-poker/internal/domain"
+	"planning-poker/internal/domain/entity"
+	"planning-poker/internal/infra/boundaries/hub/clientcollection"
 )
 
 type RedisClient interface {
@@ -88,9 +89,19 @@ func (h *RedisHub) Close() error {
 	return nil
 }
 
-func (h *RedisHub) NewRoom(ctx context.Context) (*entity.Room, error) {
-	room, err := trace.Trace(ctx, trace.NameConfig("RedisHub", "NewRoom"), func(ctx context.Context) (any, error) {
-		room := entity.NewRoom(clientcollection.New())
+func (h *RedisHub) NewRoom(ctx context.Context, deckIDs ...entity.DeckID) (*entity.Room, error) {
+	if len(deckIDs) > 1 {
+		return nil, fmt.Errorf("NewRoom accepts at most one deck ID")
+	}
+	deckID := entity.DefaultDeckID
+	if len(deckIDs) == 1 {
+		deckID = deckIDs[0]
+	}
+	value, err := trace.Trace(ctx, trace.NameConfig("RedisHub", "NewRoom"), func(ctx context.Context) (any, error) {
+		room, err := entity.NewRoomWithDeckID(clientcollection.New(), deckID)
+		if err != nil {
+			return nil, err
+		}
 		if err := h.saveInitialRoom(ctx, room); err != nil {
 			h.logger.Error(ctx, "Failed to save new room to Redis", err)
 			return nil, err
@@ -102,7 +113,7 @@ func (h *RedisHub) NewRoom(ctx context.Context) (*entity.Room, error) {
 		return nil, err
 	}
 
-	return room.(*entity.Room), nil
+	return value.(*entity.Room), nil
 }
 
 func (h *RedisHub) NewRoomWithID(ctx context.Context, roomID string) (*entity.Room, error) {

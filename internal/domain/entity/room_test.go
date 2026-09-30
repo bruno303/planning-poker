@@ -5,6 +5,7 @@ import (
 	"math"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/samber/lo"
 	"go.uber.org/mock/gomock"
@@ -310,8 +311,8 @@ func TestRoom_RevealCalculatesConsensusAndCountsSpecialVotes(t *testing.T) {
 	if room.NonNumericVoteCount != 2 {
 		t.Errorf("non-numeric vote count = %d, want 2", room.NonNumericVoteCount)
 	}
-	if !reflect.DeepEqual(room.MostAppearingVotes, []int{3}) {
-		t.Errorf("most appearing votes = %v, want [3]", room.MostAppearingVotes)
+	if !reflect.DeepEqual(room.MostCommonVotes, []string{"3"}) {
+		t.Errorf("most common votes = %v, want [3]", room.MostCommonVotes)
 	}
 }
 
@@ -326,7 +327,7 @@ func TestRoom_HideVotesClearsConsensusMetrics(t *testing.T) {
 	room.reveal(true)
 	room.reveal(false)
 
-	if room.Result != nil || room.MostAppearingVotes != nil || room.Consensus != "" ||
+	if room.Result != nil || room.MostCommonVotes != nil || room.Consensus != "" ||
 		room.LowestVote != nil || room.HighestVote != nil || room.VoteRange != nil ||
 		room.VoteSpread != nil || room.NonNumericVoteCount != 0 {
 		t.Fatalf("consensus metrics were not cleared: %+v", room)
@@ -347,6 +348,9 @@ func TestNewRoom(t *testing.T) {
 
 	if room.ID == "" {
 		t.Error("NewRoom() ID is empty")
+	}
+	if room.DeckID() != DeckIDFibonacci {
+		t.Errorf("NewRoom() DeckID = %q, want %q", room.DeckID(), DeckIDFibonacci)
 	}
 
 	if room.Clients != mockCC {
@@ -924,6 +928,48 @@ func TestRoom_Vote(t *testing.T) {
 		}
 	})
 
+	t.Run("rejects invalid votes without changing the client or reveal state", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		previous := "5"
+		votedAt := lo.ToPtr(time.Date(2026, time.September, 3, 12, 1, 0, 0, time.UTC))
+		client := &Client{ID: "client1", CurrentVote: &previous, HasVoted: true, VotedAt: votedAt}
+		mockCC := NewMockClientCollection(ctrl)
+		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
+		mockCC.EXPECT().First().Return(client, true)
+
+		room := NewRoom(mockCC)
+		invalid := "4"
+		if err := room.Vote(ctx, client.ID, &invalid); err == nil {
+			t.Fatal("Vote accepted a value outside the deck")
+		}
+		if client.CurrentVote == nil || *client.CurrentVote != previous || !client.HasVoted || client.VotedAt != votedAt || room.Reveal {
+			t.Fatalf("invalid vote mutated state: client=%+v room=%+v", client, room)
+		}
+	})
+
+	t.Run("normalizes empty string to deselection", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		client := &Client{ID: "client1", CurrentVote: lo.ToPtr("5"), HasVoted: true}
+		mockCC := NewMockClientCollection(ctrl)
+		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC).Times(2)
+		mockCC.EXPECT().First().Return(client, true)
+		mockCC.EXPECT().Values().Return([]*Client{client}).AnyTimes()
+
+		room := NewRoom(mockCC)
+		client.room = room
+		empty := ""
+		if err := room.Vote(ctx, client.ID, &empty); err != nil {
+			t.Fatalf("Vote returned error: %v", err)
+		}
+		if client.CurrentVote != nil || client.HasVoted || client.VotedAt != nil {
+			t.Fatalf("empty vote was not normalized to deselection: %+v", client)
+		}
+	})
+
 	t.Run("should fail when client not found", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
@@ -940,6 +986,38 @@ func TestRoom_Vote(t *testing.T) {
 			t.Error("Vote() expected error for nonexistent client")
 		}
 	})
+}
+
+func TestRoom_TShirtVotesAreCategoricalEstimates(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	clients := []*Client{
+		{ID: "m-1", CurrentVote: lo.ToPtr("M")},
+		{ID: "m-2", CurrentVote: lo.ToPtr("M")},
+		{ID: "l", CurrentVote: lo.ToPtr("L")},
+		{ID: "l-2", CurrentVote: lo.ToPtr("L")},
+		{ID: "question", CurrentVote: lo.ToPtr("?")},
+		{ID: "coffee", CurrentVote: lo.ToPtr("☕")},
+		{ID: "spectator", CurrentVote: lo.ToPtr("XS"), IsSpectator: true},
+	}
+	mockCC := NewMockClientCollection(ctrl)
+	mockCC.EXPECT().Values().Return(clients).AnyTimes()
+	room, err := NewRoomWithDeckID(mockCC, DeckIDTShirt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	room.reveal(true)
+
+	if room.Result != nil || room.LowestVote != nil || room.HighestVote != nil || room.VoteRange != nil || room.VoteSpread != nil {
+		t.Fatalf("categorical deck produced numeric statistics: %+v", room)
+	}
+	if room.Consensus != consensusUnavailable {
+		t.Fatalf("categorical consensus = %q, want %q", room.Consensus, consensusUnavailable)
+	}
+	if !reflect.DeepEqual(room.MostCommonVotes, []string{"M", "L"}) {
+		t.Fatalf("categorical modes = %v, want [M L] in deck order", room.MostCommonVotes)
+	}
 }
 
 func TestRoom_UpdateClientName(t *testing.T) {
@@ -984,7 +1062,7 @@ func TestRoom_UpdateClientName(t *testing.T) {
 	})
 }
 
-func TestRoom_MostAppearingVotes(t *testing.T) {
+func TestRoom_MostCommonVotes(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -1004,12 +1082,12 @@ func TestRoom_MostAppearingVotes(t *testing.T) {
 		room := NewRoom(mockCC)
 		room.reveal(true)
 
-		if len(room.MostAppearingVotes) != 1 {
-			t.Errorf("Expected 1 most appearing vote, got %v", len(room.MostAppearingVotes))
+		if len(room.MostCommonVotes) != 1 {
+			t.Errorf("Expected 1 most common vote, got %v", len(room.MostCommonVotes))
 		}
 
-		if len(room.MostAppearingVotes) > 0 && room.MostAppearingVotes[0] != 5 {
-			t.Errorf("Expected most appearing vote to be 5, got %v", room.MostAppearingVotes[0])
+		if len(room.MostCommonVotes) > 0 && room.MostCommonVotes[0] != "5" {
+			t.Errorf("Expected most common vote to be 5, got %v", room.MostCommonVotes[0])
 		}
 	})
 
@@ -1027,8 +1105,8 @@ func TestRoom_MostAppearingVotes(t *testing.T) {
 		room.reveal(true)
 
 		// Both votes appear once, so both should be in the list
-		if len(room.MostAppearingVotes) != 2 {
-			t.Errorf("Expected 2 most appearing votes, got %v", len(room.MostAppearingVotes))
+		if !reflect.DeepEqual(room.MostCommonVotes, []string{"3", "5"}) {
+			t.Errorf("Expected tied most common votes [3 5], got %v", room.MostCommonVotes)
 		}
 	})
 }

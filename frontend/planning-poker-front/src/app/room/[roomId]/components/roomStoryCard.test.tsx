@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import RoomStoryCard from './roomStoryCard';
 vi.mock('@/components/focusableInput/focusableInput', () => ({ default: (props: { currentStory: string; onChange: React.ChangeEventHandler<HTMLInputElement>; onKeyDown: React.KeyboardEventHandler<HTMLInputElement> }) => <input aria-label="Story editor" value={props.currentStory} onChange={props.onChange} onKeyDown={props.onKeyDown} /> }));
 
-const props = (overrides = {}) => ({ currentStory: 'Original', startedAt: null, backlogMode: true, stories: [{ id: 'one', name: 'Original', mostAppearingVotes: [], voted: false }], currentStoryIndex: 0, snapshotIdentity: 1, amIAdmin: true, onUpdateStory: vi.fn(), onRemoveStory: vi.fn(), onAddStory: vi.fn(), onSelectStory: vi.fn(), onReorderStory: vi.fn(), onPreviousStory: vi.fn(), onNextStory: vi.fn(), ...overrides });
+const props = (overrides = {}) => ({ currentStory: 'Original', deckKind: 'numeric' as const, startedAt: null, backlogMode: true, stories: [{ id: 'one', name: 'Original', mostAppearingVotes: [], voted: false }], currentStoryIndex: 0, snapshotIdentity: 1, amIAdmin: true, onUpdateStory: vi.fn(), onRemoveStory: vi.fn(), onAddStory: vi.fn(), onSelectStory: vi.fn(), onReorderStory: vi.fn(), onPreviousStory: vi.fn(), onNextStory: vi.fn(), ...overrides });
 
 describe('RoomStoryCard', () => {
   afterEach(() => cleanup());

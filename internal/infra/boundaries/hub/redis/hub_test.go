@@ -56,6 +56,34 @@ func TestRedisHub_NewRoom_SaveRoom_LoadRoom(t *testing.T) {
 	assert.Equal(t, room.ID, gotRoom.ID)
 }
 
+func TestRedisHub_NewRoomPersistsSelectedDeck(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockRedis := NewMockRedisClient(ctrl)
+	setCmd := redis.NewStatusCmd(context.Background())
+	setCmd.SetVal("OK")
+	var persisted []byte
+	mockRedis.EXPECT().Set(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, value any, _ time.Duration) *redis.StatusCmd {
+		persisted = append([]byte(nil), value.([]byte)...)
+		return setCmd
+	})
+
+	hub := newErrorTestHub(mockRedis)
+	room, err := hub.NewRoom(context.Background(), entity.DeckIDTShirt)
+	if err != nil {
+		t.Fatalf("NewRoom returned error: %v", err)
+	}
+	if room.DeckID() != entity.DeckIDTShirt {
+		t.Fatalf("created room deck = %q, want %q", room.DeckID(), entity.DeckIDTShirt)
+	}
+	loaded, err := DeserializeRoom(persisted, clientcollection.New())
+	if err != nil {
+		t.Fatalf("DeserializeRoom returned error: %v", err)
+	}
+	if loaded.DeckID() != entity.DeckIDTShirt {
+		t.Fatalf("persisted room deck = %q, want %q", loaded.DeckID(), entity.DeckIDTShirt)
+	}
+}
+
 func TestRedisHub_SaveRoomConditionally(t *testing.T) {
 	tests := []struct {
 		name      string

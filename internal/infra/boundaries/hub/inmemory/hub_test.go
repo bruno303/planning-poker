@@ -33,6 +33,20 @@ func TestNewRoom(t *testing.T) {
 	}
 }
 
+func TestNewRoomWithSelectedDeckStoresTheDeck(t *testing.T) {
+	hub := NewHub()
+	room, err := hub.NewRoom(context.Background(), entity.DeckIDTShirt)
+	if err != nil {
+		t.Fatalf("NewRoom returned error: %v", err)
+	}
+	if room.DeckID() != entity.DeckIDTShirt {
+		t.Fatalf("room deck = %q, want %q", room.DeckID(), entity.DeckIDTShirt)
+	}
+	if saved := hub.saved[room.ID]; saved == nil || saved.DeckID() != entity.DeckIDTShirt {
+		t.Fatalf("saved room did not preserve selected deck: %+v", saved)
+	}
+}
+
 func TestNewRoomWithID(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()

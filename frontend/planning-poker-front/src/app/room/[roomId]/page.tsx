@@ -84,7 +84,7 @@ export default function PlanningPoker() {
 
   const sendNull = (type: WebSocketMessageType) => sendMessage<null>({ type, payload: null });
   const backHome = () => { disconnect(); sessionStorage.removeItem('clientId'); logger.setContext({ clientId: undefined, roomId: undefined }); router.push('/'); };
-  const selectCard = (card: Card) => { if (!snapshot.reveal) sendMessage<VotePayload>({ type: 'vote', payload: { vote: card } }); };
+  const selectCard = (card: Card) => { if (snapshot.deck && !snapshot.reveal) sendMessage<VotePayload>({ type: 'vote', payload: { vote: card } }); };
   if (!valid) {
     return <LoadingSpinner />;
   }
@@ -105,6 +105,7 @@ export default function PlanningPoker() {
             <h1 style={styles.title}>Planning Poker</h1>
             <RoomStoryCard
               currentStory={snapshot.currentStory}
+              deckKind={snapshot.deck?.kind ?? 'numeric'}
               startedAt={snapshot.startedAt}
               backlogMode={snapshot.backlogMode}
               stories={snapshot.stories}

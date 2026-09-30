@@ -31,12 +31,35 @@ describe('join page', () => {
   });
 
   it('creates a room, stores the trimmed name, and navigates', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ roomId: 'new room' }) }));
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ roomId: 'new room' }) });
+    vi.stubGlobal('fetch', fetchMock);
     render(<Home />);
     fireEvent.change(screen.getByLabelText('Your Name'), { target: { value: ' Ada ' } });
+    fireEvent.change(screen.getByLabelText('Voting Deck'), { target: { value: 'tshirt' } });
     fireEvent.click(screen.getAllByRole('button', { name: /create room/i })[0]);
     await waitFor(() => expect(push).toHaveBeenCalledWith('/room/new%20room'));
     expect(sessionStorage.getItem('userName')).toBe('Ada');
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/planning/rooms'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deckId: 'tshirt' }),
+    });
+  });
+
+  it('defaults room creation to Fibonacci and hides the selector when joining by link', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ roomId: 'room' }) });
+    vi.stubGlobal('fetch', fetchMock);
+    const createView = render(<Home />);
+    expect((screen.getByLabelText('Voting Deck') as HTMLSelectElement).value).toBe('fibonacci');
+    fireEvent.change(screen.getByLabelText('Your Name'), { target: { value: 'Ada' } });
+    fireEvent.click(screen.getByRole('button', { name: /create room/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ deckId: 'fibonacci' });
+
+    createView.unmount();
+    params = { roomId: 'existing-room' };
+    render(<Home />);
+    expect(screen.queryByLabelText('Voting Deck')).toBeNull();
   });
 
   it('shows the create loading state and disables the button while pending', async () => {

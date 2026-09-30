@@ -1,4 +1,5 @@
 import type { ConsensusLevel, RoomState, Story } from '@/components/messages/websocket';
+import { normalizeMostCommonVotes, normalizeVotingDeck, type VotingDeck } from '@/lib/deck';
 
 export type Card = string | null;
 
@@ -12,11 +13,18 @@ export type Participant = {
   isOwner: boolean;
 };
 
+export type StorySnapshot = Omit<Story, 'mostAppearingVotes' | 'mostCommonVotes'> & {
+  mostAppearingVotes: number[];
+  mostCommonVotes: string[];
+};
+
 export type RoomSnapshot = {
+  deck: VotingDeck | null;
   currentStory: string;
   reveal: boolean;
   result: number | null;
   mostAppearingVotes: number[];
+  mostCommonVotes: string[];
   consensus: ConsensusLevel | null;
   lowestVote: number | null;
   highestVote: number | null;
@@ -26,17 +34,19 @@ export type RoomSnapshot = {
   participants: Participant[];
   startedAt: string | null;
   backlogMode: boolean;
-  stories: Story[];
+  stories: StorySnapshot[];
   currentStoryIndex: number;
   roomVersion: number | null;
 };
 
 export function normalizeRoomState(state: RoomState): RoomSnapshot {
   return {
+    deck: normalizeVotingDeck(state.deck),
     currentStory: state.currentStory,
     reveal: state.reveal,
     result: state.result ?? null,
     mostAppearingVotes: state.mostAppearingVotes ?? [],
+    mostCommonVotes: normalizeMostCommonVotes(state.mostCommonVotes, state.mostAppearingVotes),
     consensus: state.consensus ?? null,
     lowestVote: state.lowestVote ?? null,
     highestVote: state.highestVote ?? null,
@@ -49,7 +59,11 @@ export function normalizeRoomState(state: RoomState): RoomSnapshot {
     })),
     startedAt: state.startedAt ?? null,
     backlogMode: state.backlogMode ?? false,
-    stories: state.stories ?? [],
+    stories: (state.stories ?? []).map((story) => ({
+      ...story,
+      mostAppearingVotes: story.mostAppearingVotes ?? [],
+      mostCommonVotes: normalizeMostCommonVotes(story.mostCommonVotes, story.mostAppearingVotes),
+    })),
     currentStoryIndex: state.currentStoryIndex ?? 0,
     roomVersion: state.roomVersion,
   };

@@ -42,12 +42,14 @@ describe('useRoomConnection', () => {
 
   it('registers the name and injects the latest room version into guarded commands', () => {
     const { result } = renderHook(() => useRoomConnection({ roomId: 'room', userName: 'Ada', enabled: true }));
+    expect(result.current.snapshot.deck).toBeNull();
     const socket = socketState.current!;
     act(() => socket.onmessage?.({ data: JSON.stringify({ type: 'update-client-id', clientId: 'me' }) }));
     act(() => socket.onmessage?.({ data: JSON.stringify({
       type: 'room-state', currentStory: 'Story', reveal: false, mostAppearingVotes: [], roomVersion: 7,
       participants: [],
     }) }));
+    expect(result.current.snapshot.deck?.id).toBe('fibonacci');
 
     act(() => result.current.sendMessage({ type: 'reveal-votes', payload: null }));
     expect(JSON.parse(socket.sent[0])).toEqual({ type: 'update-name', payload: { username: 'Ada' } });

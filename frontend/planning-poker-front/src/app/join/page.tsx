@@ -2,6 +2,7 @@
 
 import { useLogger } from '@/context/logger/loggerContext';
 import { useToast } from '@/context/toast/toastContext';
+import { DECK_OPTIONS, type DeckId } from '@/lib/deck';
 import { Loader2, LogIn, Plus } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
@@ -25,6 +26,7 @@ export default function PlanningPokerHome() {
   const params = useParams<{ roomId?: string }>();
   const [roomCode, setRoomCode] = useState('');
   const [userName, setUserName] = useState('');
+  const [deckId, setDeckId] = useState<DeckId>('fibonacci');
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const nameInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -50,7 +52,11 @@ export default function PlanningPokerHome() {
 
     try {
       setIsCreating(true);
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/planning/rooms`, { method: 'POST' });
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/planning/rooms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deckId }),
+      });
       if (!res.ok) {
         throw new Error('Failed to create room on server');
       }
@@ -116,6 +122,17 @@ export default function PlanningPokerHome() {
 
         {/* Form */}
         <div style={styles.form}>
+          {!hasRoomParam && <div style={styles.inputGroup}>
+            <label htmlFor="voting-deck" style={styles.label}>Voting Deck</label>
+            <select
+              id="voting-deck"
+              value={deckId}
+              onChange={(event) => setDeckId(event.target.value as DeckId)}
+              style={styles.input}
+            >
+              {DECK_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+            </select>
+          </div>}
           <div style={styles.inputGroup}>
             <label htmlFor="user-name" style={styles.label}>Your Name</label>
             <input
