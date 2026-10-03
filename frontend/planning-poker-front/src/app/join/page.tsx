@@ -166,7 +166,7 @@ export default function PlanningPokerHome() {
   const handleEnterPressed = async (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') {
       if (roomCode.trim()) {
-        await handleJoinRoom();
+        handleJoinRoom();
       } else {
         await handleCreateRoom();
       }
