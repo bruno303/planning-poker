@@ -8,7 +8,7 @@ import {
 import { useLogger } from '@/context/logger/loggerContext';
 import { useRoom } from '@/context/room/roomContext';
 import { useToast } from '@/context/toast/toastContext';
-import { normalizeRoomState, type RoomSnapshot } from '@/hooks/room/roomState';
+import { normalizeRoomState, EMPTY_DECK, type RoomSnapshot } from '@/hooks/room/roomState';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -17,8 +17,8 @@ const RECONNECT_MAX_DELAY = 30000;
 const RECONNECT_MULTIPLIER = 2;
 
 const emptySnapshot: RoomSnapshot = {
-  currentStory: '', reveal: false, result: null, mostAppearingVotes: [], consensus: null,
-  lowestVote: null, highestVote: null, voteRange: null, voteSpread: null, nonNumericVoteCount: 0,
+  deck: EMPTY_DECK, currentStory: '', reveal: false, result: null, mostAppearingVotes: [], consensus: null,
+  lowestVote: null, highestVote: null, voteRange: null, voteSpread: null, specialVoteCount: 0,
   participants: [], startedAt: null, backlogMode: false, stories: [], currentStoryIndex: 0, roomVersion: null,
 };
 

@@ -1,8 +1,24 @@
 basePath: /
 definitions:
+  http.CreateRoomRequest:
+    properties:
+      deckType:
+        type: string
+    type: object
   http.CreateRoomResponse:
     properties:
       roomId:
+        type: string
+    type: object
+  http.DeckResponse:
+    properties:
+      cards:
+        items:
+          type: string
+        type: array
+      id:
+        type: string
+      name:
         type: string
     type: object
   http.ErrorResponse:
@@ -20,6 +36,13 @@ definitions:
         type: boolean
       name:
         type: string
+    type: object
+  http.GetDecksResponse:
+    properties:
+      decks:
+        items:
+          $ref: '#/definitions/http.DeckResponse'
+        type: array
     type: object
   http.GetRoomResponse:
     properties:
@@ -272,6 +295,19 @@ paths:
       summary: WebSocket connection
       tags:
       - rooms
+  /planning/decks:
+    get:
+      description: Returns the backend-owned voting deck catalogue
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.GetDecksResponse'
+      summary: List available decks
+      tags:
+      - decks
   /planning/room/{roomID}:
     get:
       description: Returns information about a specific room
@@ -299,14 +335,26 @@ paths:
     post:
       consumes:
       - application/json
-      description: Creates a new planning poker room and returns its ID
+      description: Creates a new planning poker room with the selected deck and returns
+        its ID
+      parameters:
+      - description: Room creation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/http.CreateRoomRequest'
       produces:
       - application/json
       responses:
-        "200":
-          description: OK
+        "201":
+          description: Created
           schema:
             $ref: '#/definitions/http.CreateRoomResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:

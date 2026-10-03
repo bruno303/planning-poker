@@ -301,6 +301,26 @@
                 }
             }
         },
+        "/planning/decks": {
+            "get": {
+                "description": "Returns the backend-owned voting deck catalogue",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "decks"
+                ],
+                "summary": "List available decks",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/http.GetDecksResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/planning/room/{roomID}": {
             "get": {
                 "description": "Returns information about a specific room",
@@ -338,7 +358,7 @@
         },
         "/planning/rooms": {
             "post": {
-                "description": "Creates a new planning poker room and returns its ID",
+                "description": "Creates a new planning poker room with the selected deck and returns its ID",
                 "consumes": [
                     "application/json"
                 ],
@@ -349,11 +369,28 @@
                     "rooms"
                 ],
                 "summary": "Create a new room",
+                "parameters": [
+                    {
+                        "description": "Room creation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/http.CreateRoomRequest"
+                        }
+                    }
+                ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
+                    "201": {
+                        "description": "Created",
                         "schema": {
                             "$ref": "#/definitions/http.CreateRoomResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
                         }
                     },
                     "500": {
@@ -393,10 +430,35 @@
         }
     },
     "definitions": {
+        "http.CreateRoomRequest": {
+            "type": "object",
+            "properties": {
+                "deckType": {
+                    "type": "string"
+                }
+            }
+        },
         "http.CreateRoomResponse": {
             "type": "object",
             "properties": {
                 "roomId": {
+                    "type": "string"
+                }
+            }
+        },
+        "http.DeckResponse": {
+            "type": "object",
+            "properties": {
+                "cards": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
                     "type": "string"
                 }
             }
@@ -423,6 +485,17 @@
                 },
                 "name": {
                     "type": "string"
+                }
+            }
+        },
+        "http.GetDecksResponse": {
+            "type": "object",
+            "properties": {
+                "decks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/http.DeckResponse"
+                    }
                 }
             }
         },

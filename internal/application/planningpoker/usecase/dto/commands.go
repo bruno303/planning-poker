@@ -15,28 +15,29 @@ type (
 		ID                 string   `json:"id"`
 		Name               string   `json:"name"`
 		Result             *float32 `json:"result,omitempty"`
-		MostAppearingVotes []int    `json:"mostAppearingVotes"`
+		MostAppearingVotes []string `json:"mostAppearingVotes"`
 		Voted              bool     `json:"voted"`
 	}
 
 	RoomState struct {
-		Type                string        `json:"type"`
-		StartedAt           *time.Time    `json:"startedAt,omitempty"`
-		CurrentStory        string        `json:"currentStory"`
-		Reveal              bool          `json:"reveal"`
-		Result              *float32      `json:"result,omitempty"`
-		MostAppearingVotes  []int         `json:"mostAppearingVotes"`
-		Consensus           string        `json:"consensus,omitempty"`
-		LowestVote          *int          `json:"lowestVote,omitempty"`
-		HighestVote         *int          `json:"highestVote,omitempty"`
-		VoteRange           *int          `json:"voteRange,omitempty"`
-		VoteSpread          *int          `json:"voteSpread,omitempty"`
-		NonNumericVoteCount int           `json:"nonNumericVoteCount,omitempty"`
-		Participants        []Participant `json:"participants"`
-		BacklogMode         bool          `json:"backlogMode"`
-		Stories             []Story       `json:"stories"`
-		CurrentStoryIndex   int           `json:"currentStoryIndex"`
-		RoomVersion         uint64        `json:"roomVersion"`
+		Type               string        `json:"type"`
+		StartedAt          *time.Time    `json:"startedAt,omitempty"`
+		Deck               entity.Deck   `json:"deck"`
+		CurrentStory       string        `json:"currentStory"`
+		Reveal             bool          `json:"reveal"`
+		Result             *float32      `json:"result,omitempty"`
+		MostAppearingVotes []string      `json:"mostAppearingVotes"`
+		Consensus          string        `json:"consensus,omitempty"`
+		LowestVote         *string       `json:"lowestVote,omitempty"`
+		HighestVote        *string       `json:"highestVote,omitempty"`
+		VoteRange          *int          `json:"voteRange,omitempty"`
+		VoteSpread         *int          `json:"voteSpread,omitempty"`
+		SpecialVoteCount   int           `json:"specialVoteCount,omitempty"`
+		Participants       []Participant `json:"participants"`
+		BacklogMode        bool          `json:"backlogMode"`
+		Stories            []Story       `json:"stories"`
+		CurrentStoryIndex  int           `json:"currentStoryIndex"`
+		RoomVersion        uint64        `json:"roomVersion"`
 	}
 	Participant struct {
 		ID          string     `json:"id"`
@@ -60,23 +61,24 @@ type (
 
 func NewRoomStateCommand(room *entity.Room) RoomState {
 	return RoomState{
-		Type:                "room-state",
-		StartedAt:           entity.OptionalUTCTime(room.StartedAt()),
-		CurrentStory:        room.EffectiveCurrentStory(),
-		Reveal:              room.Reveal,
-		Participants:        MapToParticipants(room.Clients.Values()),
-		Result:              room.Result,
-		MostAppearingVotes:  room.MostAppearingVotes,
-		Consensus:           room.Consensus,
-		LowestVote:          room.LowestVote,
-		HighestVote:         room.HighestVote,
-		VoteRange:           room.VoteRange,
-		VoteSpread:          room.VoteSpread,
-		NonNumericVoteCount: room.NonNumericVoteCount,
-		BacklogMode:         room.BacklogMode,
-		Stories:             mapStories(room.Stories),
-		CurrentStoryIndex:   room.CurrentStoryIndex,
-		RoomVersion:         room.RoomVersion,
+		Type:               "room-state",
+		StartedAt:          entity.OptionalUTCTime(room.StartedAt()),
+		Deck:               room.Deck(),
+		CurrentStory:       room.EffectiveCurrentStory(),
+		Reveal:             room.Reveal,
+		Participants:       MapToParticipants(room.Clients.Values()),
+		Result:             room.Result,
+		MostAppearingVotes: room.MostAppearingVotes,
+		Consensus:          room.Consensus,
+		LowestVote:         room.LowestVote,
+		HighestVote:        room.HighestVote,
+		VoteRange:          room.VoteRange,
+		VoteSpread:         room.VoteSpread,
+		SpecialVoteCount:   room.SpecialVoteCount,
+		BacklogMode:        room.BacklogMode,
+		Stories:            mapStories(room.Stories),
+		CurrentStoryIndex:  room.CurrentStoryIndex,
+		RoomVersion:        room.RoomVersion,
 	}
 }
 

@@ -150,6 +150,7 @@ func assertCommittedRoomState(t *testing.T, message map[string]any) {
 	if message["roomVersion"] != float64(2) {
 		t.Errorf("expected committed room version 2, got %v", message["roomVersion"])
 	}
+	assertDeckDescriptor(t, message, "fibonacci")
 }
 
 func readUntilStaleCommand(conn *websocket.Conn, messages chan<- map[string]any) {

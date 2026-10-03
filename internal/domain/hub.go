@@ -12,6 +12,7 @@ type (
 		RemoveClient(ctx context.Context, clientID string, roomID string) error
 
 		NewRoom(ctx context.Context) (*entity.Room, error)
+		NewRoomWithDeck(ctx context.Context, deckType entity.DeckType) (*entity.Room, error)
 		NewRoomWithID(ctx context.Context, roomID string) (*entity.Room, error)
 		LoadRoom(ctx context.Context, roomID string) (*entity.Room, error)
 		RemoveRoom(roomID string)
