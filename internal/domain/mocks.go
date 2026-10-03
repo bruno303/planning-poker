@@ -309,6 +309,45 @@ func (c *MockHubNewRoomCall) DoAndReturn(f func(context.Context) (*entity.Room, 
 	return c
 }
 
+// NewRoomWithDeck mocks base method.
+func (m *MockHub) NewRoomWithDeck(ctx context.Context, deckType entity.DeckType) (*entity.Room, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewRoomWithDeck", ctx, deckType)
+	ret0, _ := ret[0].(*entity.Room)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// NewRoomWithDeck indicates an expected call of NewRoomWithDeck.
+func (mr *MockHubMockRecorder) NewRoomWithDeck(ctx, deckType any) *MockHubNewRoomWithDeckCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewRoomWithDeck", reflect.TypeOf((*MockHub)(nil).NewRoomWithDeck), ctx, deckType)
+	return &MockHubNewRoomWithDeckCall{Call: call}
+}
+
+// MockHubNewRoomWithDeckCall wrap *gomock.Call
+type MockHubNewRoomWithDeckCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockHubNewRoomWithDeckCall) Return(arg0 *entity.Room, arg1 error) *MockHubNewRoomWithDeckCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockHubNewRoomWithDeckCall) Do(f func(context.Context, entity.DeckType) (*entity.Room, error)) *MockHubNewRoomWithDeckCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockHubNewRoomWithDeckCall) DoAndReturn(f func(context.Context, entity.DeckType) (*entity.Room, error)) *MockHubNewRoomWithDeckCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // NewRoomWithID mocks base method.
 func (m *MockHub) NewRoomWithID(ctx context.Context, roomID string) (*entity.Room, error) {
 	m.ctrl.T.Helper()

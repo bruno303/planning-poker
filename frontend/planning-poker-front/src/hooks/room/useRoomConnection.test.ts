@@ -9,6 +9,8 @@ const pushSuccess = vi.fn();
 const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), setContext: vi.fn() };
 const router = { push: vi.fn() };
 
+const deck = { id: 'fibonacci', name: 'Fibonacci', kind: 'numeric', cards: ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'] };
+
 class FakeSocket {
   static OPEN = 1;
   static CLOSED = 3;
@@ -45,13 +47,32 @@ describe('useRoomConnection', () => {
     const socket = socketState.current!;
     act(() => socket.onmessage?.({ data: JSON.stringify({ type: 'update-client-id', clientId: 'me' }) }));
     act(() => socket.onmessage?.({ data: JSON.stringify({
-      type: 'room-state', currentStory: 'Story', reveal: false, mostAppearingVotes: [], roomVersion: 7,
+      type: 'room-state', deck, currentStory: 'Story', reveal: false, mostAppearingVotes: [], roomVersion: 7,
       participants: [],
     }) }));
 
     act(() => result.current.sendMessage({ type: 'reveal-votes', payload: null }));
     expect(JSON.parse(socket.sent[0])).toEqual({ type: 'update-name', payload: { username: 'Ada' } });
     expect(JSON.parse(socket.sent[1])).toEqual({ type: 'reveal-votes', payload: { expectedRoomVersion: 7 } });
+  });
+
+  it('normalizes a T-shirt deck descriptor and label summaries into the snapshot', () => {
+    const { result } = renderHook(() => useRoomConnection({ roomId: 'room', userName: 'Ada', enabled: true }));
+    const socket = socketState.current!;
+    const tShirtDeck = { id: 't-shirt', name: 'T-shirt', kind: 'categorical', cards: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '?', '☕'] };
+    act(() => socket.onmessage?.({ data: JSON.stringify({
+      type: 'room-state', deck: tShirtDeck, currentStory: 'Story', reveal: true,
+      mostAppearingVotes: ['M'], lowestVote: 'S', highestVote: 'XL', voteSpread: 3, specialVoteCount: 2,
+      roomVersion: 9, participants: [],
+    }) }));
+
+    expect(result.current.snapshot.deck).toEqual(tShirtDeck);
+    expect(result.current.snapshot.mostAppearingVotes).toEqual(['M']);
+    expect(result.current.snapshot.lowestVote).toBe('S');
+    expect(result.current.snapshot.highestVote).toBe('XL');
+    expect(result.current.snapshot.voteSpread).toBe(3);
+    expect(result.current.snapshot.specialVoteCount).toBe(2);
+    expect(result.current.snapshot.result).toBeNull();
   });
 
   it('ignores callbacks from a replaced socket and cleans up on unmount', () => {
@@ -61,7 +82,7 @@ describe('useRoomConnection', () => {
     const firstSocket = socketState.current!;
     act(() => firstSocket.onmessage?.({ data: JSON.stringify({ type: 'update-client-id', clientId: 'old' }) }));
     act(() => firstSocket.onmessage?.({ data: JSON.stringify({
-      type: 'room-state', currentStory: 'Old story', reveal: false, mostAppearingVotes: [], roomVersion: 7,
+      type: 'room-state', deck, currentStory: 'Old story', reveal: false, mostAppearingVotes: [], roomVersion: 7,
       participants: [],
     }) }));
     act(() => rerender({ roomId: 'two' }));

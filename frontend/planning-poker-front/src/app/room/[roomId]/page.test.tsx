@@ -39,8 +39,11 @@ vi.mock('@/components/avatar/avatar', () => ({ default: () => <span aria-hidden=
 vi.mock('@/components/participantIdBadge/participantIdBadge', () => ({ default: () => null }));
 vi.mock('@/components/focusableInput/focusableInput', () => ({ default: (props: { currentStory: string; onChange: React.ChangeEventHandler<HTMLInputElement>; onKeyDown: React.KeyboardEventHandler<HTMLInputElement> }) => <input aria-label="Story editor" value={props.currentStory} onChange={props.onChange} onKeyDown={props.onKeyDown} /> }));
 
+const fibonacciCards = ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'];
+const deck = { id: 'fibonacci', name: 'Fibonacci', kind: 'numeric', cards: fibonacciCards };
+
 const roomState = (overrides = {}) => ({
-  type: 'room-state', currentStory: 'Implement feature', reveal: false, mostAppearingVotes: [], roomVersion: 4,
+  type: 'room-state', deck, currentStory: 'Implement feature', reveal: false, mostAppearingVotes: [], roomVersion: 4,
   participants: [
     { id: 'me', name: 'Ada', vote: null, hasVoted: false, isSpectator: false, isOwner: true },
     { id: 'other', name: 'Bob', vote: '5', hasVoted: true, isSpectator: false, isOwner: false },
@@ -355,7 +358,7 @@ describe('room page', () => {
     const ws = socketRef.current!;
     act(() => ws.onopen?.());
     act(() => ws.onmessage?.({ data: JSON.stringify({ type: 'update-client-id', clientId: 'me' }) }));
-     act(() => ws.onmessage?.({ data: JSON.stringify(roomState({ reveal: true, result: 5.5, consensus: 'High', lowestVote: 3, highestVote: 8, voteRange: 5, voteSpread: 2, nonNumericVoteCount: 1, mostAppearingVotes: [5] })) }));
+     act(() => ws.onmessage?.({ data: JSON.stringify(roomState({ reveal: true, result: 5.5, consensus: 'High', lowestVote: '3', highestVote: '8', voteRange: 5, voteSpread: 2, specialVoteCount: 1, mostAppearingVotes: ['5'] })) }));
      expect(screen.getByText('Results Summary')).toBeTruthy();
      expect(screen.getByText('Consensus: High')).toBeTruthy();
     act(() => ws.onmessage?.({ data: JSON.stringify({ type: 'stale-command' }) }));
@@ -377,6 +380,33 @@ describe('room page', () => {
      expect(socketRef.current).toBeNull();
       expect(pushSuccess.mock.calls).toHaveLength(successesBeforeKick);
     vi.useRealTimers();
+  });
+
+  it('renders T-shirt cards from the deck and summarizes without an average', async () => {
+    renderRoom();
+    await waitFor(() => expect(socketRef.current).not.toBeNull());
+    const ws = socketRef.current!;
+    act(() => ws.onmessage?.({ data: JSON.stringify({ type: 'update-client-id', clientId: 'me' }) }));
+    const tShirtDeck = { id: 't-shirt', name: 'T-shirt', kind: 'categorical', cards: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '?', '☕'] };
+    act(() => ws.onmessage?.({ data: JSON.stringify(roomState({
+      deck: tShirtDeck,
+      reveal: true,
+      mostAppearingVotes: ['M'],
+      lowestVote: 'S',
+      highestVote: 'XL',
+      voteSpread: 3,
+      specialVoteCount: 1,
+      participants: [{ id: 'me', name: 'Ada', vote: 'M', hasVoted: true, isSpectator: false, isOwner: true }],
+    })) }));
+
+    for (const card of tShirtDeck.cards) {
+      expect(screen.getByRole('button', { name: card })).toBeTruthy();
+    }
+    expect(screen.getByText('Most Common: M')).toBeTruthy();
+    expect(screen.getByText('Votes range from S to XL')).toBeTruthy();
+    expect(screen.getByText('Special votes: 1')).toBeTruthy();
+    expect(screen.queryByText(/^Average:/)).toBeNull();
+    expect(screen.queryByRole('button', { name: '8' })).toBeNull();
   });
 
   it('removes socket handlers and closes the socket on unmount', async () => {

@@ -184,12 +184,13 @@ func TestRoom_RevealWithSpectators(t *testing.T) {
 }
 
 func TestCalculateConsensus(t *testing.T) {
+	fibonacci, _ := DeckByType(DeckTypeFibonacci)
 	tests := []struct {
 		name       string
-		votes      []int
+		votes      []string
 		consensus  string
-		lowest     *int
-		highest    *int
+		lowest     *string
+		highest    *string
 		voteRange  *int
 		voteSpread *int
 	}{
@@ -199,65 +200,91 @@ func TestCalculateConsensus(t *testing.T) {
 		},
 		{
 			name:       "single vote",
-			votes:      []int{5},
+			votes:      []string{"5"},
 			consensus:  consensusHigh,
-			lowest:     lo.ToPtr(5),
-			highest:    lo.ToPtr(5),
+			lowest:     lo.ToPtr("5"),
+			highest:    lo.ToPtr("5"),
 			voteRange:  lo.ToPtr(0),
 			voteSpread: lo.ToPtr(0),
 		},
 		{
 			name:       "strong majority on adjacent estimates",
-			votes:      []int{3, 5, 5},
+			votes:      []string{"3", "5", "5"},
 			consensus:  consensusHigh,
-			lowest:     lo.ToPtr(3),
-			highest:    lo.ToPtr(5),
+			lowest:     lo.ToPtr("3"),
+			highest:    lo.ToPtr("5"),
 			voteRange:  lo.ToPtr(2),
 			voteSpread: lo.ToPtr(1),
 		},
 		{
 			name:       "modest two-step spread",
-			votes:      []int{3, 5, 8},
+			votes:      []string{"3", "5", "8"},
 			consensus:  consensusMedium,
-			lowest:     lo.ToPtr(3),
-			highest:    lo.ToPtr(8),
+			lowest:     lo.ToPtr("3"),
+			highest:    lo.ToPtr("8"),
 			voteRange:  lo.ToPtr(5),
 			voteSpread: lo.ToPtr(2),
 		},
 		{
 			name:       "large spread",
-			votes:      []int{3, 13},
+			votes:      []string{"3", "13"},
 			consensus:  consensusLow,
-			lowest:     lo.ToPtr(3),
-			highest:    lo.ToPtr(13),
+			lowest:     lo.ToPtr("3"),
+			highest:    lo.ToPtr("13"),
 			voteRange:  lo.ToPtr(10),
 			voteSpread: lo.ToPtr(3),
 		},
 		{
 			name:      "unknown ordered values",
-			votes:     []int{4, 5},
+			votes:     []string{"4", "6"},
 			consensus: consensusUnavailable,
-			lowest:    lo.ToPtr(4),
-			highest:   lo.ToPtr(5),
-			voteRange: lo.ToPtr(1),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			consensus, lowest, highest, voteRange, voteSpread := calculateConsensus(tt.votes)
+			summary := calculateConsensus(fibonacci, tt.votes)
 			assertConsensus(t,
-				consensusResult{consensus, lowest, highest, voteRange, voteSpread},
+				consensusResult{summary.Consensus, summary.LowestVote, summary.HighestVote, summary.VoteRange, summary.VoteSpread},
 				consensusResult{tt.consensus, tt.lowest, tt.highest, tt.voteRange, tt.voteSpread},
 			)
 		})
 	}
 }
 
+func TestCalculateConsensusTShirtUsesDeckPositions(t *testing.T) {
+	deck, _ := DeckByType(DeckTypeTShirt)
+
+	summary := calculateConsensus(deck, []string{"XS", "S", "M"})
+
+	if summary.Consensus != consensusMedium {
+		t.Errorf("consensus = %q, want %q", summary.Consensus, consensusMedium)
+	}
+	if summary.LowestVote == nil || *summary.LowestVote != "XS" {
+		t.Errorf("lowest vote = %v, want XS", summary.LowestVote)
+	}
+	if summary.HighestVote == nil || *summary.HighestVote != "M" {
+		t.Errorf("highest vote = %v, want M", summary.HighestVote)
+	}
+	if summary.VoteSpread == nil || *summary.VoteSpread != 2 {
+		t.Errorf("vote spread = %v, want 2", summary.VoteSpread)
+	}
+	if summary.VoteRange != nil {
+		t.Errorf("vote range = %v, want nil for t-shirt deck", summary.VoteRange)
+	}
+
+	single := calculateConsensus(deck, []string{"L", "L"})
+	if single.Consensus != consensusHigh || single.VoteSpread == nil || *single.VoteSpread != 0 {
+		t.Errorf("single-estimate summary = %+v, want High with spread 0", single)
+	}
+}
+
 type consensusResult struct {
-	consensus                  string
-	lowest, highest, voteRange *int
-	voteSpread                 *int
+	consensus  string
+	lowest     *string
+	highest    *string
+	voteRange  *int
+	voteSpread *int
 }
 
 func assertConsensus(t *testing.T, got, want consensusResult) {
@@ -301,16 +328,16 @@ func TestRoom_RevealCalculatesConsensusAndCountsSpecialVotes(t *testing.T) {
 	if room.Consensus != consensusLow {
 		t.Errorf("consensus = %q, want %q", room.Consensus, consensusLow)
 	}
-	if !reflect.DeepEqual(room.LowestVote, lo.ToPtr(3)) {
+	if !reflect.DeepEqual(room.LowestVote, lo.ToPtr("3")) {
 		t.Errorf("lowest vote = %v, want 3", room.LowestVote)
 	}
-	if !reflect.DeepEqual(room.HighestVote, lo.ToPtr(13)) {
+	if !reflect.DeepEqual(room.HighestVote, lo.ToPtr("13")) {
 		t.Errorf("highest vote = %v, want 13", room.HighestVote)
 	}
-	if room.NonNumericVoteCount != 2 {
-		t.Errorf("non-numeric vote count = %d, want 2", room.NonNumericVoteCount)
+	if room.SpecialVoteCount != 2 {
+		t.Errorf("special vote count = %d, want 2", room.SpecialVoteCount)
 	}
-	if !reflect.DeepEqual(room.MostAppearingVotes, []int{3}) {
+	if !reflect.DeepEqual(room.MostAppearingVotes, []string{"3"}) {
 		t.Errorf("most appearing votes = %v, want [3]", room.MostAppearingVotes)
 	}
 }
@@ -328,7 +355,7 @@ func TestRoom_HideVotesClearsConsensusMetrics(t *testing.T) {
 
 	if room.Result != nil || room.MostAppearingVotes != nil || room.Consensus != "" ||
 		room.LowestVote != nil || room.HighestVote != nil || room.VoteRange != nil ||
-		room.VoteSpread != nil || room.NonNumericVoteCount != 0 {
+		room.VoteSpread != nil || room.SpecialVoteCount != 0 {
 		t.Fatalf("consensus metrics were not cleared: %+v", room)
 	}
 }
@@ -1008,7 +1035,7 @@ func TestRoom_MostAppearingVotes(t *testing.T) {
 			t.Errorf("Expected 1 most appearing vote, got %v", len(room.MostAppearingVotes))
 		}
 
-		if len(room.MostAppearingVotes) > 0 && room.MostAppearingVotes[0] != 5 {
+		if len(room.MostAppearingVotes) > 0 && room.MostAppearingVotes[0] != "5" {
 			t.Errorf("Expected most appearing vote to be 5, got %v", room.MostAppearingVotes[0])
 		}
 	})
@@ -1031,6 +1058,62 @@ func TestRoom_MostAppearingVotes(t *testing.T) {
 			t.Errorf("Expected 2 most appearing votes, got %v", len(room.MostAppearingVotes))
 		}
 	})
+}
+
+func TestRoomVoteRejectsCardOutsideDeck(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	client := &Client{ID: "client1", IsSpectator: false}
+	mockCC := NewMockClientCollection(ctrl)
+	mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
+	mockCC.EXPECT().First().Return(client, true)
+
+	room := &Room{ID: "room1", Clients: mockCC, DeckType: DeckTypeTShirt}
+	client.room = room
+
+	if err := room.Vote(context.Background(), "client1", lo.ToPtr("5")); err == nil {
+		t.Fatal("expected voting outside the t-shirt deck to fail")
+	}
+	if client.CurrentVote != nil {
+		t.Fatalf("rejected vote mutated client: %+v", client)
+	}
+}
+
+func TestRoomTShirtRevealUsesLabelSummary(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	clients := []*Client{
+		{ID: "low", CurrentVote: lo.ToPtr("S"), HasVoted: true},
+		{ID: "mid", CurrentVote: lo.ToPtr("M"), HasVoted: true},
+		{ID: "high", CurrentVote: lo.ToPtr("L"), HasVoted: true},
+		{ID: "special", CurrentVote: lo.ToPtr(SpecialVoteCoffee), HasVoted: true},
+	}
+	mockCC := NewMockClientCollection(ctrl)
+	mockCC.EXPECT().Values().Return(clients).AnyTimes()
+
+	room := &Room{ID: "room1", Clients: mockCC, DeckType: DeckTypeTShirt}
+	room.reveal(true)
+
+	if room.Result != nil {
+		t.Errorf("t-shirt result = %v, want nil average", room.Result)
+	}
+	if room.VoteRange != nil {
+		t.Errorf("t-shirt vote range = %v, want nil", room.VoteRange)
+	}
+	if room.SpecialVoteCount != 1 {
+		t.Errorf("special vote count = %d, want 1", room.SpecialVoteCount)
+	}
+	if !reflect.DeepEqual(room.MostAppearingVotes, []string{"S", "M", "L"}) {
+		t.Errorf("most appearing votes = %v, want [S M L]", room.MostAppearingVotes)
+	}
+	if room.LowestVote == nil || *room.LowestVote != "S" || room.HighestVote == nil || *room.HighestVote != "L" {
+		t.Errorf("extreme votes = (%v, %v), want (S, L)", room.LowestVote, room.HighestVote)
+	}
+	if room.VoteSpread == nil || *room.VoteSpread != 2 {
+		t.Errorf("vote spread = %v, want 2", room.VoteSpread)
+	}
 }
 
 func newOwnerRoomForTest(ctrl *gomock.Controller) (*Room, *Client) {

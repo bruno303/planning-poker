@@ -53,6 +53,25 @@ func TestNewRoomWithID(t *testing.T) {
 	}
 }
 
+func TestNewRoomWithDeck(t *testing.T) {
+	ctx := context.Background()
+	hub := NewHub()
+
+	room, err := hub.NewRoomWithDeck(ctx, entity.DeckTypeTShirt)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if room == nil {
+		t.Fatal("expected room to be non-nil")
+	}
+	if room.DeckType != entity.DeckTypeTShirt {
+		t.Fatalf("expected deck type %q, got %q", entity.DeckTypeTShirt, room.DeckType)
+	}
+	if hub.Rooms[room.ID] != room {
+		t.Fatal("expected hub to store deck room under its ID")
+	}
+}
+
 func TestLoadRoom(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()

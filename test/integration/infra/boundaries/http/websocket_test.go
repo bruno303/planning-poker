@@ -61,6 +61,54 @@ func testWebSocketAutoCreatesRoom(t *testing.T) {
 	assertParticipants(t, msg5["participants"], clientID1, clientID2)
 }
 
+func TestWebSocketTShirtRoom(t *testing.T) {
+	ts := integration.NewTestServer(t)
+	defer ts.Close()
+
+	client := integration.NewHTTPClient(ts.Server.URL)
+	var createResponse struct {
+		RoomID string `json:"roomId"`
+	}
+	resp, err := client.PostJSON(t, "/planning/rooms", map[string]string{"deckType": "t-shirt"}, &createResponse)
+	if err != nil {
+		t.Fatalf("failed to create t-shirt room: %v", err)
+	}
+	integration.AssertStatus(t, resp, 201)
+	if createResponse.RoomID == "" {
+		t.Fatal("expected a room ID from the create room endpoint")
+	}
+
+	conn := connectWebSocket(t, ts, createResponse.RoomID)
+	defer closeAndWait(conn)
+
+	_ = clientIDFromUpdateMessage(t, receiveMessage(t, conn, 2*time.Second))
+	roomState := receiveMessage(t, conn, 2*time.Second)
+	assertRoomStateWithDeck(t, roomState, 1, "t-shirt")
+
+	send(t, conn, bus.WebSocketMessage{Type: "vote", Payload: bus.VotePayload{Vote: "M"}})
+	revealed := receiveMessage(t, conn, 2*time.Second)
+	if revealed["reveal"] != true {
+		t.Fatalf("expected single t-shirt vote to auto-reveal, got %#v", revealed)
+	}
+	if revealed["result"] != nil {
+		t.Errorf("t-shirt reveal should not report a numeric result, got %v", revealed["result"])
+	}
+}
+
+func TestWebSocketCreateRoomRejectsUnknownDeck(t *testing.T) {
+	ts := integration.NewTestServer(t)
+	defer ts.Close()
+
+	client := integration.NewHTTPClient(ts.Server.URL)
+	resp, err := client.Post(t, "/planning/rooms", map[string]string{"deckType": "planning"})
+	if err != nil {
+		t.Fatalf("failed to post room creation: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	integration.AssertStatus(t, resp, 400)
+}
+
 func clientIDFromUpdateMessage(t *testing.T, msg map[string]any) string {
 	t.Helper()
 	if msg["type"] != "update-client-id" {
@@ -100,12 +148,33 @@ func assertParticipants(t *testing.T, raw any, expectedIDs ...string) {
 
 func assertRoomStateMessage(t *testing.T, msg map[string]any, expectedParticipants int) {
 	t.Helper()
+	assertRoomStateWithDeck(t, msg, expectedParticipants, "fibonacci")
+}
+
+func assertRoomStateWithDeck(t *testing.T, msg map[string]any, expectedParticipants int, wantDeckID string) {
+	t.Helper()
 	if msg["type"] != "room-state" {
 		t.Fatalf("expected room-state message, got '%v'", msg["type"])
 	}
 	participants := msg["participants"].([]any)
 	if len(participants) != expectedParticipants {
 		t.Fatalf("expected %d participants, got %d", expectedParticipants, len(participants))
+	}
+	assertDeckDescriptor(t, msg, wantDeckID)
+}
+
+func assertDeckDescriptor(t *testing.T, msg map[string]any, wantID string) {
+	t.Helper()
+	deck, ok := msg["deck"].(map[string]any)
+	if !ok {
+		t.Fatalf("room-state missing deck descriptor: %#v", msg["deck"])
+	}
+	if deck["id"] != wantID {
+		t.Errorf("deck id = %v, want %v", deck["id"], wantID)
+	}
+	cards, ok := deck["cards"].([]any)
+	if !ok || len(cards) == 0 {
+		t.Errorf("deck cards missing or empty: %#v", deck["cards"])
 	}
 }
 

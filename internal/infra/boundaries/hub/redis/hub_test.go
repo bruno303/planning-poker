@@ -157,6 +157,30 @@ func TestRedisHub_NewRoomWithID(t *testing.T) {
 	assert.Equal(t, "room-explicit", room.ID)
 }
 
+func TestRedisHub_NewRoomWithDeck(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockRedis := NewMockRedisClient(ctrl)
+	logger := log.NewLogger("test")
+
+	statusCmd := redis.NewStatusCmd(context.Background())
+	statusCmd.SetVal("OK")
+
+	mockRedis.EXPECT().Set(gomock.Any(), gomock.Any(), gomock.Any(), time.Duration(24*time.Hour)).Return(statusCmd)
+
+	hub := &RedisHub{
+		client:           mockRedis,
+		logger:           logger,
+		buses:            make(map[string]domain.Bus),
+		closeCh:          make(chan struct{}),
+		roomClientCounts: make(map[string]int),
+	}
+
+	room, err := hub.NewRoomWithDeck(context.Background(), entity.DeckTypeTShirt)
+	assert.NoError(t, err)
+	assert.NotNil(t, room)
+	assert.Equal(t, entity.DeckTypeTShirt, room.DeckType)
+}
+
 func TestRedisHub_AddClient_RemoveRoom(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockRedis := NewMockRedisClient(ctrl)

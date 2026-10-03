@@ -118,10 +118,7 @@ func TestJoinRoomUseCase_Execute_AutoCreatesMissingRoom(t *testing.T) {
 	testMetric, metricMeter := newTestPlanningPokerMetric(ctrl)
 
 	roomID := "nonexistent"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 
 	mockLockManager.EXPECT().
 		WithLock(gomock.Any(), roomID, gomock.Any()).
@@ -159,6 +156,9 @@ func TestJoinRoomUseCase_Execute_AutoCreatesMissingRoom(t *testing.T) {
 	}
 	if !output.Client.IsOwner {
 		t.Fatal("expected first auto-created room client to be owner")
+	}
+	if output.Room.Deck().ID != string(entity.DeckTypeFibonacci) {
+		t.Fatalf("expected auto-created room to use the fibonacci deck, got %q", output.Room.Deck().ID)
 	}
 
 	calls := metricMeter.getCalls()

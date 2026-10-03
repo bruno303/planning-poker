@@ -1,6 +1,8 @@
-import type { ConsensusLevel, RoomState, Story } from '@/components/messages/websocket';
+import type { ConsensusLevel, DeckDescriptor, RoomState, Story } from '@/components/messages/websocket';
 
 export type Card = string | null;
+
+export const EMPTY_DECK: DeckDescriptor = { id: '', name: '', kind: 'numeric', cards: [] };
 
 export type Participant = {
   id: string;
@@ -13,16 +15,17 @@ export type Participant = {
 };
 
 export type RoomSnapshot = {
+  deck: DeckDescriptor;
   currentStory: string;
   reveal: boolean;
   result: number | null;
-  mostAppearingVotes: number[];
+  mostAppearingVotes: string[];
   consensus: ConsensusLevel | null;
-  lowestVote: number | null;
-  highestVote: number | null;
+  lowestVote: string | null;
+  highestVote: string | null;
   voteRange: number | null;
   voteSpread: number | null;
-  nonNumericVoteCount: number;
+  specialVoteCount: number;
   participants: Participant[];
   startedAt: string | null;
   backlogMode: boolean;
@@ -33,6 +36,7 @@ export type RoomSnapshot = {
 
 export function normalizeRoomState(state: RoomState): RoomSnapshot {
   return {
+    deck: state.deck,
     currentStory: state.currentStory,
     reveal: state.reveal,
     result: state.result ?? null,
@@ -42,7 +46,7 @@ export function normalizeRoomState(state: RoomState): RoomSnapshot {
     highestVote: state.highestVote ?? null,
     voteRange: state.voteRange ?? null,
     voteSpread: state.voteSpread ?? null,
-    nonNumericVoteCount: state.nonNumericVoteCount ?? 0,
+    specialVoteCount: state.specialVoteCount ?? 0,
     participants: state.participants.map((participant) => ({
       ...participant,
       votedAt: participant.votedAt ?? null,
