@@ -9,8 +9,8 @@ let params: { roomId?: string } = {};
 
 const deckCatalogue = {
   decks: [
-    { id: 'fibonacci', name: 'Fibonacci', cards: ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'] },
-    { id: 't-shirt', name: 'T-shirt', cards: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '?', '☕'] },
+    { id: 'fibonacci', name: 'Fibonacci', kind: 'numeric', cards: ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'] },
+    { id: 't-shirt', name: 'T-shirt', kind: 'categorical', cards: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '?', '☕'] },
   ],
 };
 
@@ -50,9 +50,10 @@ describe('join page', () => {
     sessionStorage.clear();
   });
 
-  it('validates name before creating a room', () => {
+  it('validates name before creating a room', async () => {
     stubFetch();
     render(<Home />);
+    await screen.findByRole('option', { name: 'Fibonacci' });
     fireEvent.keyDown(screen.getByLabelText('Your Name'), { key: 'Enter' });
     expect(pushError).toHaveBeenCalledWith('Name not informed');
   });
@@ -126,9 +127,19 @@ describe('join page', () => {
     expect((screen.getByRole('button', { name: /create room/i }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it('rejects deck catalogue entries with an unknown kind', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ decks: [{ ...deckCatalogue.decks[0], kind: 'ordinal' }] }),
+    }));
+    render(<Home />);
+
+    await waitFor(() => expect(pushError).toHaveBeenCalledWith('Invalid deck catalogue'));
+  });
+
   it('joins a room from the route and submits on Enter', async () => {
     params = { roomId: 'room 1' };
-    stubFetch();
+    const fetchMock = stubFetch();
     render(<Home />);
     const input = screen.getByLabelText('Your Name');
     fireEvent.change(input, { target: { value: ' Bob ' } });
@@ -136,6 +147,7 @@ describe('join page', () => {
     await waitFor(() => expect(push).toHaveBeenCalledWith('/room/room%201'));
     expect(sessionStorage.getItem('userName')).toBe('Bob');
     expect(screen.queryByLabelText('Deck')).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('shows the join loading state and disables the button while navigation is pending', async () => {

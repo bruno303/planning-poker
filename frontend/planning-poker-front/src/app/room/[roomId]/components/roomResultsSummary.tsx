@@ -6,7 +6,7 @@ type Props = Readonly<{ snapshot: RoomSnapshot }>;
 export default function RoomResultsSummary({ snapshot }: Props) {
   if (!snapshot.reveal) return null;
   const { consensus, deck, result, mostAppearingVotes, lowestVote, highestVote, voteRange, voteSpread, specialVoteCount } = snapshot;
-  const showAverage = deck.id === 'fibonacci' || result !== null;
+  const showAverage = deck.kind === 'numeric';
   return <div style={styles.summary}><h4 style={styles.summaryTitle}>Results Summary</h4><div style={styles.summaryContent}>
     <div>Consensus: {consensus ?? 'Unavailable'}</div>
     {showAverage && <div>Average: {result !== null ? result.toFixed(1) : 'Unavailable'}</div>}

@@ -32,6 +32,7 @@ const (
 	clientKeyPrefix = "planning-poker:client:"
 	pubsubChannel   = "planning-poker:updates:"
 	twentyFourHours = 24 * time.Hour
+	saveNewRoomLog  = "Failed to save new room to Redis"
 
 	subscribeTimeout = 2 * time.Second
 )
@@ -92,7 +93,7 @@ func (h *RedisHub) NewRoom(ctx context.Context) (*entity.Room, error) {
 	room, err := trace.Trace(ctx, trace.NameConfig("RedisHub", "NewRoom"), func(ctx context.Context) (any, error) {
 		room := entity.NewRoom(clientcollection.New())
 		if err := h.saveInitialRoom(ctx, room); err != nil {
-			h.logger.Error(ctx, "Failed to save new room to Redis", err)
+			h.logger.Error(ctx, saveNewRoomLog, err)
 			return nil, err
 		}
 
@@ -109,7 +110,7 @@ func (h *RedisHub) NewRoomWithDeck(ctx context.Context, deckType entity.DeckType
 	room, err := trace.Trace(ctx, trace.NameConfig("RedisHub", "NewRoomWithDeck"), func(ctx context.Context) (any, error) {
 		room := entity.NewRoomWithDeck(clientcollection.New(), deckType)
 		if err := h.saveInitialRoom(ctx, room); err != nil {
-			h.logger.Error(ctx, "Failed to save new room to Redis", err)
+			h.logger.Error(ctx, saveNewRoomLog, err)
 			return nil, err
 		}
 
@@ -126,7 +127,7 @@ func (h *RedisHub) NewRoomWithID(ctx context.Context, roomID string) (*entity.Ro
 	room, err := trace.Trace(ctx, trace.NameConfig("RedisHub", "NewRoomWithID"), func(ctx context.Context) (any, error) {
 		room := entity.NewRoomWithID(roomID, clientcollection.New())
 		if err := h.saveInitialRoom(ctx, room); err != nil {
-			h.logger.Error(ctx, "Failed to save new room to Redis", err)
+			h.logger.Error(ctx, saveNewRoomLog, err)
 			return nil, err
 		}
 

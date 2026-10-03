@@ -10,6 +10,7 @@ type (
 	DeckResponse struct {
 		ID    string   `json:"id"`
 		Name  string   `json:"name"`
+		Kind  string   `json:"kind" enums:"numeric,categorical"`
 		Cards []string `json:"cards"`
 	}
 	GetDecksResponse struct {
@@ -50,6 +51,7 @@ func mapDecks(decks []entity.Deck) []DeckResponse {
 		mapped[i] = DeckResponse{
 			ID:    deck.ID,
 			Name:  deck.Name,
+			Kind:  string(deck.Kind),
 			Cards: deck.Cards,
 		}
 	}

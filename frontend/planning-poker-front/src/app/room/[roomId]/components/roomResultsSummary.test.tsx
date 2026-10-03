@@ -4,8 +4,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { RoomSnapshot } from '@/hooks/room/roomState';
 import RoomResultsSummary from './roomResultsSummary';
 
-const fibonacciDeck = { id: 'fibonacci', name: 'Fibonacci', cards: ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'] };
-const tShirtDeck = { id: 't-shirt', name: 'T-shirt', cards: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '?', '☕'] };
+const fibonacciDeck = { id: 'fibonacci', name: 'Fibonacci', kind: 'numeric', cards: ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'] };
+const tShirtDeck = { id: 't-shirt', name: 'T-shirt', kind: 'categorical', cards: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '?', '☕'] };
 
 const snapshot = (overrides: Partial<RoomSnapshot> = {}): RoomSnapshot => ({
   deck: fibonacciDeck,
@@ -47,6 +47,12 @@ describe('RoomResultsSummary', () => {
     expect(screen.getByText('Most Common: 5')).toBeTruthy();
     expect(screen.getByText('Votes range from 3 to 8 (spread: 5)')).toBeTruthy();
     expect(screen.getByText('Deck spread: 2 steps')).toBeTruthy();
+  });
+
+  it('renders averages for numeric decks without relying on a particular deck ID', () => {
+    renderSummary({ deck: { ...fibonacciDeck, id: 'custom-numeric' } });
+
+    expect(screen.getByText('Average: 5.5')).toBeTruthy();
   });
 
   it('renders ordinal T-shirt results without an average', () => {

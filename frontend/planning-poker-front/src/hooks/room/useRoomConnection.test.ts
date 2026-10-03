@@ -9,7 +9,7 @@ const pushSuccess = vi.fn();
 const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), setContext: vi.fn() };
 const router = { push: vi.fn() };
 
-const deck = { id: 'fibonacci', name: 'Fibonacci', cards: ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'] };
+const deck = { id: 'fibonacci', name: 'Fibonacci', kind: 'numeric', cards: ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'] };
 
 class FakeSocket {
   static OPEN = 1;
@@ -59,7 +59,7 @@ describe('useRoomConnection', () => {
   it('normalizes a T-shirt deck descriptor and label summaries into the snapshot', () => {
     const { result } = renderHook(() => useRoomConnection({ roomId: 'room', userName: 'Ada', enabled: true }));
     const socket = socketState.current!;
-    const tShirtDeck = { id: 't-shirt', name: 'T-shirt', cards: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '?', '☕'] };
+    const tShirtDeck = { id: 't-shirt', name: 'T-shirt', kind: 'categorical', cards: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '?', '☕'] };
     act(() => socket.onmessage?.({ data: JSON.stringify({
       type: 'room-state', deck: tShirtDeck, currentStory: 'Story', reveal: true,
       mostAppearingVotes: ['M'], lowestVote: 'S', highestVote: 'XL', voteSpread: 3, specialVoteCount: 2,

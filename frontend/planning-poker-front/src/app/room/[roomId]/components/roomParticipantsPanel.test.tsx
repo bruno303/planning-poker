@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RoomSnapshot } from '@/hooks/room/roomState';
 import RoomParticipantsPanel from './roomParticipantsPanel';
 
-const tShirtDeck = { id: 't-shirt', name: 'T-shirt', cards: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '?', '☕'] };
+const tShirtDeck = { id: 't-shirt', name: 'T-shirt', kind: 'categorical', cards: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '?', '☕'] };
 
 const snapshot = (overrides: Partial<RoomSnapshot> = {}): RoomSnapshot => ({
   deck: tShirtDeck,

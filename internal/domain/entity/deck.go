@@ -5,9 +5,19 @@ import "slices"
 // DeckType identifies a backend-owned voting deck.
 type DeckType string
 
+// DeckKind describes how values in a deck are interpreted.
+type DeckKind string
+
 const (
 	DeckTypeFibonacci DeckType = "fibonacci"
 	DeckTypeTShirt    DeckType = "t-shirt"
+)
+
+const (
+	// DeckKindNumeric identifies decks whose estimates are numeric.
+	DeckKindNumeric DeckKind = "numeric"
+	// DeckKindCategorical identifies decks whose estimates are categorical labels.
+	DeckKindCategorical DeckKind = "categorical"
 )
 
 const (
@@ -22,6 +32,7 @@ const (
 type Deck struct {
 	ID    string   `json:"id"`
 	Name  string   `json:"name"`
+	Kind  DeckKind `json:"kind"`
 	Cards []string `json:"cards"`
 }
 
@@ -31,11 +42,13 @@ var (
 	fibonacciDeck = Deck{
 		ID:    string(DeckTypeFibonacci),
 		Name:  "Fibonacci",
+		Kind:  DeckKindNumeric,
 		Cards: append([]string{"0", "1", "2", "3", "5", "8", "13", "21", "34", "55", "89"}, specialDeckCards...),
 	}
 	tShirtDeck = Deck{
 		ID:    string(DeckTypeTShirt),
 		Name:  "T-shirt",
+		Kind:  DeckKindCategorical,
 		Cards: append([]string{"XS", "S", "M", "L", "XL", "XXL"}, specialDeckCards...),
 	}
 	decks = []Deck{fibonacciDeck, tShirtDeck}

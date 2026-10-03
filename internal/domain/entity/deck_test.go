@@ -19,16 +19,19 @@ func TestDeckDefinitions(t *testing.T) {
 	tests := []struct {
 		deckType DeckType
 		name     string
+		kind     DeckKind
 		cards    []string
 	}{
 		{
 			deckType: DeckTypeFibonacci,
 			name:     "Fibonacci",
+			kind:     DeckKindNumeric,
 			cards:    []string{"0", "1", "2", "3", "5", "8", "13", "21", "34", "55", "89", "?", "☕"},
 		},
 		{
 			deckType: DeckTypeTShirt,
 			name:     "T-shirt",
+			kind:     DeckKindCategorical,
 			cards:    []string{"XS", "S", "M", "L", "XL", "XXL", "?", "☕"},
 		},
 	}
@@ -41,6 +44,9 @@ func TestDeckDefinitions(t *testing.T) {
 			}
 			if deck.Name != tt.name {
 				t.Errorf("deck name = %q, want %q", deck.Name, tt.name)
+			}
+			if deck.Kind != tt.kind {
+				t.Errorf("deck kind = %q, want %q", deck.Kind, tt.kind)
 			}
 			if !reflect.DeepEqual(deck.Cards, tt.cards) {
 				t.Errorf("deck cards = %v, want %v", deck.Cards, tt.cards)

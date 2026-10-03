@@ -67,6 +67,15 @@ func TestNewRoomStateCommand(t *testing.T) {
 	}
 }
 
+func TestNewRoomStateCommandIncludesDeckKind(t *testing.T) {
+	room := entity.NewRoomWithIDAndDeck("room1", clientcollection.New(), entity.DeckTypeTShirt)
+
+	got := NewRoomStateCommand(room)
+	if got.Deck.Kind != entity.DeckKindCategorical {
+		t.Errorf("room state deck kind = %q, want %q", got.Deck.Kind, entity.DeckKindCategorical)
+	}
+}
+
 func TestNewUpdateClientIDCommand(t *testing.T) {
 	got := NewUpdateClientIDCommand("client-123")
 	want := UpdateClientID{

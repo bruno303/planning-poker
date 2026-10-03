@@ -40,7 +40,7 @@ vi.mock('@/components/participantIdBadge/participantIdBadge', () => ({ default: 
 vi.mock('@/components/focusableInput/focusableInput', () => ({ default: (props: { currentStory: string; onChange: React.ChangeEventHandler<HTMLInputElement>; onKeyDown: React.KeyboardEventHandler<HTMLInputElement> }) => <input aria-label="Story editor" value={props.currentStory} onChange={props.onChange} onKeyDown={props.onKeyDown} /> }));
 
 const fibonacciCards = ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'];
-const deck = { id: 'fibonacci', name: 'Fibonacci', cards: fibonacciCards };
+const deck = { id: 'fibonacci', name: 'Fibonacci', kind: 'numeric', cards: fibonacciCards };
 
 const roomState = (overrides = {}) => ({
   type: 'room-state', deck, currentStory: 'Implement feature', reveal: false, mostAppearingVotes: [], roomVersion: 4,
@@ -387,7 +387,7 @@ describe('room page', () => {
     await waitFor(() => expect(socketRef.current).not.toBeNull());
     const ws = socketRef.current!;
     act(() => ws.onmessage?.({ data: JSON.stringify({ type: 'update-client-id', clientId: 'me' }) }));
-    const tShirtDeck = { id: 't-shirt', name: 'T-shirt', cards: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '?', '☕'] };
+    const tShirtDeck = { id: 't-shirt', name: 'T-shirt', kind: 'categorical', cards: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '?', '☕'] };
     act(() => ws.onmessage?.({ data: JSON.stringify(roomState({
       deck: tShirtDeck,
       reveal: true,

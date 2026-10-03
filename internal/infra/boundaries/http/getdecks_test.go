@@ -46,6 +46,10 @@ func TestGetDecksAPI_Handle_ReturnsCatalogue(t *testing.T) {
 		t.Errorf("deck IDs = [%s, %s], want [%s, %s]",
 			response.Decks[0].ID, response.Decks[1].ID, entity.DeckTypeFibonacci, entity.DeckTypeTShirt)
 	}
+	if response.Decks[0].Kind != string(entity.DeckKindNumeric) || response.Decks[1].Kind != string(entity.DeckKindCategorical) {
+		t.Errorf("deck kinds = [%s, %s], want [%s, %s]",
+			response.Decks[0].Kind, response.Decks[1].Kind, entity.DeckKindNumeric, entity.DeckKindCategorical)
+	}
 	if response.Decks[1].Cards[0] != "XS" {
 		t.Errorf("t-shirt first card = %q, want XS", response.Decks[1].Cards[0])
 	}

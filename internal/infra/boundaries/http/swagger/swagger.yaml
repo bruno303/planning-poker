@@ -18,6 +18,11 @@ definitions:
         type: array
       id:
         type: string
+      kind:
+        enum:
+        - numeric
+        - categorical
+        type: string
       name:
         type: string
     type: object

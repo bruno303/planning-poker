@@ -2,7 +2,7 @@ import type { ConsensusLevel, DeckDescriptor, RoomState, Story } from '@/compone
 
 export type Card = string | null;
 
-export const EMPTY_DECK: DeckDescriptor = { id: '', name: '', cards: [] };
+export const EMPTY_DECK: DeckDescriptor = { id: '', name: '', kind: 'numeric', cards: [] };
 
 export type Participant = {
   id: string;

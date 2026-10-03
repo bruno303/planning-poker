@@ -7,7 +7,7 @@ const fibonacciCards = ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '8
 const validRoomState: RoomState = {
   type: 'room-state',
   startedAt: '2026-09-03T12:00:00Z',
-  deck: { id: 'fibonacci', name: 'Fibonacci', cards: fibonacciCards },
+  deck: { id: 'fibonacci', name: 'Fibonacci', kind: 'numeric', cards: fibonacciCards },
   currentStory: 'Estimate the story',
   reveal: true,
   result: 5,
@@ -47,7 +47,7 @@ describe('isRoomState', () => {
   it('accepts a T-shirt deck state without an average or numeric range', () => {
     const tShirtState: RoomState = {
       ...validRoomState,
-      deck: { id: 't-shirt', name: 'T-shirt', cards: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '?', '☕'] },
+      deck: { id: 't-shirt', name: 'T-shirt', kind: 'categorical', cards: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '?', '☕'] },
       lowestVote: 'S',
       highestVote: 'XL',
       voteSpread: 3,
@@ -83,6 +83,7 @@ describe('isRoomState', () => {
     ['required field', 'currentStory', null],
     ['required deck', 'deck', undefined],
     ['malformed deck', 'deck', { id: 'fibonacci', name: 'Fibonacci' }],
+    ['malformed deck kind', 'deck', { id: 'fibonacci', name: 'Fibonacci', kind: 'ordinal', cards: fibonacciCards }],
     ['malformed deck cards', 'deck', { id: 'fibonacci', name: 'Fibonacci', cards: [0, 1] }],
     ['vote array member', 'mostAppearingVotes', [5]],
     ['participant member', 'participants', [{ ...validRoomState.participants[0], hasVoted: 'yes' }]],

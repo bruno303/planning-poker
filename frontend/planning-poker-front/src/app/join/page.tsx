@@ -29,6 +29,8 @@ function isDeckDescriptor(value: unknown): value is DeckDescriptor {
     typeof value.id === 'string' &&
     'name' in value &&
     typeof value.name === 'string' &&
+    'kind' in value &&
+    (value.kind === 'numeric' || value.kind === 'categorical') &&
     'cards' in value &&
     Array.isArray(value.cards) &&
     value.cards.every((card) => typeof card === 'string')
@@ -60,7 +62,13 @@ export default function PlanningPokerHome() {
   useEffect(() => { nameInputRef.current?.focus(); }, []);
 
   useEffect(() => {
+    if (hasRoomParam) {
+      setIsLoadingDecks(false);
+      return;
+    }
+
     let cancelled = false;
+    setIsLoadingDecks(true);
 
     const loadDecks = async () => {
       try {
@@ -90,7 +98,7 @@ export default function PlanningPokerHome() {
 
     void loadDecks();
     return () => { cancelled = true; };
-  }, [logger, pushError]);
+  }, [hasRoomParam, logger, pushError]);
 
   const handleCreateRoom = async () => {
     if (!userName.trim()) {
@@ -129,7 +137,7 @@ export default function PlanningPokerHome() {
     }
   };
 
-  const handleJoinRoom = async () => {
+  const handleJoinRoom = () => {
     if (!userName.trim()) {
       logger.warn('Validation failed', { reason: 'Name not informed' });
       pushError('Name not informed');

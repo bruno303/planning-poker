@@ -23,10 +23,12 @@ export interface WebSocketMessage<T = unknown> {
 }
 
 export type ConsensusLevel = 'High' | 'Medium' | 'Low' | 'Unavailable';
+export type DeckKind = 'numeric' | 'categorical';
 
 export interface DeckDescriptor {
   id: string;
   name: string;
+  kind: DeckKind;
   cards: string[];
 }
 
@@ -121,6 +123,7 @@ function isDeckDescriptor(value: unknown): value is DeckDescriptor {
     isRecord(value) &&
     typeof value.id === 'string' &&
     typeof value.name === 'string' &&
+    (value.kind === 'numeric' || value.kind === 'categorical') &&
     isStringArray(value.cards)
   );
 }
