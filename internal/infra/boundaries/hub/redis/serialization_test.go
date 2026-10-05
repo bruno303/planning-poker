@@ -15,20 +15,21 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 	// Create a room with some clients
 	startedAt := time.Date(2026, time.September, 3, 12, 0, 0, 0, time.FixedZone("BRT", -3*60*60))
 	originalRoom := entity.NewRoomWithIDAndStartedAt("test-room-123", clientcollection.New(), startedAt)
+	originalRoom.DeckType = entity.DeckTypeTShirt
 	originalRoom.CurrentStory = "User Story #42"
 	originalRoom.RoomVersion = 7
 	originalRoom.Reveal = false
 	originalRoom.Consensus = "Medium"
-	originalRoom.LowestVote = lo.ToPtr(3)
-	originalRoom.HighestVote = lo.ToPtr(8)
+	originalRoom.LowestVote = lo.ToPtr("S")
+	originalRoom.HighestVote = lo.ToPtr("L")
 	originalRoom.VoteRange = lo.ToPtr(5)
 	originalRoom.VoteSpread = lo.ToPtr(2)
-	originalRoom.NonNumericVoteCount = 1
+	originalRoom.SpecialVoteCount = 1
 	originalRoom.Stories = []entity.Story{{
 		ID:                 "story-1",
 		Name:               "Backlog story",
 		Result:             lo.ToPtr(float32(8)),
-		MostAppearingVotes: []int{8},
+		MostAppearingVotes: []string{"8"},
 		Voted:              true,
 	}}
 
@@ -70,6 +71,9 @@ func assertSerializedRoomProperties(t *testing.T, originalRoom, deserializedRoom
 	if deserializedRoom.ID != originalRoom.ID {
 		t.Errorf("Expected room ID %s, got %s", originalRoom.ID, deserializedRoom.ID)
 	}
+	if deserializedRoom.DeckType != originalRoom.DeckType {
+		t.Errorf("Expected deck type %q, got %q", originalRoom.DeckType, deserializedRoom.DeckType)
+	}
 	if deserializedRoom.CurrentStory != originalRoom.CurrentStory {
 		t.Errorf("Expected story %s, got %s", originalRoom.CurrentStory, deserializedRoom.CurrentStory)
 	}
@@ -88,8 +92,8 @@ func assertSerializedRoomProperties(t *testing.T, originalRoom, deserializedRoom
 		*deserializedRoom.VoteSpread != *originalRoom.VoteSpread {
 		t.Errorf("numeric consensus metrics were not preserved")
 	}
-	if deserializedRoom.NonNumericVoteCount != originalRoom.NonNumericVoteCount {
-		t.Errorf("Expected non-numeric vote count %d, got %d", originalRoom.NonNumericVoteCount, deserializedRoom.NonNumericVoteCount)
+	if deserializedRoom.SpecialVoteCount != originalRoom.SpecialVoteCount {
+		t.Errorf("Expected special vote count %d, got %d", originalRoom.SpecialVoteCount, deserializedRoom.SpecialVoteCount)
 	}
 	if deserializedRoom.RoomVersion != originalRoom.RoomVersion {
 		t.Errorf("Expected room version %d, got %d", originalRoom.RoomVersion, deserializedRoom.RoomVersion)

@@ -23,6 +23,14 @@ export interface WebSocketMessage<T = unknown> {
 }
 
 export type ConsensusLevel = 'High' | 'Medium' | 'Low' | 'Unavailable';
+export type DeckKind = 'numeric' | 'categorical';
+
+export interface DeckDescriptor {
+  id: string;
+  name: string;
+  kind: DeckKind;
+  cards: string[];
+}
 
 export interface VotePayload {
   vote: string | null;
@@ -65,23 +73,24 @@ export interface Story {
   id: string;
   name: string;
   result?: number;
-  mostAppearingVotes: number[] | null;
+  mostAppearingVotes: string[] | null;
   voted: boolean;
 }
 
 export interface RoomState {
   type: 'room-state';
   startedAt?: string;
+  deck: DeckDescriptor;
   currentStory: string;
   reveal: boolean;
   result?: number;
-  mostAppearingVotes: number[] | null;
+  mostAppearingVotes: string[] | null;
   consensus?: ConsensusLevel;
-  lowestVote?: number;
-  highestVote?: number;
+  lowestVote?: string;
+  highestVote?: string;
   voteRange?: number;
   voteSpread?: number;
-  nonNumericVoteCount?: number;
+  specialVoteCount?: number;
   participants: Array<{
     id: string;
     name: string;
@@ -101,12 +110,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function isNumberArray(value: unknown): value is number[] {
-  return Array.isArray(value) && value.every((item) => typeof item === 'number');
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }
 
-function isNullableNumberArray(value: unknown): value is number[] | null {
-  return value === null || isNumberArray(value);
+function isNullableStringArray(value: unknown): value is string[] | null {
+  return value === null || isStringArray(value);
+}
+
+function isDeckDescriptor(value: unknown): value is DeckDescriptor {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.name === 'string' &&
+    (value.kind === 'numeric' || value.kind === 'categorical') &&
+    isStringArray(value.cards)
+  );
 }
 
 function isStory(value: unknown): value is Story {
@@ -117,7 +136,7 @@ function isStory(value: unknown): value is Story {
   return (
     typeof value.id === 'string' &&
     typeof value.name === 'string' &&
-    isNullableNumberArray(value.mostAppearingVotes) &&
+    isNullableStringArray(value.mostAppearingVotes) &&
     typeof value.voted === 'boolean' &&
     (!('result' in value) || typeof value.result === 'number')
   );
@@ -127,6 +146,13 @@ function hasOptionalNumber(value: Record<string, unknown>, key: string): boolean
   return !(
     key in value &&
     typeof value[key] !== 'number'
+  );
+}
+
+function hasOptionalString(value: Record<string, unknown>, key: string): boolean {
+  return !(
+    key in value &&
+    typeof value[key] !== 'string'
   );
 }
 
@@ -168,7 +194,8 @@ export function isRoomState(value: unknown): value is RoomState {
   if (
     typeof value.currentStory !== 'string' ||
     typeof value.reveal !== 'boolean' ||
-     !isNullableNumberArray(value.mostAppearingVotes) ||
+    !isDeckDescriptor(value.deck) ||
+    !isNullableStringArray(value.mostAppearingVotes) ||
     typeof value.roomVersion !== 'number' ||
     !Array.isArray(value.participants)
   ) {
@@ -193,11 +220,11 @@ export function isRoomState(value: unknown): value is RoomState {
     hasOptionalTimestamp(value, 'startedAt') &&
     hasOptionalNumber(value, 'result') &&
     (!('consensus' in value) || value.consensus === 'High' || value.consensus === 'Medium' || value.consensus === 'Low' || value.consensus === 'Unavailable') &&
-    hasOptionalNumber(value, 'lowestVote') &&
-    hasOptionalNumber(value, 'highestVote') &&
+    hasOptionalString(value, 'lowestVote') &&
+    hasOptionalString(value, 'highestVote') &&
     hasOptionalNumber(value, 'voteRange') &&
     hasOptionalNumber(value, 'voteSpread') &&
-    hasOptionalNumber(value, 'nonNumericVoteCount') &&
+    hasOptionalNumber(value, 'specialVoteCount') &&
     (!('backlogMode' in value) || typeof value.backlogMode === 'boolean') &&
      (!('stories' in value) || value.stories === null || (Array.isArray(value.stories) && value.stories.every(isStory))) &&
     (!('currentStoryIndex' in value) || typeof value.currentStoryIndex === 'number');

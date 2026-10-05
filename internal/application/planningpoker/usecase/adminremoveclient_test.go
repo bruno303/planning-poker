@@ -46,7 +46,7 @@ func TestAdminRemoveClientUseCase_Execute_Success(t *testing.T) {
 	mockBus := domain.NewMockBus(ctrl)
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().GetBus(clientID).Return(mockBus, true)
+	mockHub.EXPECT().BusIfInRoom(clientID, roomID).Return(mockBus, true)
 	mockLeaveRoom.EXPECT().Execute(ctx, LeaveRoomCommand{RoomID: roomID, SenderID: clientID}).Return(nil)
 	mockBus.EXPECT().Detach()
 	mockBus.EXPECT().Close().Return(nil)
@@ -75,7 +75,7 @@ func TestAdminRemoveClientUseCase_Execute_Success_NoBus(t *testing.T) {
 	}
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().GetBus(clientID).Return(nil, false)
+	mockHub.EXPECT().BusIfInRoom(clientID, roomID).Return(nil, false)
 	mockLeaveRoom.EXPECT().Execute(ctx, LeaveRoomCommand{RoomID: roomID, SenderID: clientID}).Return(nil)
 
 	uc := NewAdminRemoveClientUseCase(mockLeaveRoom, mockHub)
@@ -156,7 +156,7 @@ func TestAdminRemoveClientUseCase_Execute_LeaveRoomError(t *testing.T) {
 	leaveRoomErr := errors.New("leave room failed")
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().GetBus(clientID).Return(nil, false)
+	mockHub.EXPECT().BusIfInRoom(clientID, roomID).Return(nil, false)
 	mockLeaveRoom.EXPECT().Execute(ctx, LeaveRoomCommand{RoomID: roomID, SenderID: clientID}).Return(leaveRoomErr)
 
 	uc := NewAdminRemoveClientUseCase(mockLeaveRoom, mockHub)
@@ -188,7 +188,7 @@ func TestAdminRemoveClientUseCase_Execute_BusCloseError(t *testing.T) {
 	mockBus := domain.NewMockBus(ctrl)
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().GetBus(clientID).Return(mockBus, true)
+	mockHub.EXPECT().BusIfInRoom(clientID, roomID).Return(mockBus, true)
 	mockLeaveRoom.EXPECT().Execute(ctx, LeaveRoomCommand{RoomID: roomID, SenderID: clientID}).Return(nil)
 	mockBus.EXPECT().Detach()
 	mockBus.EXPECT().Close().Return(errors.New("close error"))

@@ -51,8 +51,9 @@ describe('BacklogModal', () => {
   it('renders story list with status tags', () => {
     const stories: Story[] = [
       { id: 'story-1', name: 'Story one', mostAppearingVotes: [], voted: false },
-      { id: 'story-2', name: 'Story two', result: 6.5, mostAppearingVotes: [6, 7], voted: true },
+      { id: 'story-2', name: 'Story two', result: 6.5, mostAppearingVotes: ['6', '7'], voted: true },
       { id: 'story-3', name: 'Story three', mostAppearingVotes: [], voted: false },
+      { id: 'story-4', name: 'T-shirt story', mostAppearingVotes: ['M', 'L'], voted: true },
     ];
 
     renderBacklogModal({ stories, currentStoryIndex: 0 });
@@ -62,8 +63,9 @@ describe('BacklogModal', () => {
     expect(screen.getByText('Story three')).not.toBeNull();
     expect(screen.getByText('Current')).not.toBeNull();
     expect(screen.getByText('Pending')).not.toBeNull();
-    expect(screen.getByText('Estimated')).not.toBeNull();
+    expect(screen.getAllByText('Estimated')).toHaveLength(2);
     expect(screen.getByText('Avg: 6.5')).not.toBeNull();
+    expect(screen.getByText('Estimate: M, L')).not.toBeNull();
   });
 
   it('renders the backlog with native dialog semantics and resets native defaults', () => {

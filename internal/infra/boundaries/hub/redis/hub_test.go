@@ -40,7 +40,6 @@ func TestRedisHub_NewRoom_SaveRoom_LoadRoom(t *testing.T) {
 		logger:           logger,
 		buses:            make(map[string]domain.Bus),
 		closeCh:          make(chan struct{}),
-		roomClientCounts: make(map[string]int),
 	}
 
 	// Set up expectations for Get before SaveRoom and GetRoom
@@ -109,7 +108,7 @@ func TestRedisHub_AddBusReplacementKeepsRoomCountsAccurate(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockRedis := NewMockRedisClient(ctrl)
 	roomID := "count-room"
-	hub := &RedisHub{client: mockRedis, logger: log.NewLogger("test"), buses: make(map[string]domain.Bus), closeCh: make(chan struct{}), roomClientCounts: make(map[string]int)}
+	hub := &RedisHub{client: mockRedis, logger: log.NewLogger("test"), buses: make(map[string]domain.Bus), closeCh: make(chan struct{})}
 	hub.roomSubs.Store(roomID, nil)
 	newBus := func(room string) domain.Bus {
 		bus := domain.NewMockBus(ctrl)
@@ -128,6 +127,8 @@ func TestRedisHub_AddBusReplacementKeepsRoomCountsAccurate(t *testing.T) {
 	assert.NoError(t, hub.AddBus(context.Background(), "one", newBus(otherID)))
 	assert.Equal(t, 1, hub.GetClientsOfRoom(roomID))
 	assert.Equal(t, 1, hub.GetClientsOfRoom(otherID))
+	assert.False(t, hub.HasBusInRoom("one", roomID), "a bus moved to other-room must not count as presence in the original room")
+	assert.True(t, hub.HasBusInRoom("one", otherID))
 	hub.roomSubs.Delete(otherID)
 	hub.RemoveBus(context.Background(), "one")
 	assert.Zero(t, hub.GetClientsOfRoom(otherID))
@@ -154,7 +155,6 @@ func TestRedisHub_LoadRoomRejectsStoryWithoutID(t *testing.T) {
 		logger:           log.NewLogger("test"),
 		buses:            make(map[string]domain.Bus),
 		closeCh:          make(chan struct{}),
-		roomClientCounts: make(map[string]int),
 	}
 
 	_, err := hub.LoadRoom(context.Background(), roomID)
@@ -179,13 +179,35 @@ func TestRedisHub_NewRoomWithID(t *testing.T) {
 		logger:           logger,
 		buses:            make(map[string]domain.Bus),
 		closeCh:          make(chan struct{}),
-		roomClientCounts: make(map[string]int),
 	}
 
 	room, err := hub.NewRoomWithID(context.Background(), "room-explicit")
 	assert.NoError(t, err)
 	assert.NotNil(t, room)
 	assert.Equal(t, "room-explicit", room.ID)
+}
+
+func TestRedisHub_NewRoomWithDeck(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockRedis := NewMockRedisClient(ctrl)
+	logger := log.NewLogger("test")
+
+	statusCmd := redis.NewStatusCmd(context.Background())
+	statusCmd.SetVal("OK")
+
+	mockRedis.EXPECT().Set(gomock.Any(), gomock.Any(), gomock.Any(), time.Duration(24*time.Hour)).Return(statusCmd)
+
+	hub := &RedisHub{
+		client:           mockRedis,
+		logger:           logger,
+		buses:            make(map[string]domain.Bus),
+		closeCh:          make(chan struct{}),
+	}
+
+	room, err := hub.NewRoomWithDeck(context.Background(), entity.DeckTypeTShirt)
+	assert.NoError(t, err)
+	assert.NotNil(t, room)
+	assert.Equal(t, entity.DeckTypeTShirt, room.DeckType)
 }
 
 func TestRedisHub_AddClient_RemoveRoom(t *testing.T) {
@@ -207,7 +229,6 @@ func TestRedisHub_AddClient_RemoveRoom(t *testing.T) {
 		logger:           logger,
 		buses:            make(map[string]domain.Bus),
 		closeCh:          make(chan struct{}),
-		roomClientCounts: make(map[string]int),
 	}
 
 	hub.AddClient(client)
@@ -237,7 +258,6 @@ func TestRedisHub_AddBus_SubscriptionSetupFails_CleansUpBus(t *testing.T) {
 		logger:           log.NewLogger("test"),
 		buses:            make(map[string]domain.Bus),
 		closeCh:          make(chan struct{}),
-		roomClientCounts: make(map[string]int),
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -245,7 +265,7 @@ func TestRedisHub_AddBus_SubscriptionSetupFails_CleansUpBus(t *testing.T) {
 	err := hub.AddBus(ctx, clientID, mockBus)
 
 	assert.Error(t, err)
-	_, ok := hub.GetBus(clientID)
+	_, ok := hub.BusIfInRoom(clientID, "room-count")
 	assert.False(t, ok)
 	assert.Zero(t, hub.GetClientsOfRoom(roomID))
 }
@@ -276,7 +296,6 @@ func TestRedisHub_FindClientByID(t *testing.T) {
 		logger:           logger,
 		buses:            make(map[string]domain.Bus),
 		closeCh:          make(chan struct{}),
-		roomClientCounts: make(map[string]int),
 	}
 
 	found, ok := hub.FindClientByID("client2")
@@ -315,11 +334,44 @@ func TestRedisHub_RemoveClient(t *testing.T) {
 		logger:           logger,
 		buses:            make(map[string]domain.Bus),
 		closeCh:          make(chan struct{}),
-		roomClientCounts: make(map[string]int),
 	}
 
 	err := hub.RemoveClient(context.Background(), "client3", room.ID)
 	assert.NoError(t, err)
+}
+
+func TestRedisHub_RemoveClient_KeepsBusRegisteredForAnotherRoom(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockRedis := NewMockRedisClient(ctrl)
+	logger := log.NewLogger("test")
+
+	intCmd := redis.NewIntCmd(context.Background())
+	intCmd.SetVal(1)
+	stringCmd := redis.NewStringCmd(context.Background())
+	stringCmd.SetErr(redis.Nil)
+
+	// The instance holds the bus for room-b: the client already switched rooms
+	// while room-a's socket close is still in flight.
+	mockBus := domain.NewMockBus(ctrl)
+	mockBus.EXPECT().RoomID().Return("room-b").AnyTimes()
+
+	mockRedis.EXPECT().Del(gomock.Any(), "planning-poker:client:client3").Return(intCmd)
+	mockRedis.EXPECT().Get(gomock.Any(), "planning-poker:room:room-a").Return(stringCmd)
+
+	hub := &RedisHub{
+		client:  mockRedis,
+		logger:  logger,
+		buses:   map[string]domain.Bus{"client3": mockBus},
+		closeCh: make(chan struct{}),
+	}
+
+	err := hub.RemoveClient(context.Background(), "client3", "room-a")
+	assert.NoError(t, err)
+
+	_, ok := hub.BusIfInRoom("client3", "room-b")
+	assert.True(t, ok, "a leave from room-a must not tear down the bus registered for room-b")
+	assert.Equal(t, 1, hub.GetClientsOfRoom("room-b"))
+	assert.Zero(t, hub.GetClientsOfRoom("room-a"))
 }
 
 func TestRedisHub_RemoveClient_MissingRoomStillCleansUpAndSucceeds(t *testing.T) {
@@ -342,12 +394,11 @@ func TestRedisHub_RemoveClient_MissingRoomStillCleansUpAndSucceeds(t *testing.T)
 		logger:           logger,
 		buses:            map[string]domain.Bus{"client3": mockBus},
 		closeCh:          make(chan struct{}),
-		roomClientCounts: map[string]int{"room4": 1},
 	}
 
 	err := hub.RemoveClient(context.Background(), "client3", "room4")
 	assert.NoError(t, err)
-	_, ok := hub.GetBus("client3")
+	_, ok := hub.BusIfInRoom("client3", "room4")
 	assert.False(t, ok)
 	assert.Zero(t, hub.GetClientsOfRoom("room4"))
 }
@@ -384,12 +435,11 @@ func TestRedisHub_RemoveClient_ClientDeleteFailsAndRoomSavesSuccessfully_Returns
 		logger:           logger,
 		buses:            map[string]domain.Bus{"client3": mockBus},
 		closeCh:          make(chan struct{}),
-		roomClientCounts: map[string]int{"room4": 1},
 	}
 
 	err := hub.RemoveClient(context.Background(), "client3", "room4")
 	assert.NoError(t, err)
-	_, ok := hub.GetBus("client3")
+	_, ok := hub.BusIfInRoom("client3", "room4")
 	assert.False(t, ok)
 	assert.Zero(t, hub.GetClientsOfRoom("room4"))
 }
@@ -428,13 +478,12 @@ func TestRedisHub_RemoveClient_SaveRoomFails_PropagatesError(t *testing.T) {
 		logger:           logger,
 		buses:            map[string]domain.Bus{"client3": mockBus},
 		closeCh:          make(chan struct{}),
-		roomClientCounts: map[string]int{"room4": 1},
 	}
 
 	err := hub.RemoveClient(context.Background(), "client3", "room4")
 	assert.ErrorIs(t, err, saveErr)
 	assert.EqualError(t, err, "failed to save room to Redis: save failed")
-	_, ok := hub.GetBus("client3")
+	_, ok := hub.BusIfInRoom("client3", "room4")
 	assert.False(t, ok)
 	assert.Zero(t, hub.GetClientsOfRoom("room4"))
 }
@@ -460,13 +509,12 @@ func TestRedisHub_RemoveClient_LoadFailureStillCleansUpAndPropagatesError(t *tes
 		logger:           logger,
 		buses:            map[string]domain.Bus{"client3": mockBus},
 		closeCh:          make(chan struct{}),
-		roomClientCounts: map[string]int{"room4": 1},
 	}
 
 	err := hub.RemoveClient(context.Background(), "client3", "room4")
 	assert.ErrorIs(t, err, loadErr)
 	assert.EqualError(t, err, "load room room4: redis unavailable")
-	_, ok := hub.GetBus("client3")
+	_, ok := hub.BusIfInRoom("client3", "room4")
 	assert.False(t, ok)
 	assert.Zero(t, hub.GetClientsOfRoom("room4"))
 }
@@ -484,7 +532,6 @@ func TestRedisHub_BroadcastToRoom(t *testing.T) {
 		logger:           logger,
 		buses:            make(map[string]domain.Bus),
 		closeCh:          make(chan struct{}),
-		roomClientCounts: make(map[string]int),
 	}
 
 	err := hub.BroadcastToRoom(context.Background(), roomID, map[string]string{"type": "test"})
@@ -517,7 +564,6 @@ func TestRedisHub_GetRooms(t *testing.T) {
 		logger:           logger,
 		buses:            make(map[string]domain.Bus),
 		closeCh:          make(chan struct{}),
-		roomClientCounts: make(map[string]int),
 	}
 
 	rooms := hub.GetRooms()

@@ -147,6 +147,9 @@ export default function BacklogModal({
                   {story.voted && story.result != null && (
                     <span style={styles.backlogStoryTagVoted}>Avg: {story.result.toFixed(1)}</span>
                   )}
+                  {story.voted && story.result == null && story.mostAppearingVotes?.length ? (
+                    <span style={styles.backlogStoryTagVoted}>Estimate: {story.mostAppearingVotes.join(', ')}</span>
+                  ) : null}
                 </div>
                 <div style={styles.backlogStoryRight}>
                   {amIAdmin && !story.voted && index !== currentStoryIndex && (

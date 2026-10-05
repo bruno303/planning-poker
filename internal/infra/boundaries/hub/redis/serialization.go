@@ -15,27 +15,28 @@ type (
 		ID                 string   `json:"id,omitempty"`
 		Name               string   `json:"name"`
 		Result             *float32 `json:"result,omitempty"`
-		MostAppearingVotes []int    `json:"mostAppearingVotes"`
+		MostAppearingVotes []string `json:"mostAppearingVotes"`
 		Voted              bool     `json:"voted"`
 	}
 	SerializedRoom struct {
-		ID                  string             `json:"id"`
-		StartedAt           *time.Time         `json:"startedAt,omitempty"`
-		Clients             []SerializedClient `json:"clients"`
-		CurrentStory        string             `json:"currentStory"`
-		Reveal              bool               `json:"reveal"`
-		Result              *float32           `json:"result,omitempty"`
-		MostAppearingVotes  []int              `json:"mostAppearingVotes"`
-		Consensus           string             `json:"consensus,omitempty"`
-		LowestVote          *int               `json:"lowestVote,omitempty"`
-		HighestVote         *int               `json:"highestVote,omitempty"`
-		VoteRange           *int               `json:"voteRange,omitempty"`
-		VoteSpread          *int               `json:"voteSpread,omitempty"`
-		NonNumericVoteCount int                `json:"nonNumericVoteCount,omitempty"`
-		BacklogMode         bool               `json:"backlogMode"`
-		Stories             []SerializedStory  `json:"stories,omitempty"`
-		CurrentStoryIndex   int                `json:"currentStoryIndex"`
-		RoomVersion         uint64             `json:"roomVersion"`
+		ID                 string             `json:"id"`
+		StartedAt          *time.Time         `json:"startedAt,omitempty"`
+		Clients            []SerializedClient `json:"clients"`
+		DeckType           entity.DeckType    `json:"deckType,omitempty"`
+		CurrentStory       string             `json:"currentStory"`
+		Reveal             bool               `json:"reveal"`
+		Result             *float32           `json:"result,omitempty"`
+		MostAppearingVotes []string           `json:"mostAppearingVotes"`
+		Consensus          string             `json:"consensus,omitempty"`
+		LowestVote         *string            `json:"lowestVote,omitempty"`
+		HighestVote        *string            `json:"highestVote,omitempty"`
+		VoteRange          *int               `json:"voteRange,omitempty"`
+		VoteSpread         *int               `json:"voteSpread,omitempty"`
+		SpecialVoteCount   int                `json:"specialVoteCount,omitempty"`
+		BacklogMode        bool               `json:"backlogMode"`
+		Stories            []SerializedStory  `json:"stories,omitempty"`
+		CurrentStoryIndex  int                `json:"currentStoryIndex"`
+		RoomVersion        uint64             `json:"roomVersion"`
 	}
 	SerializedClient struct {
 		ID          string     `json:"id"`
@@ -79,23 +80,24 @@ func SerializeRoom(room *entity.Room) ([]byte, error) {
 	})
 
 	serialized := SerializedRoom{
-		ID:                  room.ID,
-		StartedAt:           entity.OptionalUTCTime(room.StartedAt()),
-		Clients:             clients,
-		CurrentStory:        room.CurrentStory,
-		Reveal:              room.Reveal,
-		Result:              room.Result,
-		MostAppearingVotes:  room.MostAppearingVotes,
-		Consensus:           room.Consensus,
-		LowestVote:          room.LowestVote,
-		HighestVote:         room.HighestVote,
-		VoteRange:           room.VoteRange,
-		VoteSpread:          room.VoteSpread,
-		NonNumericVoteCount: room.NonNumericVoteCount,
-		BacklogMode:         room.BacklogMode,
-		Stories:             serializeStories(room.Stories),
-		CurrentStoryIndex:   room.CurrentStoryIndex,
-		RoomVersion:         room.RoomVersion,
+		ID:                 room.ID,
+		StartedAt:          entity.OptionalUTCTime(room.StartedAt()),
+		Clients:            clients,
+		DeckType:           room.DeckType,
+		CurrentStory:       room.CurrentStory,
+		Reveal:             room.Reveal,
+		Result:             room.Result,
+		MostAppearingVotes: room.MostAppearingVotes,
+		Consensus:          room.Consensus,
+		LowestVote:         room.LowestVote,
+		HighestVote:        room.HighestVote,
+		VoteRange:          room.VoteRange,
+		VoteSpread:         room.VoteSpread,
+		SpecialVoteCount:   room.SpecialVoteCount,
+		BacklogMode:        room.BacklogMode,
+		Stories:            serializeStories(room.Stories),
+		CurrentStoryIndex:  room.CurrentStoryIndex,
+		RoomVersion:        room.RoomVersion,
 	}
 
 	return json.Marshal(serialized)
@@ -130,6 +132,7 @@ func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 		clientCollection,
 		entity.UTCTimeOrZero(serialized.StartedAt),
 	)
+	room.DeckType = serialized.DeckType
 	room.CurrentStory = serialized.CurrentStory
 	room.Reveal = serialized.Reveal
 	room.Result = serialized.Result
@@ -139,7 +142,7 @@ func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 	room.HighestVote = serialized.HighestVote
 	room.VoteRange = serialized.VoteRange
 	room.VoteSpread = serialized.VoteSpread
-	room.NonNumericVoteCount = serialized.NonNumericVoteCount
+	room.SpecialVoteCount = serialized.SpecialVoteCount
 	room.BacklogMode = serialized.BacklogMode
 	room.Stories = stories
 	room.CurrentStoryIndex = serialized.CurrentStoryIndex

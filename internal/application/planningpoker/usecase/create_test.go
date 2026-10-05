@@ -17,13 +17,13 @@ func TestCreateRoomUseCase_Execute_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctx := context.Background()
 	mockHub := domain.NewMockHub(ctrl)
-	room := &entity.Room{ID: "room-123", Clients: clientcollection.New()}
+	room := &entity.Room{ID: "room-123", Clients: clientcollection.New(), DeckType: entity.DeckTypeTShirt}
 
-	mockHub.EXPECT().NewRoom(ctx).Return(room, nil)
+	mockHub.EXPECT().NewRoomWithDeck(ctx, entity.DeckTypeTShirt).Return(room, nil)
 
 	uc := NewCreateRoomUseCase(mockHub)
 
-	got, err := uc.Execute(ctx)
+	got, err := uc.Execute(ctx, CreateRoomCommand{DeckType: entity.DeckTypeTShirt})
 
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -33,17 +33,34 @@ func TestCreateRoomUseCase_Execute_Success(t *testing.T) {
 	}
 }
 
-func TestCreateRoomUseCase_Execute_WhenHubFails_ReturnsErrorWithoutMetric(t *testing.T) {
+func TestCreateRoomUseCase_Execute_UnknownDeckTypeDoesNotCreateRoom(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctx := context.Background()
+	mockHub := domain.NewMockHub(ctrl)
+
+	uc := NewCreateRoomUseCase(mockHub)
+
+	got, err := uc.Execute(ctx, CreateRoomCommand{DeckType: entity.DeckType("unknown")})
+
+	if err == nil {
+		t.Fatal("expected error for unknown deck type")
+	}
+	if got != (CreateRoomOutput{}) {
+		t.Fatalf("expected empty output, got %#v", got)
+	}
+}
+
+func TestCreateRoomUseCase_Execute_WhenHubFails_ReturnsError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctx := context.Background()
 	mockHub := domain.NewMockHub(ctrl)
 	wantErr := errors.New("redis unavailable")
 
-	mockHub.EXPECT().NewRoom(ctx).Return(nil, wantErr)
+	mockHub.EXPECT().NewRoomWithDeck(ctx, entity.DeckTypeFibonacci).Return(nil, wantErr)
 
 	uc := NewCreateRoomUseCase(mockHub)
 
-	got, err := uc.Execute(ctx)
+	got, err := uc.Execute(ctx, CreateRoomCommand{DeckType: entity.DeckTypeFibonacci})
 
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("expected %v, got %v", wantErr, err)

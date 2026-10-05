@@ -68,6 +68,20 @@ func (h *InMemoryHub) NewRoomWithID(ctx context.Context, roomID string) (*entity
 	return room.(*entity.Room), nil
 }
 
+func (h *InMemoryHub) NewRoomWithDeck(ctx context.Context, deckType entity.DeckType) (*entity.Room, error) {
+	room, _ := trace.Trace(ctx, trace.NameConfig("InMemoryHub", "NewRoomWithDeck"), func(ctx context.Context) (any, error) {
+		room := entity.NewRoomWithDeck(clientcollection.New(), deckType)
+		h.roomMu.Lock()
+		h.Rooms[room.ID] = room
+		h.saved[room.ID] = cloneRoom(room)
+		h.removed[room.ID] = make(chan struct{})
+		h.roomMu.Unlock()
+		return room, nil
+	})
+
+	return room.(*entity.Room), nil
+}
+
 func (h *InMemoryHub) LoadRoom(_ context.Context, roomID string) (*entity.Room, error) {
 	room, ok := h.Rooms[roomID]
 	if !ok {
@@ -160,11 +174,26 @@ func (h *InMemoryHub) GetClientsOfRoom(roomID string) int {
 	return count
 }
 
-func (h *InMemoryHub) GetBus(clientID string) (domain.Bus, bool) {
+func (h *InMemoryHub) BusIfInRoom(clientID string, roomID string) (domain.Bus, bool) {
+	h.busMu.RLock()
+	defer h.busMu.RUnlock()
+	bus, ok := h.Buses[clientID]
+	if !ok || bus.RoomID() != roomID {
+		return nil, false
+	}
+	return bus, true
+}
+
+func (h *InMemoryHub) Bus(clientID string) (domain.Bus, bool) {
 	h.busMu.RLock()
 	defer h.busMu.RUnlock()
 	bus, ok := h.Buses[clientID]
 	return bus, ok
+}
+
+func (h *InMemoryHub) HasBusInRoom(clientID string, roomID string) bool {
+	_, ok := h.BusIfInRoom(clientID, roomID)
+	return ok
 }
 
 func (h *InMemoryHub) RemoveBus(_ context.Context, clientID string) {
@@ -173,11 +202,25 @@ func (h *InMemoryHub) RemoveBus(_ context.Context, clientID string) {
 	delete(h.Buses, clientID)
 }
 
+// removeBusForRoom drops the client's bus only when it belongs to roomID. A
+// client can hold a bus for another room on this instance (a room switch whose
+// previous socket is still open), and leaving this room must not tear that
+// connection down.
+func (h *InMemoryHub) removeBusForRoom(clientID string, roomID string) {
+	h.busMu.Lock()
+	defer h.busMu.Unlock()
+	bus, ok := h.Buses[clientID]
+	if !ok || bus.RoomID() != roomID {
+		return
+	}
+	delete(h.Buses, clientID)
+}
+
 func (h *InMemoryHub) RemoveClient(ctx context.Context, clientID string, roomID string) error {
 	_, err := trace.Trace(ctx, trace.NameConfig("InMemoryHub", "RemoveClient"), func(ctx context.Context) (any, error) {
 
 		delete(h.Clients, clientID)
-		h.RemoveBus(ctx, clientID)
+		h.removeBusForRoom(clientID, roomID)
 
 		room, err := h.LoadRoom(ctx, roomID)
 		if err != nil {
@@ -266,21 +309,22 @@ func (h *InMemoryHub) SaveRoomIfVersion(_ context.Context, room *entity.Room, ex
 
 func cloneRoom(room *entity.Room) *entity.Room {
 	clone := entity.NewRoomWithIDAndStartedAt(room.ID, clientcollection.New(), room.StartedAt())
+	clone.DeckType = room.DeckType
 	clone.CurrentStory = room.CurrentStory
 	clone.Reveal = room.Reveal
 	clone.Result = cloneFloat32(room.Result)
-	clone.MostAppearingVotes = append([]int(nil), room.MostAppearingVotes...)
+	clone.MostAppearingVotes = append([]string(nil), room.MostAppearingVotes...)
 	clone.Consensus = room.Consensus
-	clone.LowestVote = cloneInt(room.LowestVote)
-	clone.HighestVote = cloneInt(room.HighestVote)
+	clone.LowestVote = cloneString(room.LowestVote)
+	clone.HighestVote = cloneString(room.HighestVote)
 	clone.VoteRange = cloneInt(room.VoteRange)
 	clone.VoteSpread = cloneInt(room.VoteSpread)
-	clone.NonNumericVoteCount = room.NonNumericVoteCount
+	clone.SpecialVoteCount = room.SpecialVoteCount
 	clone.BacklogMode = room.BacklogMode
 	clone.Stories = append([]entity.Story(nil), room.Stories...)
 	for i := range clone.Stories {
 		clone.Stories[i].Result = cloneFloat32(room.Stories[i].Result)
-		clone.Stories[i].MostAppearingVotes = append([]int(nil), room.Stories[i].MostAppearingVotes...)
+		clone.Stories[i].MostAppearingVotes = append([]string(nil), room.Stories[i].MostAppearingVotes...)
 	}
 	clone.CurrentStoryIndex = room.CurrentStoryIndex
 	clone.RoomVersion = room.RoomVersion
@@ -331,7 +375,7 @@ func (h *InMemoryHub) BroadcastToRoom(ctx context.Context, roomID string, messag
 		}
 
 		for _, client := range room.Clients.Values() {
-			bus, ok := h.GetBus(client.ID)
+			bus, ok := h.BusIfInRoom(client.ID, roomID)
 			if !ok {
 				h.logger.Warn(ctx, "bus not found for client %s", client.ID)
 				continue

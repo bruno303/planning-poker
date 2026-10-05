@@ -76,6 +76,19 @@ func countMetricCallsWithValue(calls []metricCall, metricName string, value floa
 	return count
 }
 
+// sumMetricCalls returns the net value recorded for metricName. It is used to
+// assert process-local counters stay balanced across a sequence of operations.
+func sumMetricCalls(calls []metricCall, metricName string) float64 {
+	var total float64
+	for _, call := range calls {
+		if call.name == metricName {
+			total += call.value
+		}
+	}
+
+	return total
+}
+
 type expectedMetricCall struct {
 	name  string
 	value float64

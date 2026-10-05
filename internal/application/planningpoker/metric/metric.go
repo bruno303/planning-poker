@@ -14,8 +14,15 @@ type PlanningPokerMetric struct {
 type noopMeter struct{}
 
 const (
+	// PlanningPokerActiveUsersMetric counts the clients with an active bus on the
+	// emitting instance. It is process-local: aggregate it across instances.
 	PlanningPokerActiveUsersMetric = "planning_poker_active_users"
 	PlanningPokerUsersTotalMetric  = "planning_poker_users_total"
+	// PlanningPokerActiveRoomsMetric counts the rooms with at least one local
+	// client on the emitting instance. It is process-local and a room whose
+	// participants span N instances is counted once per instance, so summing it
+	// across instances overcounts shared rooms. A room created through the HTTP
+	// API is not counted until its first local client connects.
 	PlanningPokerActiveRoomsMetric = "planning_poker_active_rooms"
 )
 

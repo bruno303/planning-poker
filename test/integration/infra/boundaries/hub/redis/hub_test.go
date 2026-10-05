@@ -82,7 +82,7 @@ func TestIntegration_RemoveClient_WhenRoomIsAlreadyMissing_CleansUpAndSucceeds(t
 
 	_, ok := hub.FindClientByID(client1.ID)
 	assert.False(t, ok)
-	_, ok = hub.GetBus(client1.ID)
+	_, ok = hub.BusIfInRoom(client1.ID, room.ID)
 	assert.False(t, ok)
 	assert.Zero(t, hub.GetClientsOfRoom(room.ID))
 	_, err = hub.LoadRoom(context.Background(), room.ID)
@@ -109,7 +109,7 @@ func TestIntegration_RoomTTLExpiry(t *testing.T) {
 	assert.True(t, errors.Is(err, domain.ErrRoomNotFound))
 }
 
-func TestIntegration_GetBus(t *testing.T) {
+func TestIntegration_BusIfInRoom(t *testing.T) {
 	client := setupRedisClient(t)
 	defer client.Close()
 
@@ -128,11 +128,14 @@ func TestIntegration_GetBus(t *testing.T) {
 	bus := &mockBus{roomID: room.ID}
 	hub.AddBus(context.Background(), client1.ID, bus)
 
-	foundBus, ok := hub.GetBus(client1.ID)
+	foundBus, ok := hub.BusIfInRoom(client1.ID, room.ID)
 	assert.True(t, ok)
 	assert.Equal(t, bus, foundBus)
 
-	_, ok = hub.GetBus("nonexistent-client")
+	_, ok = hub.BusIfInRoom(client1.ID, "other-room")
+	assert.False(t, ok, "a bus registered for room.ID must not be returned for another room")
+
+	_, ok = hub.BusIfInRoom("nonexistent-client", room.ID)
 	assert.False(t, ok)
 }
 

@@ -53,7 +53,7 @@ func TestLeaveRoomUseCase_Execute_LastLocalClient_RoomExists_DecrementsUsersAndR
 			return fn(ctx)
 		})
 
-	mockHub.EXPECT().GetBus(senderID).Return(nil, true)
+	mockHub.EXPECT().HasBusInRoom(senderID, roomID).Return(true)
 	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(1)
 	mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(nil)
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
@@ -100,7 +100,7 @@ func TestLeaveRoomUseCase_Execute_NonLastLocalClient_DecrementsOnlyActiveUsers(t
 			return fn(ctx)
 		})
 
-	mockHub.EXPECT().GetBus(senderID).Return(nil, true)
+	mockHub.EXPECT().HasBusInRoom(senderID, roomID).Return(true)
 	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(2)
 	mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(nil)
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
@@ -146,7 +146,7 @@ func TestLeaveRoomUseCase_Execute_NoLocalBus_DuplicateLeave_EmitsNoMetrics(t *te
 			return fn(ctx)
 		})
 
-	mockHub.EXPECT().GetBus(senderID).Return(nil, false)
+	mockHub.EXPECT().HasBusInRoom(senderID, roomID).Return(false)
 	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(0)
 	mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(nil)
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
@@ -187,7 +187,7 @@ func TestLeaveRoomUseCase_Execute_WhenRoomIsMissingAfterRemove_DecrementsRoomMet
 			return fn(ctx)
 		})
 
-	mockHub.EXPECT().GetBus(senderID).Return(nil, true)
+	mockHub.EXPECT().HasBusInRoom(senderID, roomID).Return(true)
 	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(1)
 	mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(nil)
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, domain.ErrRoomNotFound)
@@ -230,7 +230,7 @@ func TestLeaveRoomUseCase_Execute_RemoveClientError(t *testing.T) {
 			return fn(ctx)
 		})
 
-	mockHub.EXPECT().GetBus(senderID).Return(nil, false)
+	mockHub.EXPECT().HasBusInRoom(senderID, roomID).Return(false)
 	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(0)
 	mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(expectedError)
 
@@ -274,7 +274,7 @@ func TestLeaveRoomUseCase_Execute_BroadcastError(t *testing.T) {
 			return fn(ctx)
 		})
 
-	mockHub.EXPECT().GetBus(senderID).Return(nil, true)
+	mockHub.EXPECT().HasBusInRoom(senderID, roomID).Return(true)
 	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(1)
 	mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(nil)
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
@@ -315,7 +315,7 @@ func TestLeaveRoomUseCase_Execute_LoadRoomErrorAfterRemove_ReturnsErrorWithoutDe
 			return fn(ctx)
 		})
 
-	mockHub.EXPECT().GetBus(senderID).Return(nil, true)
+	mockHub.EXPECT().HasBusInRoom(senderID, roomID).Return(true)
 	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(2)
 	mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(nil)
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, expectedError)

@@ -21,7 +21,6 @@ func newErrorTestHub(mockRedis *MockRedisClient) *RedisHub {
 		logger:           log.NewLogger("test"),
 		buses:            make(map[string]domain.Bus),
 		closeCh:          make(chan struct{}),
-		roomClientCounts: make(map[string]int),
 	}
 }
 
@@ -162,14 +161,14 @@ func TestRedisHub_AddBus_WithEmptyRoomIDDoesNotSubscribe(t *testing.T) {
 	mockRedis := NewMockRedisClient(ctrl)
 	mockBus := domain.NewMockBus(ctrl)
 	mockBus.EXPECT().RoomID().Return("")
+	mockBus.EXPECT().RoomID().Return("").AnyTimes()
 	hub := newErrorTestHub(mockRedis)
 
 	err := hub.AddBus(context.Background(), "client-1", mockBus)
 
 	assert.NoError(t, err)
-	got, ok := hub.GetBus("client-1")
-	assert.True(t, ok)
-	assert.Equal(t, mockBus, got)
+	assert.Zero(t, hub.GetClientsOfRoom(""), "an empty roomID must not subscribe or count")
+	assert.False(t, hub.HasBusInRoom("client-1", "room-1"), "an empty roomID must not count as local presence in a real room")
 }
 
 func newFailingPubSub(t *testing.T, roomID string) *redis.PubSub {
@@ -199,7 +198,6 @@ func TestRedisHub_AddBus_SubscriptionFailureRestoresPreviousBusAndCounts(t *test
 
 	hub := newErrorTestHub(mockRedis)
 	hub.buses[clientID] = oldBus
-	hub.roomClientCounts[oldRoomID] = 1
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -207,8 +205,8 @@ func TestRedisHub_AddBus_SubscriptionFailureRestoresPreviousBusAndCounts(t *test
 	err := hub.AddBus(ctx, clientID, newBus)
 
 	assert.Error(t, err)
-	got, ok := hub.GetBus(clientID)
-	assert.True(t, ok)
+	got, ok := hub.BusIfInRoom(clientID, oldRoomID)
+	assert.True(t, ok, "the previous bus must be restored on the failure path")
 	assert.Equal(t, oldBus, got)
 	assert.Equal(t, 1, hub.GetClientsOfRoom(oldRoomID), "old room count must be restored, not leaked")
 	assert.Zero(t, hub.GetClientsOfRoom(newRoomID), "failed call must not leak a count for the destination room")
@@ -229,7 +227,6 @@ func TestRedisHub_AddBus_SubscriptionFailureOnSameRoomReplacementKeepsCounts(t *
 
 	hub := newErrorTestHub(mockRedis)
 	hub.buses[clientID] = oldBus
-	hub.roomClientCounts[roomID] = 1
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -237,8 +234,8 @@ func TestRedisHub_AddBus_SubscriptionFailureOnSameRoomReplacementKeepsCounts(t *
 	err := hub.AddBus(ctx, clientID, newBus)
 
 	assert.Error(t, err)
-	got, ok := hub.GetBus(clientID)
-	assert.True(t, ok)
+	got, ok := hub.BusIfInRoom(clientID, roomID)
+	assert.True(t, ok, "the previous bus must be restored on the failure path")
 	assert.Equal(t, oldBus, got)
 	assert.Equal(t, 1, hub.GetClientsOfRoom(roomID), "failed same-room replacement must not change the count")
 }
@@ -263,7 +260,6 @@ func TestRedisHub_RemoveBus_WhenClientDoesNotExistIsSafe(t *testing.T) {
 		logger:           log.NewLogger("test"),
 		buses:            make(map[string]domain.Bus),
 		closeCh:          make(chan struct{}),
-		roomClientCounts: make(map[string]int),
 	}
 
 	hub.RemoveBus(context.Background(), "missing")

@@ -59,10 +59,18 @@ func (uc JoinRoomUseCase) Execute(ctx context.Context, cmd JoinRoomCommand) (*Jo
 			return nil, err
 		}
 
-		oldBus, hadLocalBus := uc.hub.GetBus(cmd.SenderID)
-		hadLocalClients := uc.hub.GetClientsOfRoom(cmd.RoomID) > 0
+		// A client holds exactly one bus per instance. Capture the local state
+		// this instance had before the join mutates it: the destination's local
+		// state decides whether it gains the active-rooms counter, and the room
+		// the client came from decides whether it must release it. Reconnecting to
+		// the bus's own room is not a room switch, so it never changes that count.
+		previousBus, hadLocalBus := uc.hub.Bus(cmd.SenderID)
+		previousRoomID := roomIDOf(previousBus)
+		switchingRooms := previousRoomID != "" && previousRoomID != cmd.RoomID
+		destinationHadLocalClients := uc.hub.GetClientsOfRoom(cmd.RoomID) > 0
+		previousRoomHasOtherClients := switchingRooms && uc.hub.GetClientsOfRoom(previousRoomID) > 1
 
-		client, isReconnect, rollbackFunc, err := uc.joinClient(ctx, room, cmd, oldBus, hadLocalBus)
+		client, isReconnect, rollbackFunc, err := uc.joinClient(ctx, room, cmd, previousBus)
 		if err != nil {
 			return nil, uc.rollbackJoin(ctx, rollbackFunc, err)
 		}
@@ -72,7 +80,14 @@ func (uc JoinRoomUseCase) Execute(ctx context.Context, cmd JoinRoomCommand) (*Jo
 			return output, uc.rollbackJoin(ctx, rollbackFunc, err)
 		}
 
-		uc.recordJoinMetrics(ctx, isReconnect, hadLocalBus, hadLocalClients)
+		uc.recordJoinMetrics(ctx, joinMetrics{
+			isReconnect:                 isReconnect,
+			hasLocalBus:                 hadLocalBus,
+			destinationHadLocalClients:  destinationHadLocalClients,
+			previouslyActiveRoom:        previousRoomID,
+			previousRoomHasOtherClients: previousRoomHasOtherClients,
+			switchingRooms:              switchingRooms,
+		})
 
 		return output, nil
 	})
@@ -127,37 +142,97 @@ func (uc JoinRoomUseCase) rollbackJoin(ctx context.Context, rollbackFunc func(co
 	return cause
 }
 
-func (uc JoinRoomUseCase) recordJoinMetrics(ctx context.Context, isReconnect, hadLocalBus, hadLocalClients bool) {
-	if !isReconnect {
+// joinMetrics carries the presence facts a join needs to keep the process-local
+// active counters aligned with what this instance actually tracks.
+type joinMetrics struct {
+	// isReconnect is true when the client was already a member of the room.
+	isReconnect bool
+	// hasLocalBus is true when the client already held a bus on this instance,
+	// regardless of the room that bus belongs to.
+	hasLocalBus bool
+	// destinationHadLocalClients is true when the joined room already counted as
+	// locally active before this join.
+	destinationHadLocalClients bool
+	// previouslyActiveRoom is the room this instance counted as active before the
+	// join, if any.
+	previouslyActiveRoom string
+	// previousRoomHasOtherClients is true when previouslyActiveRoom keeps at least
+	// one other local client after the join.
+	previousRoomHasOtherClients bool
+	// switchingRooms is true when the client moved from another room on this
+	// instance. Reconnecting to the same room never changes the room count.
+	switchingRooms bool
+}
+
+// activeRoomsDelta reports the net change the join causes to the count of rooms
+// this instance considers locally active: the destination room may become
+// active, and the room the client came from stops being active when the client
+// was its only local client.
+func (m joinMetrics) activeRoomsDelta() int {
+	delta := 0
+	if m.switchingRooms && !m.previousRoomHasOtherClients {
+		delta--
+	}
+	if !m.destinationHadLocalClients {
+		delta++
+	}
+
+	return delta
+}
+
+func (uc JoinRoomUseCase) recordJoinMetrics(ctx context.Context, m joinMetrics) {
+	if !m.isReconnect {
 		uc.metric.IncrementUsersTotal(ctx)
 	}
-	if !hadLocalBus {
+	if !m.hasLocalBus {
 		uc.metric.IncrementActiveUsers(ctx)
 	}
-	if !hadLocalClients {
+
+	switch m.activeRoomsDelta() {
+	case 1:
 		uc.metric.IncrementActiveRoomsCounter(ctx)
+	case -1:
+		uc.metric.DecrementActiveRoomsCounter(ctx)
 	}
 }
 
-func (uc JoinRoomUseCase) joinClient(ctx context.Context, room *entity.Room, cmd JoinRoomCommand, oldBus domain.Bus, hadLocalBus bool) (client *entity.Client, isReconnect bool, rollbackFunc func(context.Context) error, err error) {
+func (uc JoinRoomUseCase) joinClient(ctx context.Context, room *entity.Room, cmd JoinRoomCommand, previousBus domain.Bus) (client *entity.Client, isReconnect bool, rollbackFunc func(context.Context) error, err error) {
 	if existingClient, ok := room.FindClient(cmd.SenderID); ok {
 		isReconnect = true
 		client = existingClient
-		rollbackFunc, err = uc.reconnectClient(ctx, cmd, oldBus, hadLocalBus)
-	} else {
-		client = room.NewClient(cmd.SenderID)
-		rollbackFunc, err = uc.createNewClient(ctx, cmd, client)
+		rollbackFunc, err = uc.reconnectClient(ctx, cmd, previousBus)
+		return
 	}
+
+	client = room.NewClient(cmd.SenderID)
+	// A client can still hold a bus for a different room on this instance when
+	// the socket switch is mid-flight. AddBus replaces that map entry; the old
+	// session's own close handler is what leaves its room, and reconnectClient
+	// below is careful not to close a socket that belongs to another room.
+	rollbackFunc, err = uc.createNewClient(ctx, cmd, client)
 
 	return
 }
 
-func (uc JoinRoomUseCase) reconnectClient(ctx context.Context, cmd JoinRoomCommand, oldBus domain.Bus, hadLocalBus bool) (func(context.Context) error, error) {
+// roomIDOf returns the room a bus belongs to, or an empty string when there is
+// no bus.
+func roomIDOf(bus domain.Bus) string {
+	if bus == nil {
+		return ""
+	}
+
+	return bus.RoomID()
+}
+
+func (uc JoinRoomUseCase) reconnectClient(ctx context.Context, cmd JoinRoomCommand, previousBus domain.Bus) (func(context.Context) error, error) {
 	uc.logger.Info(ctx, "Client %s reconnecting to room %s", cmd.SenderID, cmd.RoomID)
 
-	if hadLocalBus {
-		oldBus.Detach()
-		if err := oldBus.Close(); err != nil {
+	// Only close the previous socket when it belongs to the same room. A bus
+	// registered for another room belongs to a different session and must be
+	// left alone; AddBus below replaces the map entry regardless.
+	if roomIDOf(previousBus) == cmd.RoomID {
+		previousBus.Detach()
+		if err := previousBus.Close(); err != nil {
 			uc.logger.Debug(ctx, "closing old bus for client %s: %v", cmd.SenderID, err)
 		}
 	}

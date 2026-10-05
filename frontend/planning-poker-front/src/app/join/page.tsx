@@ -1,5 +1,6 @@
 'use client'
 
+import type { DeckDescriptor } from '@/components/messages/websocket';
 import { useLogger } from '@/context/logger/loggerContext';
 import { useToast } from '@/context/toast/toastContext';
 import { Loader2, LogIn, Plus } from 'lucide-react';
@@ -20,11 +21,30 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
+function isDeckDescriptor(value: unknown): value is DeckDescriptor {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'id' in value &&
+    typeof value.id === 'string' &&
+    'name' in value &&
+    typeof value.name === 'string' &&
+    'kind' in value &&
+    (value.kind === 'numeric' || value.kind === 'categorical') &&
+    'cards' in value &&
+    Array.isArray(value.cards) &&
+    value.cards.every((card) => typeof card === 'string')
+  );
+}
+
 export default function PlanningPokerHome() {
   const router = useRouter();
   const params = useParams<{ roomId?: string }>();
   const [roomCode, setRoomCode] = useState('');
   const [userName, setUserName] = useState('');
+  const [decks, setDecks] = useState<DeckDescriptor[]>([]);
+  const [deckType, setDeckType] = useState('');
+  const [isLoadingDecks, setIsLoadingDecks] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const nameInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -41,6 +61,45 @@ export default function PlanningPokerHome() {
 
   useEffect(() => { nameInputRef.current?.focus(); }, []);
 
+  useEffect(() => {
+    if (hasRoomParam) {
+      setIsLoadingDecks(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingDecks(true);
+
+    const loadDecks = async () => {
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/planning/decks`);
+        if (!res.ok) {
+          throw new Error('Failed to load deck catalogue');
+        }
+        const data: unknown = await res.json();
+        const catalogue = typeof data === 'object' && data !== null && 'decks' in data ? data.decks : null;
+        if (!Array.isArray(catalogue) || !catalogue.every(isDeckDescriptor)) {
+          throw new Error('Invalid deck catalogue');
+        }
+        if (cancelled) return;
+        setDecks(catalogue);
+        setDeckType((current) => current || catalogue[0]?.id || '');
+      } catch (err: unknown) {
+        if (cancelled) return;
+        const message = getErrorMessage(err, 'Failed to load decks. Please refresh and try again.');
+        logger.error('Failed to load deck catalogue', { error: message });
+        pushError(message);
+      } finally {
+        if (!cancelled) {
+          setIsLoadingDecks(false);
+        }
+      }
+    };
+
+    void loadDecks();
+    return () => { cancelled = true; };
+  }, [hasRoomParam, logger, pushError]);
+
   const handleCreateRoom = async () => {
     if (!userName.trim()) {
       logger.warn('Validation failed', { reason: 'Name not informed' });
@@ -48,14 +107,24 @@ export default function PlanningPokerHome() {
       return;
     }
 
+    if (!deckType) {
+      logger.warn('Validation failed', { reason: 'Deck not selected' });
+      pushError('Deck not selected');
+      return;
+    }
+
     try {
       setIsCreating(true);
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/planning/rooms`, { method: 'POST' });
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/planning/rooms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deckType }),
+      });
       if (!res.ok) {
         throw new Error('Failed to create room on server');
       }
       const data = await res.json();
-      logger.info('Room created', { roomId: data.roomId });
+      logger.info('Room created', { roomId: data.roomId, deckType });
       logger.setContext({ roomId: data.roomId });
       sessionStorage.setItem('userName', userName.trim());
       router.push(getRoomRoute(data.roomId));
@@ -68,7 +137,7 @@ export default function PlanningPokerHome() {
     }
   };
 
-  const handleJoinRoom = async () => {
+  const handleJoinRoom = () => {
     if (!userName.trim()) {
       logger.warn('Validation failed', { reason: 'Name not informed' });
       pushError('Name not informed');
@@ -97,7 +166,7 @@ export default function PlanningPokerHome() {
   const handleEnterPressed = async (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') {
       if (roomCode.trim()) {
-        await handleJoinRoom();
+        handleJoinRoom();
       } else {
         await handleCreateRoom();
       }
@@ -132,6 +201,24 @@ export default function PlanningPokerHome() {
               onKeyDown={async (e) => await handleEnterPressed(e)}
             />
           </div>
+          {!hasRoomParam && (
+            <div style={styles.inputGroup}>
+              <label htmlFor="deck-type" style={styles.label}>Deck</label>
+              <select
+                id="deck-type"
+                value={deckType}
+                onChange={(e) => setDeckType(e.target.value)}
+                disabled={isLoadingDecks || decks.length === 0}
+                style={styles.input}
+              >
+                {isLoadingDecks && <option value="">Loading decks...</option>}
+                {!isLoadingDecks && decks.length === 0 && <option value="">No decks available</option>}
+                {decks.map((option) => (
+                  <option key={option.id} value={option.id}>{option.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Buttons */}
@@ -161,11 +248,11 @@ export default function PlanningPokerHome() {
           ) : (
             <button
               onClick={handleCreateRoom}
-              disabled={isCreating || isJoining || !userName.trim()}
+              disabled={isCreating || isJoining || !userName.trim() || !deckType}
               style={{
                 ...styles.button,
                 ...styles.primaryButton,
-                ...(isCreating || isJoining || !userName.trim() ? styles.buttonDisabled : {})
+                ...(isCreating || isJoining || !userName.trim() || !deckType ? styles.buttonDisabled : {})
               }}
             >
               {isCreating ? (

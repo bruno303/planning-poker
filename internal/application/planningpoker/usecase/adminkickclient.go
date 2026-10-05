@@ -49,15 +49,15 @@ func (uc *adminKickClientUseCase) Execute(ctx context.Context, cmd AdminKickClie
 		return fmt.Errorf("client %s not found: %w", cmd.ClientID, domain.ErrClientNotFound)
 	}
 
-	bus, busExists := uc.hub.GetBus(cmd.ClientID)
+	bus, busExists := uc.hub.BusIfInRoom(cmd.ClientID, cmd.RoomID)
 
 	if err := uc.leaveRoom.Execute(ctx, LeaveRoomCommand{RoomID: cmd.RoomID, SenderID: cmd.ClientID}); err != nil {
 		uc.logger.Error(ctx, "Error removing client from room", err)
 		return fmt.Errorf("remove client: %w", err)
 	}
 
-	// GetBus is called before leaveRoom because leaveRoom -> hub.RemoveClient -> RemoveBus
-	// would remove the bus from the hub's map, making GetBus return nil afterwards.
+	// BusIfInRoom is called before leaveRoom because leaveRoom -> hub.RemoveClient -> RemoveBus
+	// would remove the bus from the hub's map, making BusIfInRoom return nil afterwards.
 	if busExists {
 		if err := bus.Send(ctx, dto.NewKickNotification()); err != nil {
 			uc.logger.Error(ctx, "Failed to send kick notification to client", err)

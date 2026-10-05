@@ -53,6 +53,25 @@ func TestNewRoomWithID(t *testing.T) {
 	}
 }
 
+func TestNewRoomWithDeck(t *testing.T) {
+	ctx := context.Background()
+	hub := NewHub()
+
+	room, err := hub.NewRoomWithDeck(ctx, entity.DeckTypeTShirt)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if room == nil {
+		t.Fatal("expected room to be non-nil")
+	}
+	if room.DeckType != entity.DeckTypeTShirt {
+		t.Fatalf("expected deck type %q, got %q", entity.DeckTypeTShirt, room.DeckType)
+	}
+	if hub.Rooms[room.ID] != room {
+		t.Fatal("expected hub to store deck room under its ID")
+	}
+}
+
 func TestLoadRoom(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
@@ -136,11 +155,13 @@ func TestAddAndGetBus(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
 	clientID := "client1"
+	roomID := "room1"
 	mockBus := domain.NewMockBus(ctrl)
+	mockBus.EXPECT().RoomID().Return(roomID).AnyTimes()
 
 	hub.AddBus(ctx, clientID, mockBus)
 
-	got, ok := hub.GetBus(clientID)
+	got, ok := hub.BusIfInRoom(clientID, roomID)
 	if !ok {
 		t.Fatalf("expected to find bus but got not found")
 	}
@@ -148,8 +169,11 @@ func TestAddAndGetBus(t *testing.T) {
 		t.Errorf("expected to get the added bus, got different bus")
 	}
 
-	_, ok = hub.GetBus("non-existent-id")
-	if ok {
+	if _, ok := hub.BusIfInRoom(clientID, "other-room"); ok {
+		t.Error("expected a bus registered for another room to not be returned")
+	}
+
+	if _, ok := hub.BusIfInRoom("non-existent-id", roomID); ok {
 		t.Error("expected \"false\" for non-existent bus, got \"true\"")
 	}
 }
@@ -208,13 +232,11 @@ func TestRemoveBus(t *testing.T) {
 		t.Errorf("expected 1 bus after removal, got %d", len(hub.Buses))
 	}
 
-	_, ok := hub.GetBus(clientID1)
-	if ok {
+	if _, ok := hub.Buses[clientID1]; ok {
 		t.Error("expected bus1 to be removed")
 	}
 
-	_, ok = hub.GetBus(clientID2)
-	if !ok {
+	if _, ok := hub.Buses[clientID2]; !ok {
 		t.Error("expected bus2 to still exist")
 	}
 
@@ -222,6 +244,41 @@ func TestRemoveBus(t *testing.T) {
 	hub.RemoveBus(ctx, "non-existent-id")
 	if len(hub.Buses) != 1 {
 		t.Errorf("expected 1 bus after removing non-existent, got %d", len(hub.Buses))
+	}
+}
+
+func TestRemoveClient_KeepsBusRegisteredForAnotherRoom(t *testing.T) {
+	ctx := context.Background()
+	hub := NewHub()
+
+	roomA, err := hub.NewRoomWithID(ctx, "room-a")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	roomB, err := hub.NewRoomWithID(ctx, "room-b")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	client := &entity.Client{ID: "client1", Name: "Alice"}
+	hub.AddClient(client)
+	roomA.Clients.Add(client)
+	roomB.Clients.Add(client)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	// The instance holds the bus for room-b: the client already switched rooms
+	// while room-a's socket close is still in flight.
+	mockBus := domain.NewMockBus(ctrl)
+	mockBus.EXPECT().RoomID().Return(roomB.ID).AnyTimes()
+	hub.AddBus(ctx, client.ID, mockBus)
+
+	if err := hub.RemoveClient(ctx, client.ID, roomA.ID); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if _, ok := hub.Buses[client.ID]; !ok {
+		t.Error("expected the bus registered for room-b to survive a leave from room-a")
 	}
 }
 
@@ -239,6 +296,7 @@ func TestRemoveClient_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockBus := domain.NewMockBus(ctrl)
+	mockBus.EXPECT().RoomID().Return(room.ID).AnyTimes()
 	hub.AddBus(ctx, client.ID, mockBus)
 
 	// Add client to room
@@ -254,8 +312,7 @@ func TestRemoveClient_Success(t *testing.T) {
 		t.Error("expected client to be removed from hub")
 	}
 
-	_, ok = hub.GetBus(client.ID)
-	if ok {
+	if _, ok := hub.Buses[client.ID]; ok {
 		t.Error("expected bus to be removed")
 	}
 }
@@ -303,12 +360,14 @@ func TestRemoveClient_RoomNotFound(t *testing.T) {
 	client := &entity.Client{ID: "client1", Name: "Alice"}
 	hub.AddClient(client)
 
+	roomID := "non-existent-room"
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockBus := domain.NewMockBus(ctrl)
+	mockBus.EXPECT().RoomID().Return(roomID).AnyTimes()
 	hub.AddBus(ctx, client.ID, mockBus)
 
-	err := hub.RemoveClient(ctx, client.ID, "non-existent-room")
+	err := hub.RemoveClient(ctx, client.ID, roomID)
 	if err != nil {
 		t.Fatalf("expected no error when room not found, got %v", err)
 	}
@@ -318,8 +377,7 @@ func TestRemoveClient_RoomNotFound(t *testing.T) {
 		t.Error("expected client to be removed even when room not found")
 	}
 
-	_, ok = hub.GetBus(client.ID)
-	if ok {
+	if _, ok := hub.Buses[client.ID]; ok {
 		t.Error("expected bus to be removed even when room not found")
 	}
 }
@@ -338,6 +396,7 @@ func TestRemoveClient_EmptyRoomRemoval(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockBus := domain.NewMockBus(ctrl)
+	mockBus.EXPECT().RoomID().Return(room.ID).AnyTimes()
 	hub.AddBus(ctx, client.ID, mockBus)
 
 	room.Clients.Add(client)
@@ -377,7 +436,9 @@ func TestBroadcastToRoom_Success(t *testing.T) {
 	room.Clients.Add(client2)
 
 	mockBus1 := domain.NewMockBus(ctrl)
+	mockBus1.EXPECT().RoomID().Return(room.ID).AnyTimes()
 	mockBus2 := domain.NewMockBus(ctrl)
+	mockBus2.EXPECT().RoomID().Return(room.ID).AnyTimes()
 	hub.AddBus(ctx, client1.ID, mockBus1)
 	hub.AddBus(ctx, client2.ID, mockBus2)
 
@@ -445,6 +506,7 @@ func TestBroadcastToRoom_SendError(t *testing.T) {
 	room.Clients.Add(client)
 
 	mockBus := domain.NewMockBus(ctrl)
+	mockBus.EXPECT().RoomID().Return(room.ID).AnyTimes()
 	hub.AddBus(ctx, client.ID, mockBus)
 
 	message := map[string]string{"type": "test"}
