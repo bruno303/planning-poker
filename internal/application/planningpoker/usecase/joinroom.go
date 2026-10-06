@@ -53,6 +53,12 @@ func NewJoinRoomUseCase(hub domain.Hub, lockManager lock.LockManager, metric met
 }
 
 func (uc JoinRoomUseCase) Execute(ctx context.Context, cmd JoinRoomCommand) (*JoinRoomOutput, error) {
+	unlockPresence, err := lockLocalPresence(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer unlockPresence()
+
 	output, err := uc.lockManager.WithLock(ctx, cmd.RoomID, func(ctx context.Context) (any, error) {
 		room, _, err := uc.loadOrCreateRoom(ctx, cmd)
 		if err != nil {
@@ -69,15 +75,18 @@ func (uc JoinRoomUseCase) Execute(ctx context.Context, cmd JoinRoomCommand) (*Jo
 		switchingRooms := previousRoomID != "" && previousRoomID != cmd.RoomID
 		destinationHadLocalClients := uc.hub.GetClientsOfRoom(cmd.RoomID) > 0
 		previousRoomHasOtherClients := switchingRooms && uc.hub.GetClientsOfRoom(previousRoomID) > 1
+		rollback := func(fn func(context.Context) error, cause error) error {
+			return uc.rollbackReplacement(ctx, cmd, fn, cause, previousBus, hadLocalBus, destinationHadLocalClients)
+		}
 
 		client, isReconnect, rollbackFunc, err := uc.joinClient(ctx, room, cmd, previousBus)
 		if err != nil {
-			return nil, uc.rollbackJoin(ctx, rollbackFunc, err)
+			return nil, rollback(rollbackFunc, err)
 		}
 
 		output := &JoinRoomOutput{Client: client, Room: room}
 		if err := uc.notifyJoin(ctx, cmd, room, client); err != nil {
-			return output, uc.rollbackJoin(ctx, rollbackFunc, err)
+			return output, rollback(rollbackFunc, err)
 		}
 
 		uc.recordJoinMetrics(ctx, joinMetrics{
@@ -140,6 +149,50 @@ func (uc JoinRoomUseCase) rollbackJoin(ctx context.Context, rollbackFunc func(co
 	}
 
 	return cause
+}
+
+func (uc JoinRoomUseCase) rollbackReplacement(ctx context.Context, cmd JoinRoomCommand, rollbackFunc func(context.Context) error, cause error, previousBus domain.Bus, hadLocalBus, destinationHadLocalClients bool) error {
+	err := uc.rollbackJoin(ctx, rollbackFunc, cause)
+	if !hadLocalBus {
+		return err
+	}
+
+	previousRoomID := roomIDOf(previousBus)
+	_, hasLocalBus := uc.hub.Bus(cmd.SenderID)
+	// A cross-room join leaves the original socket open. Restore it if cleanup
+	// removed the replacement; a same-room reconnect already closed its socket.
+	if !hasLocalBus && previousRoomID != cmd.RoomID {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), rollbackJoinCleanupTimeout)
+		restoreErr := uc.hub.AddBus(cleanupCtx, cmd.SenderID, previousBus)
+		cancel()
+		if restoreErr != nil {
+			err = fmt.Errorf("%w: restore previous bus: %w", err, restoreErr)
+		}
+		_, hasLocalBus = uc.hub.Bus(cmd.SenderID)
+	}
+	if !hasLocalBus {
+		uc.metric.DecrementActiveUsers(ctx)
+	}
+
+	roomsBefore, roomsAfter := 1, 0
+	if uc.hub.GetClientsOfRoom(previousRoomID) > 0 {
+		roomsAfter++
+	}
+	if previousRoomID != cmd.RoomID {
+		if destinationHadLocalClients {
+			roomsBefore++
+		}
+		if uc.hub.GetClientsOfRoom(cmd.RoomID) > 0 {
+			roomsAfter++
+		}
+	}
+	switch roomsAfter - roomsBefore {
+	case -1:
+		uc.metric.DecrementActiveRoomsCounter(ctx)
+	case 1:
+		uc.metric.IncrementActiveRoomsCounter(ctx)
+	}
+	return err
 }
 
 // joinMetrics carries the presence facts a join needs to keep the process-local
@@ -242,6 +295,10 @@ func (uc JoinRoomUseCase) reconnectClient(ctx context.Context, cmd JoinRoomComma
 		return nil
 	}
 	if err := uc.hub.AddBus(ctx, cmd.SenderID, cmd.Bus); err != nil {
+		if roomIDOf(previousBus) != cmd.RoomID {
+			// AddBus restores the original bus when subscription setup fails.
+			rollbackFunc = func(context.Context) error { return nil }
+		}
 		return rollbackFunc, fmt.Errorf("failed to add bus for client %s: %w", cmd.SenderID, err)
 	}
 

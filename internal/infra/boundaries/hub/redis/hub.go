@@ -364,7 +364,9 @@ func (h *RedisHub) RemoveClient(ctx context.Context, clientID string, roomID str
 			h.logger.Error(ctx, fmt.Sprintf("Failed to delete client %s from Redis", clientID), err)
 		}
 
+		h.busMux.Lock()
 		h.removeBusForRoom(ctx, clientID, roomID)
+		h.busMux.Unlock()
 
 		room, err := h.LoadRoom(ctx, roomID)
 		if err != nil {

@@ -340,3 +340,45 @@ func TestLeaveRoomUseCase_Execute_LoadRoomErrorAfterRemove_ReturnsErrorWithoutDe
 		t.Fatalf("expected no active room decrements, got %d", countMetricCallsWithValue(calls, metric.PlanningPokerActiveRoomsMetric, -1))
 	}
 }
+
+func TestLeaveRoomUseCase_PersistenceFailureAccountsForRemovedPresenceOnce(t *testing.T) {
+	for _, removed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "bus retained", true: "bus removed"}[removed], func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			hub := domain.NewMockHub(ctrl)
+			manager := lock.NewMockLockManager(ctrl)
+			pokerMetric, recorder := newTestPlanningPokerMetric(ctrl)
+			failure := errors.New("persistence failed")
+			ctx := context.Background()
+			manager.EXPECT().ExecuteWithLock(gomock.Any(), "room", gomock.Any()).DoAndReturn(
+				func(ctx context.Context, _ string, fn func(context.Context) error) error { return fn(ctx) }).AnyTimes()
+			gomock.InOrder(
+				hub.EXPECT().HasBusInRoom("client", "room").Return(true),
+				hub.EXPECT().GetClientsOfRoom("room").Return(1),
+				hub.EXPECT().RemoveClient(ctx, "client", "room").Return(failure),
+				hub.EXPECT().HasBusInRoom("client", "room").Return(!removed),
+			)
+			uc := NewLeaveRoomUseCase(hub, manager, pokerMetric)
+			if err := uc.Execute(ctx, LeaveRoomCommand{RoomID: "room", SenderID: "client"}); !errors.Is(err, failure) {
+				t.Fatalf("got %v, want persistence error", err)
+			}
+			if !removed {
+				if len(recorder.getCalls()) != 0 {
+					t.Fatal("retained presence must not decrement metrics")
+				}
+				return
+			}
+			hub.EXPECT().HasBusInRoom("client", "room").Return(false)
+			hub.EXPECT().GetClientsOfRoom("room").Return(0)
+			hub.EXPECT().RemoveClient(ctx, "client", "room").Return(nil)
+			hub.EXPECT().LoadRoom(ctx, "room").Return(nil, domain.ErrRoomNotFound)
+			if err := uc.Execute(ctx, LeaveRoomCommand{RoomID: "room", SenderID: "client"}); err != nil {
+				t.Fatal(err)
+			}
+			assertMetricCallSequence(t, recorder.getCalls(),
+				expectedMetricCall{name: metric.PlanningPokerActiveUsersMetric, value: -1},
+				expectedMetricCall{name: metric.PlanningPokerActiveRoomsMetric, value: -1},
+			)
+		})
+	}
+}

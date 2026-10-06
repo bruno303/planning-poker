@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -569,4 +570,45 @@ func TestRedisHub_GetRooms(t *testing.T) {
 	rooms := hub.GetRooms()
 	assert.Len(t, rooms, 1)
 	assert.Equal(t, validRoom.ID, rooms[0].ID)
+}
+
+func TestRedisHub_ConcurrentRemoveClientAndLocalPresenceReads(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockRedis := NewMockRedisClient(ctrl)
+	ctx := context.Background()
+	missing := redis.NewStringCmd(ctx)
+	missing.SetErr(redis.Nil)
+	mockRedis.EXPECT().Del(gomock.Any(), gomock.Any()).Return(redis.NewIntCmd(ctx)).AnyTimes()
+	mockRedis.EXPECT().Get(gomock.Any(), gomock.Any()).Return(missing).AnyTimes()
+	hub := &RedisHub{client: mockRedis, logger: log.NewLogger("test"), buses: make(map[string]domain.Bus)}
+	bus := domain.NewMockBus(ctrl)
+	bus.EXPECT().RoomID().Return("room").AnyTimes()
+	hub.roomSubs.Store("room", nil)
+	// Keep a second bus so removal never closes the placeholder subscription.
+	assert.NoError(t, hub.AddBus(ctx, "other", bus))
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		<-start
+		for range 200 {
+			if err := hub.AddBus(ctx, "client", bus); err != nil {
+				t.Error(err)
+				return
+			}
+			if err := hub.RemoveClient(ctx, "client", "room"); err != nil {
+				t.Error(err)
+				return
+			}
+		}
+	})
+	wg.Go(func() {
+		<-start
+		for range 200 {
+			hub.GetClientsOfRoom("room")
+			hub.BusIfInRoom("client", "room")
+		}
+	})
+	close(start)
+	wg.Wait()
+	assert.Equal(t, 1, hub.GetClientsOfRoom("room"))
 }

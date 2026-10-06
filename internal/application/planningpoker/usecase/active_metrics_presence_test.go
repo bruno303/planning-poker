@@ -2,7 +2,9 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync"
 	"testing"
 
 	"planning-poker/internal/application/planningpoker/metric"
@@ -17,14 +19,15 @@ import (
 // tests below. The hub keeps one bus per client, so the room the bus was built
 // for is what defines local presence.
 type localPresenceBus struct {
-	roomID string
+	roomID  string
+	sendErr error
 }
 
 func (b *localPresenceBus) RoomID() string                  { return b.roomID }
 func (b *localPresenceBus) Detach()                         {}
 func (b *localPresenceBus) Close() error                    { return nil }
 func (b *localPresenceBus) Listen(context.Context)          {}
-func (b *localPresenceBus) Send(context.Context, any) error { return nil }
+func (b *localPresenceBus) Send(context.Context, any) error { return b.sendErr }
 
 func (b *localPresenceBus) String() string {
 	return fmt.Sprintf("localPresenceBus(%s)", b.roomID)
@@ -163,6 +166,18 @@ func TestActiveMetricsMatchLocalPresence(t *testing.T) {
 			wantRooms: 1,
 		},
 		{
+			name: "late leave after a switch preserves the other client's active room",
+			scenario: func(t *testing.T, h *localPresenceHarness) {
+				h.createRoom(t, "room-a")
+				h.joinRoom(t, "room-a", "client-1")
+				h.joinRoom(t, "room-a", "client-2")
+				h.joinRoom(t, "room-b", "client-1")
+				h.leaveRoom(t, "room-a", "client-1")
+			},
+			wantUsers: 2,
+			wantRooms: 2,
+		},
+		{
 			name: "cross-room switch followed by disconnect settles at zero",
 			scenario: func(t *testing.T, h *localPresenceHarness) {
 				h.createRoom(t, "room-a")
@@ -245,3 +260,76 @@ func TestLeaveRoomIgnoresBusFromAnotherRoom(t *testing.T) {
 }
 
 var _ domain.Bus = (*localPresenceBus)(nil)
+
+func TestConcurrentSwitchesFromSharedRoomKeepMetricsBalanced(t *testing.T) {
+	for range 30 {
+		h := newLocalPresenceHarness(t)
+		h.createRoom(t, "source")
+		h.createRoom(t, "destination-1")
+		h.createRoom(t, "destination-2")
+		h.joinRoom(t, "source", "client-1")
+		h.joinRoom(t, "source", "client-2")
+		start := make(chan struct{})
+		results := make(chan error, 2)
+		var wg sync.WaitGroup
+		for i := 1; i <= 2; i++ {
+			wg.Go(func() {
+				<-start
+				_, err := h.join.Execute(context.Background(), JoinRoomCommand{
+					RoomID: fmt.Sprintf("destination-%d", i), SenderID: fmt.Sprintf("client-%d", i),
+					Bus: &localPresenceBus{roomID: fmt.Sprintf("destination-%d", i)},
+				})
+				results <- err
+			})
+		}
+		close(start)
+		wg.Wait()
+		close(results)
+		for err := range results {
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		if got := h.activeRooms(); got != 2 {
+			t.Fatalf("active rooms = %v, want 2", got)
+		}
+		h.leaveRoom(t, "source", "client-1")
+		h.leaveRoom(t, "source", "client-2")
+		h.leaveRoom(t, "destination-1", "client-1")
+		h.leaveRoom(t, "destination-2", "client-2")
+		if h.activeUsers() != 0 || h.activeRooms() != 0 {
+			t.Fatal("metrics did not settle at zero")
+		}
+	}
+}
+
+func TestFailedReplacementJoinReconcilesPresence(t *testing.T) {
+	for _, destination := range []string{"room-a", "room-b"} {
+		t.Run(destination, func(t *testing.T) {
+			h := newLocalPresenceHarness(t)
+			h.createRoom(t, "room-a")
+			h.joinRoom(t, "room-a", "client")
+			failure := errors.New("socket send failed")
+			_, err := h.join.Execute(context.Background(), JoinRoomCommand{
+				RoomID: destination, SenderID: "client", Bus: &localPresenceBus{roomID: destination, sendErr: failure},
+			})
+			if !errors.Is(err, failure) {
+				t.Fatalf("got %v, want send failure", err)
+			}
+			want := float64(0)
+			if destination != "room-a" {
+				want = 1
+				if !h.hub.HasBusInRoom("client", "room-a") {
+					t.Fatal("original room's bus was not restored")
+				}
+			}
+			if h.activeUsers() != want || h.activeRooms() != want {
+				t.Fatalf("active users/rooms = %v/%v, want %v/%v", h.activeUsers(), h.activeRooms(), want, want)
+			}
+			h.leaveRoom(t, "room-a", "client")
+			if h.activeUsers() != 0 || h.activeRooms() != 0 {
+				t.Fatal("cleanup did not settle at zero")
+			}
+		})
+	}
+}

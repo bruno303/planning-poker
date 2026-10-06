@@ -2,11 +2,14 @@ package redishub_test
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 
 	toolkitmetric "github.com/bruno303/go-toolkit/pkg/metric"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"planning-poker/internal/application/planningpoker/metric"
 	"planning-poker/internal/application/planningpoker/usecase"
@@ -104,3 +107,74 @@ func (b *stubBus) Listen(context.Context)          {}
 func (b *stubBus) Send(context.Context, any) error { return nil }
 
 var _ domain.Bus = (*stubBus)(nil)
+
+// failingPresenceClient injects failures at the Redis boundary while retaining
+// the production hub's subscription and local bus handling.
+type failingPresenceClient struct {
+	redishub.RedisClient
+	failSubscription string
+	failLoad         bool
+}
+
+func (c *failingPresenceClient) Subscribe(ctx context.Context, channels ...string) *redis.PubSub {
+	sub := c.RedisClient.Subscribe(ctx, channels...)
+	if len(channels) == 1 && channels[0] == c.failSubscription {
+		_ = sub.Close()
+	}
+	return sub
+}
+
+func (c *failingPresenceClient) Get(ctx context.Context, key string) *redis.StringCmd {
+	if c.failLoad {
+		cmd := redis.NewStringCmd(ctx)
+		cmd.SetErr(errors.New("injected load failure"))
+		return cmd
+	}
+	return c.RedisClient.Get(ctx, key)
+}
+
+func TestIntegration_FailedPresenceTransitionsKeepMetricsBalanced(t *testing.T) {
+	for _, failure := range []string{"subscription", "leave persistence"} {
+		t.Run(failure, func(t *testing.T) {
+			client := setupRedisClient(t)
+			defer client.Close()
+			boundary := &failingPresenceClient{RedisClient: client}
+			ctx := context.Background()
+			hub, err := redishub.NewRedisHub(ctx, boundary)
+			require.NoError(t, err)
+			defer func() { _ = hub.Close() }()
+			recorder := newRecordingMeter()
+			pokerMetric := metric.NewPlanningPokerMetricWithMeter(recorder)
+			manager := infralock.NewInMemoryLockManager()
+			join := usecase.NewJoinRoomUseCase(hub, manager, pokerMetric)
+			leave := usecase.NewLeaveRoomUseCase(hub, manager, pokerMetric)
+			roomA, err := hub.NewRoomWithID(ctx, "failure-room-a")
+			require.NoError(t, err)
+			_, err = join.Execute(ctx, usecase.JoinRoomCommand{RoomID: roomA.ID, SenderID: "failure-client", Bus: &stubBus{roomID: roomA.ID}})
+			require.NoError(t, err)
+			if failure == "subscription" {
+				roomB, err := hub.NewRoomWithID(ctx, "failure-room-b")
+				require.NoError(t, err)
+				// Existing destination membership takes the reconnect path; the local
+				// original bus still belongs to A and must survive failed subscription.
+				roomB.NewClient("failure-client")
+				require.NoError(t, hub.SaveRoom(ctx, roomB))
+				boundary.failSubscription = "planning-poker:updates:" + roomB.ID
+				_, err = join.Execute(ctx, usecase.JoinRoomCommand{RoomID: roomB.ID, SenderID: "failure-client", Bus: &stubBus{roomID: roomB.ID}})
+				require.Error(t, err)
+				require.True(t, hub.HasBusInRoom("failure-client", roomA.ID))
+				assert.Equal(t, float64(1), recorder.value(metric.PlanningPokerActiveUsersMetric))
+				assert.Equal(t, float64(1), recorder.value(metric.PlanningPokerActiveRoomsMetric))
+			} else {
+				boundary.failLoad = true
+				require.Error(t, leave.Execute(ctx, usecase.LeaveRoomCommand{RoomID: roomA.ID, SenderID: "failure-client"}))
+				assert.Zero(t, recorder.value(metric.PlanningPokerActiveUsersMetric))
+				assert.Zero(t, recorder.value(metric.PlanningPokerActiveRoomsMetric))
+				boundary.failLoad = false
+			}
+			require.NoError(t, leave.Execute(ctx, usecase.LeaveRoomCommand{RoomID: roomA.ID, SenderID: "failure-client"}))
+			assert.Zero(t, recorder.value(metric.PlanningPokerActiveUsersMetric))
+			assert.Zero(t, recorder.value(metric.PlanningPokerActiveRoomsMetric))
+		})
+	}
+}
