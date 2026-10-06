@@ -246,29 +246,11 @@ func (h *RedisHub) AddBus(ctx context.Context, clientID string, bus domain.Bus) 
 	return nil
 }
 
-// BusIfInRoom returns the bus registered for clientID on this instance, but
-// only when that bus belongs to roomID. A client can only hold one bus per
-// instance, so a bus registered for another room must not be returned here.
-func (h *RedisHub) BusIfInRoom(clientID string, roomID string) (domain.Bus, bool) {
-	h.busMux.RLock()
-	defer h.busMux.RUnlock()
-	bus, ok := h.buses[clientID]
-	if !ok || bus.RoomID() != roomID {
-		return nil, false
-	}
-	return bus, true
-}
-
-func (h *RedisHub) Bus(clientID string) (domain.Bus, bool) {
+func (h *RedisHub) GetBus(clientID string) (domain.Bus, bool) {
 	h.busMux.RLock()
 	defer h.busMux.RUnlock()
 	bus, ok := h.buses[clientID]
 	return bus, ok
-}
-
-func (h *RedisHub) HasBusInRoom(clientID string, roomID string) bool {
-	_, ok := h.BusIfInRoom(clientID, roomID)
-	return ok
 }
 
 func (h *RedisHub) RemoveBus(ctx context.Context, clientID string) {

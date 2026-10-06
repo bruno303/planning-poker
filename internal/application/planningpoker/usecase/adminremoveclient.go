@@ -48,7 +48,7 @@ func (uc *adminRemoveClientUseCase) Execute(ctx context.Context, cmd AdminRemove
 		return fmt.Errorf("client %s not found: %w", cmd.ClientID, domain.ErrClientNotFound)
 	}
 
-	bus, busExists := uc.hub.BusIfInRoom(cmd.ClientID, cmd.RoomID)
+	bus, busExists := domain.GetBusOfRoom(uc.hub, cmd.ClientID, cmd.RoomID)
 
 	if err := uc.leaveRoom.Execute(ctx, LeaveRoomCommand{RoomID: cmd.RoomID, SenderID: cmd.ClientID}); err != nil {
 		uc.logger.Error(ctx, "Error removing client from room", err)
@@ -56,8 +56,7 @@ func (uc *adminRemoveClientUseCase) Execute(ctx context.Context, cmd AdminRemove
 	}
 
 	// Close the WebSocket bus after removal.
-	// BusIfInRoom is called before leaveRoom because leaveRoom -> hub.RemoveClient -> RemoveBus
-	// would remove the bus from the hub's map, making BusIfInRoom return nil afterwards.
+	// Capture the bus before leave removes it from the hub.
 	if busExists {
 		bus.Detach()
 		if err := bus.Close(); err != nil {

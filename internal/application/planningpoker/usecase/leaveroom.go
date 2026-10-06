@@ -44,13 +44,8 @@ func (uc *leaveRoomUseCase) Execute(ctx context.Context, cmd LeaveRoomCommand) e
 	defer unlockPresence()
 
 	return uc.lockManager.ExecuteWithLock(ctx, cmd.RoomID, func(ctx context.Context) error {
-		// The client stops being an active local user only when the bus being
-		// removed is the one registered for this room. When the same client has
-		// already moved to another room on this instance, the join side kept the
-		// active-user counter, and the late leave of the old socket must not
-		// decrement it again. localClientsBefore decides whether this instance must
-		// also drop the room.
-		hadBusInRoom := uc.hub.HasBusInRoom(cmd.SenderID, cmd.RoomID)
+		// A late leave from an old room must not count the replacement bus.
+		hadBusInRoom := domain.HasBusInRoom(uc.hub, cmd.SenderID, cmd.RoomID)
 		localClientsBefore := uc.hub.GetClientsOfRoom(cmd.RoomID)
 
 		removeErr := uc.hub.RemoveClient(ctx, cmd.SenderID, cmd.RoomID)
@@ -58,7 +53,7 @@ func (uc *leaveRoomUseCase) Execute(ctx context.Context, cmd LeaveRoomCommand) e
 		// for that removal now so a retry cannot lose or duplicate the delta.
 		removedLocalBus := hadBusInRoom
 		if removeErr != nil && hadBusInRoom {
-			removedLocalBus = !uc.hub.HasBusInRoom(cmd.SenderID, cmd.RoomID)
+			removedLocalBus = !domain.HasBusInRoom(uc.hub, cmd.SenderID, cmd.RoomID)
 		}
 
 		if removedLocalBus {

@@ -174,26 +174,11 @@ func (h *InMemoryHub) GetClientsOfRoom(roomID string) int {
 	return count
 }
 
-func (h *InMemoryHub) BusIfInRoom(clientID string, roomID string) (domain.Bus, bool) {
-	h.busMu.RLock()
-	defer h.busMu.RUnlock()
-	bus, ok := h.Buses[clientID]
-	if !ok || bus.RoomID() != roomID {
-		return nil, false
-	}
-	return bus, true
-}
-
-func (h *InMemoryHub) Bus(clientID string) (domain.Bus, bool) {
+func (h *InMemoryHub) GetBus(clientID string) (domain.Bus, bool) {
 	h.busMu.RLock()
 	defer h.busMu.RUnlock()
 	bus, ok := h.Buses[clientID]
 	return bus, ok
-}
-
-func (h *InMemoryHub) HasBusInRoom(clientID string, roomID string) bool {
-	_, ok := h.BusIfInRoom(clientID, roomID)
-	return ok
 }
 
 func (h *InMemoryHub) RemoveBus(_ context.Context, clientID string) {
@@ -375,7 +360,7 @@ func (h *InMemoryHub) BroadcastToRoom(ctx context.Context, roomID string, messag
 		}
 
 		for _, client := range room.Clients.Values() {
-			bus, ok := h.BusIfInRoom(client.ID, roomID)
+			bus, ok := domain.GetBusOfRoom(h, client.ID, roomID)
 			if !ok {
 				h.logger.Warn(ctx, "bus not found for client %s", client.ID)
 				continue

@@ -168,7 +168,7 @@ func TestRedisHub_AddBus_WithEmptyRoomIDDoesNotSubscribe(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Zero(t, hub.GetClientsOfRoom(""), "an empty roomID must not subscribe or count")
-	assert.False(t, hub.HasBusInRoom("client-1", "room-1"), "an empty roomID must not count as local presence in a real room")
+	assert.False(t, domain.HasBusInRoom(hub, "client-1", "room-1"), "an empty roomID must not count as local presence in a real room")
 }
 
 func newFailingPubSub(t *testing.T, roomID string) *redis.PubSub {
@@ -205,7 +205,7 @@ func TestRedisHub_AddBus_SubscriptionFailureRestoresPreviousBusAndCounts(t *test
 	err := hub.AddBus(ctx, clientID, newBus)
 
 	assert.Error(t, err)
-	got, ok := hub.BusIfInRoom(clientID, oldRoomID)
+	got, ok := domain.GetBusOfRoom(hub, clientID, oldRoomID)
 	assert.True(t, ok, "the previous bus must be restored on the failure path")
 	assert.Equal(t, oldBus, got)
 	assert.Equal(t, 1, hub.GetClientsOfRoom(oldRoomID), "old room count must be restored, not leaked")
@@ -234,7 +234,7 @@ func TestRedisHub_AddBus_SubscriptionFailureOnSameRoomReplacementKeepsCounts(t *
 	err := hub.AddBus(ctx, clientID, newBus)
 
 	assert.Error(t, err)
-	got, ok := hub.BusIfInRoom(clientID, roomID)
+	got, ok := domain.GetBusOfRoom(hub, clientID, roomID)
 	assert.True(t, ok, "the previous bus must be restored on the failure path")
 	assert.Equal(t, oldBus, got)
 	assert.Equal(t, 1, hub.GetClientsOfRoom(roomID), "failed same-room replacement must not change the count")

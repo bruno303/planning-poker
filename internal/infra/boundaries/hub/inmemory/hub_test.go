@@ -161,7 +161,7 @@ func TestAddAndGetBus(t *testing.T) {
 
 	hub.AddBus(ctx, clientID, mockBus)
 
-	got, ok := hub.BusIfInRoom(clientID, roomID)
+	got, ok := domain.GetBusOfRoom(hub, clientID, roomID)
 	if !ok {
 		t.Fatalf("expected to find bus but got not found")
 	}
@@ -169,11 +169,11 @@ func TestAddAndGetBus(t *testing.T) {
 		t.Errorf("expected to get the added bus, got different bus")
 	}
 
-	if _, ok := hub.BusIfInRoom(clientID, "other-room"); ok {
+	if _, ok := domain.GetBusOfRoom(hub, clientID, "other-room"); ok {
 		t.Error("expected a bus registered for another room to not be returned")
 	}
 
-	if _, ok := hub.BusIfInRoom("non-existent-id", roomID); ok {
+	if _, ok := domain.GetBusOfRoom(hub, "non-existent-id", roomID); ok {
 		t.Error("expected \"false\" for non-existent bus, got \"true\"")
 	}
 }

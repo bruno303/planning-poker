@@ -128,8 +128,8 @@ func TestRedisHub_AddBusReplacementKeepsRoomCountsAccurate(t *testing.T) {
 	assert.NoError(t, hub.AddBus(context.Background(), "one", newBus(otherID)))
 	assert.Equal(t, 1, hub.GetClientsOfRoom(roomID))
 	assert.Equal(t, 1, hub.GetClientsOfRoom(otherID))
-	assert.False(t, hub.HasBusInRoom("one", roomID), "a bus moved to other-room must not count as presence in the original room")
-	assert.True(t, hub.HasBusInRoom("one", otherID))
+	assert.False(t, domain.HasBusInRoom(hub, "one", roomID), "a bus moved to other-room must not count as presence in the original room")
+	assert.True(t, domain.HasBusInRoom(hub, "one", otherID))
 	hub.roomSubs.Delete(otherID)
 	hub.RemoveBus(context.Background(), "one")
 	assert.Zero(t, hub.GetClientsOfRoom(otherID))
@@ -266,7 +266,7 @@ func TestRedisHub_AddBus_SubscriptionSetupFails_CleansUpBus(t *testing.T) {
 	err := hub.AddBus(ctx, clientID, mockBus)
 
 	assert.Error(t, err)
-	_, ok := hub.BusIfInRoom(clientID, "room-count")
+	_, ok := domain.GetBusOfRoom(hub, clientID, "room-count")
 	assert.False(t, ok)
 	assert.Zero(t, hub.GetClientsOfRoom(roomID))
 }
@@ -369,7 +369,7 @@ func TestRedisHub_RemoveClient_KeepsBusRegisteredForAnotherRoom(t *testing.T) {
 	err := hub.RemoveClient(context.Background(), "client3", "room-a")
 	assert.NoError(t, err)
 
-	_, ok := hub.BusIfInRoom("client3", "room-b")
+	_, ok := domain.GetBusOfRoom(hub, "client3", "room-b")
 	assert.True(t, ok, "a leave from room-a must not tear down the bus registered for room-b")
 	assert.Equal(t, 1, hub.GetClientsOfRoom("room-b"))
 	assert.Zero(t, hub.GetClientsOfRoom("room-a"))
@@ -399,7 +399,7 @@ func TestRedisHub_RemoveClient_MissingRoomStillCleansUpAndSucceeds(t *testing.T)
 
 	err := hub.RemoveClient(context.Background(), "client3", "room4")
 	assert.NoError(t, err)
-	_, ok := hub.BusIfInRoom("client3", "room4")
+	_, ok := domain.GetBusOfRoom(hub, "client3", "room4")
 	assert.False(t, ok)
 	assert.Zero(t, hub.GetClientsOfRoom("room4"))
 }
@@ -440,7 +440,7 @@ func TestRedisHub_RemoveClient_ClientDeleteFailsAndRoomSavesSuccessfully_Returns
 
 	err := hub.RemoveClient(context.Background(), "client3", "room4")
 	assert.NoError(t, err)
-	_, ok := hub.BusIfInRoom("client3", "room4")
+	_, ok := domain.GetBusOfRoom(hub, "client3", "room4")
 	assert.False(t, ok)
 	assert.Zero(t, hub.GetClientsOfRoom("room4"))
 }
@@ -484,7 +484,7 @@ func TestRedisHub_RemoveClient_SaveRoomFails_PropagatesError(t *testing.T) {
 	err := hub.RemoveClient(context.Background(), "client3", "room4")
 	assert.ErrorIs(t, err, saveErr)
 	assert.EqualError(t, err, "failed to save room to Redis: save failed")
-	_, ok := hub.BusIfInRoom("client3", "room4")
+	_, ok := domain.GetBusOfRoom(hub, "client3", "room4")
 	assert.False(t, ok)
 	assert.Zero(t, hub.GetClientsOfRoom("room4"))
 }
@@ -515,7 +515,7 @@ func TestRedisHub_RemoveClient_LoadFailureStillCleansUpAndPropagatesError(t *tes
 	err := hub.RemoveClient(context.Background(), "client3", "room4")
 	assert.ErrorIs(t, err, loadErr)
 	assert.EqualError(t, err, "load room room4: redis unavailable")
-	_, ok := hub.BusIfInRoom("client3", "room4")
+	_, ok := domain.GetBusOfRoom(hub, "client3", "room4")
 	assert.False(t, ok)
 	assert.Zero(t, hub.GetClientsOfRoom("room4"))
 }
@@ -605,7 +605,7 @@ func TestRedisHub_ConcurrentRemoveClientAndLocalPresenceReads(t *testing.T) {
 		<-start
 		for range 200 {
 			hub.GetClientsOfRoom("room")
-			hub.BusIfInRoom("client", "room")
+			domain.GetBusOfRoom(hub, "client", "room")
 		}
 	})
 	close(start)

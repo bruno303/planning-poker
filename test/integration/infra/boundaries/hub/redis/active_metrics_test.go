@@ -18,7 +18,6 @@ import (
 	infralock "planning-poker/internal/infra/lock"
 )
 
-// recordingMeter captures the delta counters the use cases emit.
 type recordingMeter struct {
 	mu    sync.Mutex
 	calls map[string]float64
@@ -48,10 +47,6 @@ func (m *recordingMeter) value(name string) float64 {
 	return m.calls[name]
 }
 
-// TestIntegration_ActiveMetricsFollowLocalPresenceOnRedisHub runs the real join
-// and leave use cases against the production RedisHub to confirm the
-// process-local active counters track the hub's local presence, including a
-// client that switches rooms while the previous socket is still open.
 func TestIntegration_ActiveMetricsFollowLocalPresenceOnRedisHub(t *testing.T) {
 	client := setupRedisClient(t)
 	defer client.Close()
@@ -95,7 +90,6 @@ func TestIntegration_ActiveMetricsFollowLocalPresenceOnRedisHub(t *testing.T) {
 	assert.Zero(t, recorder.value(metric.PlanningPokerActiveRoomsMetric))
 }
 
-// stubBus is a no-op domain.Bus bound to a room.
 type stubBus struct {
 	roomID string
 }
@@ -108,8 +102,6 @@ func (b *stubBus) Send(context.Context, any) error { return nil }
 
 var _ domain.Bus = (*stubBus)(nil)
 
-// failingPresenceClient injects failures at the Redis boundary while retaining
-// the production hub's subscription and local bus handling.
 type failingPresenceClient struct {
 	redishub.RedisClient
 	failSubscription string
@@ -162,7 +154,7 @@ func TestIntegration_FailedPresenceTransitionsKeepMetricsBalanced(t *testing.T) 
 				boundary.failSubscription = "planning-poker:updates:" + roomB.ID
 				_, err = join.Execute(ctx, usecase.JoinRoomCommand{RoomID: roomB.ID, SenderID: "failure-client", Bus: &stubBus{roomID: roomB.ID}})
 				require.Error(t, err)
-				require.True(t, hub.HasBusInRoom("failure-client", roomA.ID))
+				require.True(t, domain.HasBusInRoom(hub, "failure-client", roomA.ID))
 				assert.Equal(t, float64(1), recorder.value(metric.PlanningPokerActiveUsersMetric))
 				assert.Equal(t, float64(1), recorder.value(metric.PlanningPokerActiveRoomsMetric))
 			} else {

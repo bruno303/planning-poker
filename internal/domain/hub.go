@@ -20,16 +20,7 @@ type (
 		SaveRoomIfVersion(ctx context.Context, room *entity.Room, expectedVersion *uint64) error
 		BroadcastToRoom(ctx context.Context, roomID string, message any) error
 
-		// Bus returns the bus this instance currently holds for clientID, if any.
-		// A client holds at most one bus per instance.
-		Bus(clientID string) (Bus, bool)
-		// HasBusInRoom reports whether clientID currently has an active bus for
-		// roomID on this instance.
-		HasBusInRoom(clientID string, roomID string) bool
-		// BusIfInRoom returns the bus for clientID on this instance, but only when
-		// that bus belongs to roomID. A client can only hold one bus per instance,
-		// so a bus registered for another room must not be returned here.
-		BusIfInRoom(clientID string, roomID string) (Bus, bool)
+		GetBus(clientID string) (Bus, bool)
 		// GetClientsOfRoom returns the number of clients with an active bus in roomID on
 		// this instance (local only; not a cluster-wide count).
 		GetClientsOfRoom(roomID string) int
@@ -40,3 +31,18 @@ type (
 		GetRooms() []*entity.Room
 	}
 )
+
+// GetBusOfRoom excludes a client's bus when it belongs to another room.
+func GetBusOfRoom(hub Hub, clientID, roomID string) (Bus, bool) {
+	bus, ok := hub.GetBus(clientID)
+	if !ok || bus.RoomID() != roomID {
+		return nil, false
+	}
+	return bus, true
+}
+
+// HasBusInRoom reports local presence using the room-aware bus lookup.
+func HasBusInRoom(hub Hub, clientID, roomID string) bool {
+	_, ok := GetBusOfRoom(hub, clientID, roomID)
+	return ok
+}

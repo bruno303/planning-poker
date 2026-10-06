@@ -15,9 +15,6 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-// localPresenceBus is a minimal domain.Bus used to drive the real hubs in the
-// tests below. The hub keeps one bus per client, so the room the bus was built
-// for is what defines local presence.
 type localPresenceBus struct {
 	roomID  string
 	sendErr error
@@ -33,10 +30,6 @@ func (b *localPresenceBus) String() string {
 	return fmt.Sprintf("localPresenceBus(%s)", b.roomID)
 }
 
-// localPresenceHarness wires the real in-memory hub and lock manager to the real
-// join/leave use cases and records every emitted metric. It lets tests assert
-// the invariant the mocked hub cannot express: the process-local active metrics
-// must match real local presence after any sequence of joins and leaves.
 type localPresenceHarness struct {
 	hub      *inmemory.InMemoryHub
 	join     JoinRoomUseCase
@@ -95,167 +88,52 @@ func (h *localPresenceHarness) activeRooms() float64 {
 	return sumMetricCalls(h.recorder.getCalls(), metric.PlanningPokerActiveRoomsMetric)
 }
 
-// TestActiveMetricsMatchLocalPresence is the regression test for negative active
-// metrics: a client that switches rooms on the same instance while the previous
-// socket is still open must not drift the counters.
 func TestActiveMetricsMatchLocalPresence(t *testing.T) {
 	t.Parallel()
-
-	tests := []struct {
-		name     string
-		scenario func(t *testing.T, h *localPresenceHarness)
-		// wantUsers/wantRooms are the net values the process-local counters must
-		// hold once the scenario finishes.
-		wantUsers float64
-		wantRooms float64
-	}{
-		{
-			name: "first client joining an existing room counts one user and one room",
-			scenario: func(t *testing.T, h *localPresenceHarness) {
-				h.createRoom(t, "room-a")
-				h.joinRoom(t, "room-a", "client-1")
-			},
-			wantUsers: 1,
-			wantRooms: 1,
-		},
-		{
-			name: "second local client in the same room adds a user but not a room",
-			scenario: func(t *testing.T, h *localPresenceHarness) {
-				h.createRoom(t, "room-a")
-				h.joinRoom(t, "room-a", "client-1")
-				h.joinRoom(t, "room-a", "client-2")
-			},
-			wantUsers: 2,
-			wantRooms: 1,
-		},
-		{
-			name: "two local rooms count two rooms",
-			scenario: func(t *testing.T, h *localPresenceHarness) {
-				h.createRoom(t, "room-a")
-				h.createRoom(t, "room-b")
-				h.joinRoom(t, "room-a", "client-1")
-				h.joinRoom(t, "room-b", "client-2")
-			},
-			wantUsers: 2,
-			wantRooms: 2,
-		},
-		{
-			name: "same room reconnect after the old socket closed stays balanced",
-			scenario: func(t *testing.T, h *localPresenceHarness) {
-				h.createRoom(t, "room-a")
-				h.joinRoom(t, "room-a", "client-1")
-				h.leaveRoom(t, "room-a", "client-1")
-				h.joinRoom(t, "room-a", "client-1")
-			},
-			wantUsers: 1,
-			wantRooms: 1,
-		},
-		{
-			name: "cross-room switch where the old leave arrives while the client is in the new room",
-			scenario: func(t *testing.T, h *localPresenceHarness) {
-				h.createRoom(t, "room-a")
-				h.joinRoom(t, "room-a", "client-1")
-				// The client opens room-b while room-a's socket is still open. The
-				// hub now holds the bus for room-b; room-a is no longer locally
-				// present on this instance.
-				h.joinRoom(t, "room-b", "client-1")
-				// The old room-a socket close is processed after the room-b join.
-				h.leaveRoom(t, "room-a", "client-1")
-			},
-			wantUsers: 1,
-			wantRooms: 1,
-		},
-		{
-			name: "late leave after a switch preserves the other client's active room",
-			scenario: func(t *testing.T, h *localPresenceHarness) {
-				h.createRoom(t, "room-a")
-				h.joinRoom(t, "room-a", "client-1")
-				h.joinRoom(t, "room-a", "client-2")
-				h.joinRoom(t, "room-b", "client-1")
-				h.leaveRoom(t, "room-a", "client-1")
-			},
-			wantUsers: 2,
-			wantRooms: 2,
-		},
-		{
-			name: "cross-room switch followed by disconnect settles at zero",
-			scenario: func(t *testing.T, h *localPresenceHarness) {
-				h.createRoom(t, "room-a")
-				h.joinRoom(t, "room-a", "client-1")
-				h.joinRoom(t, "room-b", "client-1")
-				// The late room-a leave is a no-op for the counters; the client is
-				// still connected here through room-b.
-				h.leaveRoom(t, "room-a", "client-1")
-				h.leaveRoom(t, "room-b", "client-1")
-			},
-			wantUsers: 0,
-			wantRooms: 0,
-		},
+	type step struct {
+		room, client string
+		leave        bool
 	}
-
+	tests := []struct {
+		name  string
+		steps []step
+	}{
+		{"first join", []step{{"a", "1", false}}},
+		{"shared room", []step{{"a", "1", false}, {"a", "2", false}}},
+		{"two rooms", []step{{"a", "1", false}, {"b", "2", false}}},
+		{"reconnect", []step{{"a", "1", false}, {"a", "1", false}}},
+		{"reconnect after disconnect", []step{{"a", "1", false}, {"a", "1", true}, {"a", "1", false}}},
+		{"switch then late leave", []step{{"a", "1", false}, {"b", "1", false}, {"a", "1", true}}},
+		{"switch with another client remaining", []step{{"a", "1", false}, {"a", "2", false}, {"b", "1", false}, {"a", "1", true}}},
+		{"switch to occupied room", []step{{"a", "1", false}, {"b", "2", false}, {"b", "1", false}, {"a", "1", true}}},
+		{"switch then disconnect", []step{{"a", "1", false}, {"b", "1", false}, {"a", "1", true}, {"b", "1", true}}},
+	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newLocalPresenceHarness(t)
-			tc.scenario(t, h)
-
-			if got := h.activeUsers(); got != tc.wantUsers {
-				t.Errorf("active users = %v, want %v", got, tc.wantUsers)
-			}
-			if got := h.activeRooms(); got != tc.wantRooms {
-				t.Errorf("active rooms = %v, want %v", got, tc.wantRooms)
+			h.createRoom(t, "a")
+			for i, step := range tc.steps {
+				if step.leave {
+					h.leaveRoom(t, step.room, step.client)
+				} else {
+					h.joinRoom(t, step.room, step.client)
+				}
+				users, rooms := 0, 0
+				for _, room := range []string{"a", "b"} {
+					count := h.hub.GetClientsOfRoom(room)
+					users += count
+					if count > 0 {
+						rooms++
+					}
+				}
+				if h.activeUsers() != float64(users) || h.activeRooms() != float64(rooms) {
+					t.Fatalf("step %d: active users/rooms = %v/%v, local presence = %d/%d", i, h.activeUsers(), h.activeRooms(), users, rooms)
+				}
+				if !step.leave && !domain.HasBusInRoom(h.hub, step.client, step.room) {
+					t.Fatal("joined bus belongs to another room")
+				}
 			}
 		})
-	}
-}
-
-// TestCrossRoomSwitchClearsLocalPresence pins the hub-level invariant the metric
-// assertions above depend on: once the client's bus belongs to the new room, the
-// previous room no longer reports the client as locally present.
-func TestCrossRoomSwitchClearsLocalPresence(t *testing.T) {
-	t.Parallel()
-
-	h := newLocalPresenceHarness(t)
-	h.createRoom(t, "room-a")
-	h.createRoom(t, "room-b")
-
-	h.joinRoom(t, "room-a", "client-1")
-	if !h.hub.HasBusInRoom("client-1", "room-a") {
-		t.Fatal("expected the client to be locally present in room-a after joining")
-	}
-
-	h.joinRoom(t, "room-b", "client-1")
-	if h.hub.HasBusInRoom("client-1", "room-a") {
-		t.Error("expected room-a to stop reporting local presence after the client moved to room-b")
-	}
-	if !h.hub.HasBusInRoom("client-1", "room-b") {
-		t.Error("expected the client to be locally present in room-b after joining")
-	}
-	if got := h.hub.GetClientsOfRoom("room-a"); got != 0 {
-		t.Errorf("room-a local clients = %d, want 0", got)
-	}
-	if got := h.hub.GetClientsOfRoom("room-b"); got != 1 {
-		t.Errorf("room-b local clients = %d, want 1", got)
-	}
-}
-
-// TestLeaveRoomIgnoresBusFromAnotherRoom covers the leave path directly: a leave
-// for a room the client no longer holds a bus for must not emit metrics.
-func TestLeaveRoomIgnoresBusFromAnotherRoom(t *testing.T) {
-	t.Parallel()
-
-	h := newLocalPresenceHarness(t)
-	h.createRoom(t, "room-a")
-	h.createRoom(t, "room-b")
-	h.joinRoom(t, "room-a", "client-1")
-	h.joinRoom(t, "room-b", "client-1")
-
-	h.leaveRoom(t, "room-a", "client-1")
-
-	if got := h.activeUsers(); got != 1 {
-		t.Errorf("active users = %v, want 1 while the client is still connected in room-b", got)
-	}
-	if got := h.activeRooms(); got != 1 {
-		t.Errorf("active rooms = %v, want 1 while the client is still connected in room-b", got)
 	}
 }
 
@@ -319,7 +197,7 @@ func TestFailedReplacementJoinReconcilesPresence(t *testing.T) {
 			want := float64(0)
 			if destination != "room-a" {
 				want = 1
-				if !h.hub.HasBusInRoom("client", "room-a") {
+				if !domain.HasBusInRoom(h.hub, "client", "room-a") {
 					t.Fatal("original room's bus was not restored")
 				}
 			}

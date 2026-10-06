@@ -72,7 +72,7 @@ func TestJoinRoomUseCase_Execute_Success(t *testing.T) {
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().Bus("sender123").Return(nil, false).AnyTimes()
+	mockHub.EXPECT().GetBus("sender123").Return(nil, false).AnyTimes()
 	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(0)
 	mockHub.EXPECT().AddClient(gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
@@ -131,7 +131,7 @@ func TestJoinRoomUseCase_Execute_AutoCreatesMissingRoom(t *testing.T) {
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, domain.ErrRoomNotFound)
 	mockHub.EXPECT().NewRoomWithID(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().Bus("sender123").Return(nil, false).AnyTimes()
+	mockHub.EXPECT().GetBus("sender123").Return(nil, false).AnyTimes()
 	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(0)
 	mockHub.EXPECT().AddClient(gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
@@ -298,7 +298,7 @@ func TestJoinRoomUseCase_Execute_SendError(t *testing.T) {
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().Bus("sender123").Return(nil, false).AnyTimes()
+	mockHub.EXPECT().GetBus("sender123").Return(nil, false).AnyTimes()
 	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(0)
 	mockHub.EXPECT().AddClient(gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
@@ -352,7 +352,7 @@ func TestJoinRoomUseCase_Execute_SendErrorOnAutoCreatedRoom_RollsBackJoinInitial
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, domain.ErrRoomNotFound)
 	mockHub.EXPECT().NewRoomWithID(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().Bus("sender123").Return(nil, false).AnyTimes()
+	mockHub.EXPECT().GetBus("sender123").Return(nil, false).AnyTimes()
 	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(0)
 	mockHub.EXPECT().AddClient(gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
@@ -410,7 +410,7 @@ func TestJoinRoomUseCase_Execute_SendErrorOnAutoCreatedRoom_DoesNotReloadRoomOrE
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, domain.ErrRoomNotFound)
 	mockHub.EXPECT().NewRoomWithID(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().Bus("sender123").Return(nil, false).AnyTimes()
+	mockHub.EXPECT().GetBus("sender123").Return(nil, false).AnyTimes()
 	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(0)
 	mockHub.EXPECT().AddClient(gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
@@ -471,7 +471,7 @@ func TestJoinRoomUseCase_Execute_SendErrorWhenRollbackCleanupFails_DoesNotDecrem
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, domain.ErrRoomNotFound)
 	mockHub.EXPECT().NewRoomWithID(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().Bus("sender123").Return(nil, false).AnyTimes()
+	mockHub.EXPECT().GetBus("sender123").Return(nil, false).AnyTimes()
 	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(0)
 	mockHub.EXPECT().AddClient(gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
@@ -530,7 +530,7 @@ func TestJoinRoomUseCase_Execute_BroadcastErrorAfterSend_RollsBackWithoutEmittin
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().Bus("sender123").Return(nil, false).AnyTimes()
+	mockHub.EXPECT().GetBus("sender123").Return(nil, false).AnyTimes()
 	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(0)
 	mockHub.EXPECT().AddClient(gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
@@ -597,7 +597,7 @@ func TestJoinRoomUseCase_Execute_BroadcastErrorAfterSendOnAutoCreatedRoom_DoesNo
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, domain.ErrRoomNotFound)
 	mockHub.EXPECT().NewRoomWithID(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().Bus("sender123").Return(nil, false).AnyTimes()
+	mockHub.EXPECT().GetBus("sender123").Return(nil, false).AnyTimes()
 	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(0)
 	mockHub.EXPECT().AddClient(gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
@@ -662,7 +662,7 @@ func TestJoinRoomUseCase_Execute_SendFailsFromCanceledContext_UsesActiveRollback
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().Bus("sender123").Return(nil, false).AnyTimes()
+	mockHub.EXPECT().GetBus("sender123").Return(nil, false).AnyTimes()
 	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(0)
 	mockHub.EXPECT().AddClient(gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
@@ -723,7 +723,7 @@ func TestJoinRoomUseCase_Execute_BroadcastFailsFromCanceledContext_UsesActiveRol
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().Bus("sender123").Return(nil, false).AnyTimes()
+	mockHub.EXPECT().GetBus("sender123").Return(nil, false).AnyTimes()
 	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(0)
 	mockHub.EXPECT().AddClient(gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
@@ -793,7 +793,7 @@ func TestJoinRoomUseCase_Execute_ReconnectClientExists(t *testing.T) {
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().Bus(clientID).Return(mockOldBus, true)
+	mockHub.EXPECT().GetBus(clientID).Return(mockOldBus, true)
 	mockOldBus.EXPECT().RoomID().Return(roomID).AnyTimes()
 	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(1).AnyTimes()
 	mockOldBus.EXPECT().Detach()
@@ -859,7 +859,7 @@ func TestJoinRoomUseCase_Execute_ReconnectNoOldBus(t *testing.T) {
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().Bus(clientID).Return(nil, false).AnyTimes()
+	mockHub.EXPECT().GetBus(clientID).Return(nil, false).AnyTimes()
 	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(0)
 	mockHub.EXPECT().AddBus(gomock.Any(), clientID, mockNewBus)
 
@@ -921,7 +921,7 @@ func TestJoinRoomUseCase_Execute_ReconnectSendErrorRollback(t *testing.T) {
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().Bus(clientID).Return(nil, false).AnyTimes()
+	mockHub.EXPECT().GetBus(clientID).Return(nil, false).AnyTimes()
 	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(0)
 	mockHub.EXPECT().AddBus(gomock.Any(), clientID, mockNewBus)
 
@@ -979,7 +979,7 @@ func TestJoinRoomUseCase_Execute_ReconnectBroadcastErrorRollback(t *testing.T) {
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().Bus(clientID).Return(nil, false).AnyTimes()
+	mockHub.EXPECT().GetBus(clientID).Return(nil, false).AnyTimes()
 	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(0)
 	mockHub.EXPECT().AddBus(gomock.Any(), clientID, mockNewBus)
 
@@ -1037,7 +1037,7 @@ func TestJoinRoomUseCase_Execute_AddBusErrorRollsBackNewClient(t *testing.T) {
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().Bus(clientID).Return(nil, false)
+	mockHub.EXPECT().GetBus(clientID).Return(nil, false)
 	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(0)
 	mockHub.EXPECT().AddClient(gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), clientID, mockBus).Return(addBusErr)
