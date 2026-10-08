@@ -143,17 +143,22 @@ func (c *WebsocketBus) Detach() {
 }
 
 func (c *WebsocketBus) Close() error {
-	var err error
+	// The connection is closed inside the once, but the cleanup leave runs
+	// outside it. A reconnect that replaces this socket must be able to return
+	// from Close while an already-started leave waits on the presence guard,
+	// otherwise the two closes deadlock.
+	var leave bool
+	var connErr error
 	c.closeOnce.Do(func() {
 		c.closed.Store(true)
 		close(c.done)
-		if !c.skipCleanup.Load() {
-			err = c.leaveRoom(context.Background())
-		}
-		err2 := c.conn.Close()
-		err = errors.Join(err, err2)
+		connErr = c.conn.Close()
+		leave = !c.skipCleanup.Load()
 	})
-	return err
+	if !leave {
+		return connErr
+	}
+	return errors.Join(c.leaveRoom(context.Background()), connErr)
 }
 
 func (c *WebsocketBus) Send(ctx context.Context, message any) error {
@@ -452,5 +457,6 @@ func (c *WebsocketBus) leaveRoom(ctx context.Context) error {
 	return c.usecases.LeaveRoom.Execute(ctx, usecase.LeaveRoomCommand{
 		RoomID:   c.roomID,
 		SenderID: c.ID,
+		Bus:      c,
 	})
 }

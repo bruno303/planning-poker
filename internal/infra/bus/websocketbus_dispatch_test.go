@@ -321,7 +321,9 @@ func TestWebsocketBus_Listen_DispatchesIncomingMessage(t *testing.T) {
 		RoomID: "room-1", SenderID: "client-1", Username: "Alice",
 	}).Return(nil)
 	leaveRoom := usecase.NewMockUseCase[usecase.LeaveRoomCommand](ctrl)
-	leaveRoom.EXPECT().Execute(gomock.Any(), usecase.LeaveRoomCommand{RoomID: "room-1", SenderID: "client-1"}).Return(nil)
+	leaveRoom.EXPECT().Execute(gomock.Any(), gomock.Cond(func(cmd usecase.LeaveRoomCommand) bool {
+		return cmd.RoomID == "room-1" && cmd.SenderID == "client-1" && cmd.Bus != nil
+	})).Return(nil)
 
 	bus := NewWebsocketBus(
 		"client-1",

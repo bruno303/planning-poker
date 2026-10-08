@@ -88,10 +88,9 @@ func TestWebsocketBus_Close_WithoutDetach_CallsLeaveRoom(t *testing.T) {
 
 	mockLeaveRoom := usecase.NewMockUseCase[usecase.LeaveRoomCommand](ctrl)
 	mockLeaveRoom.EXPECT().
-		Execute(gomock.Any(), usecase.LeaveRoomCommand{
-			RoomID:   "test-room",
-			SenderID: "test-client",
-		}).
+		Execute(gomock.Any(), gomock.Cond(func(cmd usecase.LeaveRoomCommand) bool {
+			return cmd.RoomID == "test-room" && cmd.SenderID == "test-client" && cmd.Bus != nil
+		})).
 		Return(nil)
 
 	usecases := usecase.UseCasesFacade{

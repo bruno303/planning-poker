@@ -15,6 +15,9 @@ type (
 	LeaveRoomCommand struct {
 		RoomID   string
 		SenderID string
+		// Bus identifies the socket that requested the leave. It is set by a
+		// websocket bus so a superseded socket cannot remove the replacement.
+		Bus domain.Bus
 	}
 	leaveRoomUseCase struct {
 		hub         domain.Hub
@@ -44,8 +47,14 @@ func (uc *leaveRoomUseCase) Execute(ctx context.Context, cmd LeaveRoomCommand) e
 	defer unlockPresence()
 
 	return uc.lockManager.ExecuteWithLock(ctx, cmd.RoomID, func(ctx context.Context) error {
+		currentBus, hasBus := uc.hub.GetBus(cmd.SenderID)
+		// A reconnect replaces the socket with a newer one in the same room; the
+		// superseded socket must not remove or count the replacement.
+		if cmd.Bus != nil && hasBus && currentBus != cmd.Bus && currentBus.RoomID() == cmd.RoomID {
+			return nil
+		}
 		// A late leave from an old room must not count the replacement bus.
-		hadBusInRoom := domain.HasBusInRoom(uc.hub, cmd.SenderID, cmd.RoomID)
+		hadBusInRoom := hasBus && currentBus.RoomID() == cmd.RoomID
 		localClientsBefore := uc.hub.GetClientsOfRoom(cmd.RoomID)
 
 		removeErr := uc.hub.RemoveClient(ctx, cmd.SenderID, cmd.RoomID)
