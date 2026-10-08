@@ -21,7 +21,7 @@ func TestNewLeaveRoomUseCase(t *testing.T) {
 	mockLockManager := lock.NewMockLockManager(ctrl)
 	mockMetric := metric.NewPlanningPokerMetric()
 
-	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, mockMetric)
+	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, mockMetric, NewPresenceGuard())
 
 	if uc.hub != mockHub {
 		t.Error("hub not set correctly")
@@ -59,7 +59,7 @@ func TestLeaveRoomUseCase_Execute_LastLocalClient_RoomExists_DecrementsUsersAndR
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(nil)
 
-	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, testMetric)
+	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, testMetric, NewPresenceGuard())
 	cmd := LeaveRoomCommand{
 		RoomID:   roomID,
 		SenderID: senderID,
@@ -106,7 +106,7 @@ func TestLeaveRoomUseCase_Execute_NonLastLocalClient_DecrementsOnlyActiveUsers(t
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(nil)
 
-	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, testMetric)
+	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, testMetric, NewPresenceGuard())
 	cmd := LeaveRoomCommand{
 		RoomID:   roomID,
 		SenderID: senderID,
@@ -152,7 +152,7 @@ func TestLeaveRoomUseCase_Execute_NoLocalBus_DuplicateLeave_EmitsNoMetrics(t *te
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(nil)
 
-	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, testMetric)
+	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, testMetric, NewPresenceGuard())
 	cmd := LeaveRoomCommand{
 		RoomID:   roomID,
 		SenderID: senderID,
@@ -192,7 +192,7 @@ func TestLeaveRoomUseCase_Execute_WhenRoomIsMissingAfterRemove_DecrementsRoomMet
 	mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(nil)
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, domain.ErrRoomNotFound)
 
-	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, testMetric)
+	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, testMetric, NewPresenceGuard())
 	cmd := LeaveRoomCommand{
 		RoomID:   roomID,
 		SenderID: senderID,
@@ -234,7 +234,7 @@ func TestLeaveRoomUseCase_Execute_RemoveClientError(t *testing.T) {
 	mockHub.EXPECT().GetClientsOfRoom(roomID).Return(0)
 	mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(expectedError)
 
-	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, mockMetric)
+	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, mockMetric, NewPresenceGuard())
 	cmd := LeaveRoomCommand{
 		RoomID:   roomID,
 		SenderID: senderID,
@@ -280,7 +280,7 @@ func TestLeaveRoomUseCase_Execute_BroadcastError(t *testing.T) {
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(expectedError)
 
-	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, mockMetric)
+	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, mockMetric, NewPresenceGuard())
 	cmd := LeaveRoomCommand{
 		RoomID:   roomID,
 		SenderID: senderID,
@@ -320,7 +320,7 @@ func TestLeaveRoomUseCase_Execute_LoadRoomErrorAfterRemove_ReturnsErrorWithoutDe
 	mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(nil)
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, expectedError)
 
-	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, testMetric)
+	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, testMetric, NewPresenceGuard())
 	cmd := LeaveRoomCommand{
 		RoomID:   roomID,
 		SenderID: senderID,
@@ -358,7 +358,7 @@ func TestLeaveRoomUseCase_PersistenceFailureAccountsForRemovedPresenceOnce(t *te
 				hub.EXPECT().RemoveClient(ctx, "client", "room").Return(failure),
 				hub.EXPECT().GetBus("client").Return(&localPresenceBus{roomID: "room"}, !removed),
 			)
-			uc := NewLeaveRoomUseCase(hub, manager, pokerMetric)
+			uc := NewLeaveRoomUseCase(hub, manager, pokerMetric, NewPresenceGuard())
 			if err := uc.Execute(ctx, LeaveRoomCommand{RoomID: "room", SenderID: "client"}); !errors.Is(err, failure) {
 				t.Fatalf("got %v, want persistence error", err)
 			}

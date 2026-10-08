@@ -39,7 +39,7 @@ func TestNewJoinRoomUseCase(t *testing.T) {
 	mockLockManager := lock.NewMockLockManager(ctrl)
 	mockMetric := metric.NewPlanningPokerMetric()
 
-	uc := NewJoinRoomUseCase(mockHub, mockLockManager, mockMetric)
+	uc := NewJoinRoomUseCase(mockHub, mockLockManager, mockMetric, NewPresenceGuard())
 
 	if uc.hub != mockHub {
 		t.Error("hub not set correctly")
@@ -80,7 +80,7 @@ func TestJoinRoomUseCase_Execute_Success(t *testing.T) {
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(nil)
 
-	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric)
+	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric, NewPresenceGuard())
 	cmd := JoinRoomCommand{
 		RoomID:   roomID,
 		SenderID: "sender123",
@@ -138,7 +138,7 @@ func TestJoinRoomUseCase_Execute_AutoCreatesMissingRoom(t *testing.T) {
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(nil)
 
-	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric)
+	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric, NewPresenceGuard())
 	cmd := JoinRoomCommand{
 		RoomID:   roomID,
 		SenderID: "sender123",
@@ -195,7 +195,7 @@ func TestJoinRoomUseCase_Execute_LoadRoomError(t *testing.T) {
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, expectedError)
 
-	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric)
+	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric, NewPresenceGuard())
 	cmd := JoinRoomCommand{
 		RoomID:   roomID,
 		SenderID: "sender123",
@@ -245,7 +245,7 @@ func TestJoinRoomUseCase_Execute_AutoCreateRoomError(t *testing.T) {
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, domain.ErrRoomNotFound)
 	mockHub.EXPECT().NewRoomWithID(ctx, roomID).Return(nil, expectedError)
 
-	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric)
+	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric, NewPresenceGuard())
 	cmd := JoinRoomCommand{
 		RoomID:   roomID,
 		SenderID: "sender123",
@@ -305,7 +305,7 @@ func TestJoinRoomUseCase_Execute_SendError(t *testing.T) {
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(expectedError)
 	mockHub.EXPECT().RemoveClient(gomock.Any(), gomock.Any(), roomID).Return(nil)
 
-	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric)
+	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric, NewPresenceGuard())
 	cmd := JoinRoomCommand{
 		RoomID:   roomID,
 		SenderID: "sender123",
@@ -359,7 +359,7 @@ func TestJoinRoomUseCase_Execute_SendErrorOnAutoCreatedRoom_RollsBackJoinInitial
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(expectedError)
 	mockHub.EXPECT().RemoveClient(gomock.Any(), gomock.Any(), roomID).Return(nil)
 
-	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric)
+	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric, NewPresenceGuard())
 	cmd := JoinRoomCommand{
 		RoomID:   roomID,
 		SenderID: "sender123",
@@ -417,7 +417,7 @@ func TestJoinRoomUseCase_Execute_SendErrorOnAutoCreatedRoom_DoesNotReloadRoomOrE
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(expectedError)
 	mockHub.EXPECT().RemoveClient(gomock.Any(), gomock.Any(), roomID).Return(nil)
 
-	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric)
+	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric, NewPresenceGuard())
 	cmd := JoinRoomCommand{
 		RoomID:   roomID,
 		SenderID: "sender123",
@@ -478,7 +478,7 @@ func TestJoinRoomUseCase_Execute_SendErrorWhenRollbackCleanupFails_DoesNotDecrem
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(sendErr)
 	mockHub.EXPECT().RemoveClient(gomock.Any(), gomock.Any(), roomID).Return(removeErr)
 
-	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric)
+	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric, NewPresenceGuard())
 	cmd := JoinRoomCommand{
 		RoomID:   roomID,
 		SenderID: "sender123",
@@ -538,7 +538,7 @@ func TestJoinRoomUseCase_Execute_BroadcastErrorAfterSend_RollsBackWithoutEmittin
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(broadcastErr)
 	mockHub.EXPECT().RemoveClient(gomock.Any(), gomock.Any(), roomID).Return(nil)
 
-	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric)
+	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric, NewPresenceGuard())
 	cmd := JoinRoomCommand{
 		RoomID:   roomID,
 		SenderID: "sender123",
@@ -605,7 +605,7 @@ func TestJoinRoomUseCase_Execute_BroadcastErrorAfterSendOnAutoCreatedRoom_DoesNo
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(broadcastErr)
 	mockHub.EXPECT().RemoveClient(gomock.Any(), gomock.Any(), roomID).Return(nil)
 
-	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric)
+	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric, NewPresenceGuard())
 	cmd := JoinRoomCommand{
 		RoomID:   roomID,
 		SenderID: "sender123",
@@ -675,7 +675,7 @@ func TestJoinRoomUseCase_Execute_SendFailsFromCanceledContext_UsesActiveRollback
 		return nil
 	})
 
-	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric)
+	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric, NewPresenceGuard())
 	cmd := JoinRoomCommand{
 		RoomID:   roomID,
 		SenderID: "sender123",
@@ -742,7 +742,7 @@ func TestJoinRoomUseCase_Execute_BroadcastFailsFromCanceledContext_UsesActiveRol
 		return nil
 	})
 
-	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric)
+	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric, NewPresenceGuard())
 	cmd := JoinRoomCommand{
 		RoomID:   roomID,
 		SenderID: "sender123",
@@ -803,7 +803,7 @@ func TestJoinRoomUseCase_Execute_ReconnectClientExists(t *testing.T) {
 	mockNewBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(nil)
 
-	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric)
+	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric, NewPresenceGuard())
 	cmd := JoinRoomCommand{
 		RoomID:   roomID,
 		SenderID: clientID,
@@ -866,7 +866,7 @@ func TestJoinRoomUseCase_Execute_ReconnectNoOldBus(t *testing.T) {
 	mockNewBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(nil)
 
-	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric)
+	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric, NewPresenceGuard())
 	cmd := JoinRoomCommand{
 		RoomID:   roomID,
 		SenderID: clientID,
@@ -928,7 +928,7 @@ func TestJoinRoomUseCase_Execute_ReconnectSendErrorRollback(t *testing.T) {
 	mockNewBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(sendErr)
 	mockHub.EXPECT().RemoveBus(gomock.Any(), clientID)
 
-	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric)
+	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric, NewPresenceGuard())
 	cmd := JoinRoomCommand{
 		RoomID:   roomID,
 		SenderID: clientID,
@@ -987,7 +987,7 @@ func TestJoinRoomUseCase_Execute_ReconnectBroadcastErrorRollback(t *testing.T) {
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(broadcastErr)
 	mockHub.EXPECT().RemoveBus(gomock.Any(), clientID)
 
-	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric)
+	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric, NewPresenceGuard())
 	cmd := JoinRoomCommand{
 		RoomID:   roomID,
 		SenderID: clientID,
@@ -1043,7 +1043,7 @@ func TestJoinRoomUseCase_Execute_AddBusErrorRollsBackNewClient(t *testing.T) {
 	mockHub.EXPECT().AddBus(gomock.Any(), clientID, mockBus).Return(addBusErr)
 	mockHub.EXPECT().RemoveClient(gomock.Any(), clientID, roomID).Return(nil)
 
-	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric)
+	uc := NewJoinRoomUseCase(mockHub, mockLockManager, testMetric, NewPresenceGuard())
 	cmd := JoinRoomCommand{
 		RoomID:   roomID,
 		SenderID: clientID,
@@ -1086,7 +1086,7 @@ func TestJoinRoomUseCase_Execute_NilDependencies(t *testing.T) {
 				}
 			}()
 
-			_ = NewJoinRoomUseCase(tc.hub, tc.lock, mockMetric)
+			_ = NewJoinRoomUseCase(tc.hub, tc.lock, mockMetric, NewPresenceGuard())
 		})
 	}
 }

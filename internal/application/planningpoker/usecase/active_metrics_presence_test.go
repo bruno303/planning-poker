@@ -45,11 +45,12 @@ func newLocalPresenceHarness(t *testing.T) *localPresenceHarness {
 	hub := inmemory.NewHub()
 	lockManager := infralock.NewInMemoryLockManager()
 	pokerMetric, recorder := newTestPlanningPokerMetric(ctrl)
+	guard := NewPresenceGuard()
 
 	return &localPresenceHarness{
 		hub:      hub,
-		join:     NewJoinRoomUseCase(hub, lockManager, pokerMetric),
-		leave:    NewLeaveRoomUseCase(hub, lockManager, pokerMetric),
+		join:     NewJoinRoomUseCase(hub, lockManager, pokerMetric, guard),
+		leave:    NewLeaveRoomUseCase(hub, lockManager, pokerMetric, guard),
 		recorder: recorder,
 	}
 }

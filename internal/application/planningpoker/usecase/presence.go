@@ -2,15 +2,27 @@ package usecase
 
 import "context"
 
-// localPresenceTransitions serializes presence snapshots, bus changes, and metric
-// deltas on this process. Room locks alone cannot protect a switch's source room.
-// Waiting is cancellable because a transition may perform network operations.
-var localPresenceTransitions = make(chan struct{}, 1)
+// PresenceGuard serializes local presence transitions. A room lock protects a
+// single room, but a room switch also changes the local count of the source
+// room, which no single room lock covers. The guard is process-wide, so callers
+// hold it only around the in-memory presence bookkeeping and never around
+// network reads or socket writes.
+type PresenceGuard interface {
+	Lock(ctx context.Context) (func(), error)
+}
 
-func lockLocalPresence(ctx context.Context) (func(), error) {
+type localPresenceGuard struct {
+	transitions chan struct{}
+}
+
+func NewPresenceGuard() PresenceGuard {
+	return &localPresenceGuard{transitions: make(chan struct{}, 1)}
+}
+
+func (g *localPresenceGuard) Lock(ctx context.Context) (func(), error) {
 	select {
-	case localPresenceTransitions <- struct{}{}:
-		return func() { <-localPresenceTransitions }, nil
+	case g.transitions <- struct{}{}:
+		return func() { <-g.transitions }, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}

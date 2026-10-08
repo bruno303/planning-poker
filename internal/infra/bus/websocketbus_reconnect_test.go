@@ -77,8 +77,9 @@ func TestWebsocketBus_ReconnectDoesNotDeadlockOtherRooms(t *testing.T) {
 		entered:     make(chan struct{}),
 		release:     make(chan struct{}),
 	}
-	leave := usecase.NewLeaveRoomUseCase(hub, lockManager, pokerMetric)
-	join := usecase.NewJoinRoomUseCase(hub, lockManager, pokerMetric)
+	presenceGuard := usecase.NewPresenceGuard()
+	leave := usecase.NewLeaveRoomUseCase(hub, lockManager, pokerMetric, presenceGuard)
+	join := usecase.NewJoinRoomUseCase(hub, lockManager, pokerMetric, presenceGuard)
 
 	oldBus := NewWebsocketBus(senderID, roomID, serverConn, hub, usecase.UseCasesFacade{LeaveRoom: leave}, WebSocketConfig{})
 	if err := hub.AddBus(ctx, senderID, oldBus); err != nil {

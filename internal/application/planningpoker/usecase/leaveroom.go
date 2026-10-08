@@ -22,6 +22,7 @@ type (
 	leaveRoomUseCase struct {
 		hub         domain.Hub
 		lockManager lock.LockManager
+		presence    PresenceGuard
 		metric      metric.PlanningPokerMetric
 		logger      log.Logger
 	}
@@ -29,10 +30,11 @@ type (
 
 var _ UseCase[LeaveRoomCommand] = (*leaveRoomUseCase)(nil)
 
-func NewLeaveRoomUseCase(hub domain.Hub, lockManager lock.LockManager, metric metric.PlanningPokerMetric) *leaveRoomUseCase {
+func NewLeaveRoomUseCase(hub domain.Hub, lockManager lock.LockManager, metric metric.PlanningPokerMetric, presence PresenceGuard) *leaveRoomUseCase {
 	return &leaveRoomUseCase{
 		hub:         hub,
 		lockManager: lockManager,
+		presence:    presence,
 		metric:      metric,
 		logger:      log.NewLogger("usecase.leaveroom"),
 	}
@@ -40,43 +42,22 @@ func NewLeaveRoomUseCase(hub domain.Hub, lockManager lock.LockManager, metric me
 
 func (uc *leaveRoomUseCase) Execute(ctx context.Context, cmd LeaveRoomCommand) error {
 	uc.logger.Info(ctx, "Client %s leaving room %s", cmd.SenderID, cmd.RoomID)
-	unlockPresence, err := lockLocalPresence(ctx)
-	if err != nil {
-		return err
-	}
-	defer unlockPresence()
 
 	return uc.lockManager.ExecuteWithLock(ctx, cmd.RoomID, func(ctx context.Context) error {
-		currentBus, hasBus := uc.hub.GetBus(cmd.SenderID)
-		// A reconnect replaces the socket with a newer one in the same room; the
-		// superseded socket must not remove or count the replacement.
-		if cmd.Bus != nil && hasBus && currentBus != cmd.Bus && currentBus.RoomID() == cmd.RoomID {
+		superseded, removeErr, guardErr := uc.removePresence(ctx, cmd)
+		if guardErr != nil {
+			return guardErr
+		}
+		if superseded {
 			return nil
-		}
-		// A late leave from an old room must not count the replacement bus.
-		hadBusInRoom := hasBus && currentBus.RoomID() == cmd.RoomID
-		localClientsBefore := uc.hub.GetClientsOfRoom(cmd.RoomID)
-
-		removeErr := uc.hub.RemoveClient(ctx, cmd.SenderID, cmd.RoomID)
-		// Redis can remove local presence before a persistence failure. Account
-		// for that removal now so a retry cannot lose or duplicate the delta.
-		removedLocalBus := hadBusInRoom
-		if removeErr != nil && hadBusInRoom {
-			removedLocalBus = !domain.HasBusInRoom(uc.hub, cmd.SenderID, cmd.RoomID)
-		}
-
-		if removedLocalBus {
-			uc.metric.DecrementActiveUsers(ctx)
-		}
-		if removedLocalBus && localClientsBefore == 1 {
-			uc.metric.DecrementActiveRoomsCounter(ctx)
 		}
 		if removeErr != nil {
 			uc.logger.Error(ctx, "Error removing client from room", removeErr)
 			return removeErr
 		}
 
-		// if room still exists, broadcast the updated state
+		// The presence guard is released before the broadcast so a slow socket
+		// write or Redis publish cannot stall unrelated rooms.
 		room, err := uc.hub.LoadRoom(ctx, cmd.RoomID)
 		if err == nil {
 			if err := uc.hub.BroadcastToRoom(ctx, room.ID, dto.NewRoomStateCommand(room)); err != nil {
@@ -91,4 +72,42 @@ func (uc *leaveRoomUseCase) Execute(ctx context.Context, cmd LeaveRoomCommand) e
 		uc.logger.Info(ctx, "Client %s left room %s successfully", cmd.SenderID, cmd.RoomID)
 		return nil
 	})
+}
+
+// removePresence holds the presence guard only around the local bus removal and
+// metric deltas. Presence is guarded after the room lock so joins and leaves
+// always acquire in the same order and cannot deadlock.
+func (uc *leaveRoomUseCase) removePresence(ctx context.Context, cmd LeaveRoomCommand) (superseded bool, removeErr, guardErr error) {
+	unlockPresence, guardErr := uc.presence.Lock(ctx)
+	if guardErr != nil {
+		return false, nil, guardErr
+	}
+	defer unlockPresence()
+
+	currentBus, hasBus := uc.hub.GetBus(cmd.SenderID)
+	// A reconnect replaces the socket with a newer one in the same room; the
+	// superseded socket must not remove or count the replacement.
+	if cmd.Bus != nil && hasBus && currentBus != cmd.Bus && currentBus.RoomID() == cmd.RoomID {
+		return true, nil, nil
+	}
+	// A late leave from an old room must not count the replacement bus.
+	hadBusInRoom := hasBus && currentBus.RoomID() == cmd.RoomID
+	localClientsBefore := uc.hub.GetClientsOfRoom(cmd.RoomID)
+
+	removeErr = uc.hub.RemoveClient(ctx, cmd.SenderID, cmd.RoomID)
+	// Redis can remove local presence before a persistence failure. Account
+	// for that removal now so a retry cannot lose or duplicate the delta.
+	removedLocalBus := hadBusInRoom
+	if removeErr != nil && hadBusInRoom {
+		removedLocalBus = !domain.HasBusInRoom(uc.hub, cmd.SenderID, cmd.RoomID)
+	}
+
+	if removedLocalBus {
+		uc.metric.DecrementActiveUsers(ctx)
+	}
+	if removedLocalBus && localClientsBefore == 1 {
+		uc.metric.DecrementActiveRoomsCounter(ctx)
+	}
+
+	return false, removeErr, nil
 }
