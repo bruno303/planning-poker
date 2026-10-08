@@ -34,13 +34,13 @@ type (
 		metric      metric.PlanningPokerMetric
 	}
 	joinState struct {
-		client                     *entity.Client
-		isReconnect                bool
-		hadLocalBus                bool
-		previousBus                domain.Bus
-		destinationHadLocalClients bool
-		roomDelta                  int
-		rollbackFunc               func(context.Context) error
+		client       *entity.Client
+		isReconnect  bool
+		hadLocalBus  bool
+		previousBus  domain.Bus
+		roomsBefore  int
+		roomDelta    int
+		rollbackFunc func(context.Context) error
 	}
 )
 
@@ -107,20 +107,12 @@ func (uc JoinRoomUseCase) attachClient(ctx context.Context, room *entity.Room, c
 
 	previousBus, hadLocalBus := uc.hub.GetBus(cmd.SenderID)
 	previousRoomID := roomIDOf(previousBus)
-	destinationHadLocalClients := uc.hub.GetClientsOfRoom(cmd.RoomID) > 0
-	roomDelta := 0
-	if !destinationHadLocalClients {
-		roomDelta++
-	}
-	if previousRoomID != "" && previousRoomID != cmd.RoomID && uc.hub.GetClientsOfRoom(previousRoomID) <= 1 {
-		roomDelta--
-	}
+	roomsBefore := activeRooms(uc.hub, cmd.RoomID, previousRoomID)
 
 	state := joinState{
-		hadLocalBus:                hadLocalBus,
-		previousBus:                previousBus,
-		destinationHadLocalClients: destinationHadLocalClients,
-		roomDelta:                  roomDelta,
+		hadLocalBus: hadLocalBus,
+		previousBus: previousBus,
+		roomsBefore: roomsBefore,
 	}
 
 	client, isReconnect, rollbackFunc, err := uc.joinClient(ctx, room, cmd, previousBus)
@@ -130,8 +122,30 @@ func (uc JoinRoomUseCase) attachClient(ctx context.Context, room *entity.Room, c
 	if err != nil {
 		return state, uc.rollbackReplacementLocked(ctx, cmd, state, err)
 	}
+	state.roomDelta = activeRooms(uc.hub, cmd.RoomID, previousRoomID) - roomsBefore
 
 	return state, nil
+}
+
+// activeRooms counts the given rooms that have at least one local client,
+// ignoring empty ids and duplicates. It is the single helper used to derive
+// active-room deltas on both the success and the rollback paths.
+func activeRooms(hub domain.Hub, roomIDs ...string) int {
+	seen := make(map[string]struct{}, len(roomIDs))
+	count := 0
+	for _, roomID := range roomIDs {
+		if roomID == "" {
+			continue
+		}
+		if _, ok := seen[roomID]; ok {
+			continue
+		}
+		seen[roomID] = struct{}{}
+		if hub.GetClientsOfRoom(roomID) > 0 {
+			count++
+		}
+	}
+	return count
 }
 
 func (uc JoinRoomUseCase) recordJoinMetrics(ctx context.Context, state joinState) {
@@ -222,19 +236,8 @@ func (uc JoinRoomUseCase) rollbackReplacementLocked(ctx context.Context, cmd Joi
 		uc.metric.DecrementActiveUsers(ctx)
 	}
 
-	roomsBefore, roomsAfter := 1, 0
-	if uc.hub.GetClientsOfRoom(previousRoomID) > 0 {
-		roomsAfter++
-	}
-	if previousRoomID != cmd.RoomID {
-		if state.destinationHadLocalClients {
-			roomsBefore++
-		}
-		if uc.hub.GetClientsOfRoom(cmd.RoomID) > 0 {
-			roomsAfter++
-		}
-	}
-	uc.recordRoomDelta(ctx, roomsAfter-roomsBefore)
+	roomsAfter := activeRooms(uc.hub, cmd.RoomID, previousRoomID)
+	uc.recordRoomDelta(ctx, roomsAfter-state.roomsBefore)
 	return err
 }
 
