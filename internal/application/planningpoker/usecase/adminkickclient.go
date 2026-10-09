@@ -62,8 +62,6 @@ func (uc *adminKickClientUseCase) Execute(ctx context.Context, cmd AdminKickClie
 		if err := bus.Send(ctx, dto.NewKickNotification()); err != nil {
 			uc.logger.Error(ctx, "Failed to send kick notification to client", err)
 		}
-		// Detach prevents bus.Close() from triggering a second LeaveRoom,
-		// which would decrement active-users twice for one removal.
 		bus.Detach()
 		if err := bus.Close(); err != nil {
 			uc.logger.Error(ctx, "Failed to close WebSocket bus for client", err)

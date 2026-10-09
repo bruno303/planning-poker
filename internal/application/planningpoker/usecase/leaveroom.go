@@ -41,8 +41,6 @@ func (uc *leaveRoomUseCase) Execute(ctx context.Context, cmd LeaveRoomCommand) e
 		room, err := uc.hub.LoadRoom(ctx, cmd.RoomID)
 		if err != nil {
 			if errors.Is(err, domain.ErrRoomNotFound) {
-				// Room already gone: still run RemoveClient for bus cleanup (idempotent),
-				// but skip all metric decrements to avoid negative active-users.
 				_ = uc.hub.RemoveClient(ctx, cmd.SenderID, cmd.RoomID)
 				return nil
 			}
@@ -50,8 +48,6 @@ func (uc *leaveRoomUseCase) Execute(ctx context.Context, cmd LeaveRoomCommand) e
 			return err
 		}
 		if _, ok := room.FindClient(cmd.SenderID); !ok {
-			// Duplicate leave / not a member: still run RemoveClient for bus cleanup,
-			// but skip all metric decrements to avoid negative active-users.
 			_ = uc.hub.RemoveClient(ctx, cmd.SenderID, cmd.RoomID)
 			return nil
 		}
