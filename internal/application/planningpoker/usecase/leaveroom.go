@@ -38,6 +38,24 @@ func NewLeaveRoomUseCase(hub domain.Hub, lockManager lock.LockManager, metric me
 func (uc *leaveRoomUseCase) Execute(ctx context.Context, cmd LeaveRoomCommand) error {
 	uc.logger.Info(ctx, "Client %s leaving room %s", cmd.SenderID, cmd.RoomID)
 	return uc.lockManager.ExecuteWithLock(ctx, cmd.RoomID, func(ctx context.Context) error {
+		room, err := uc.hub.LoadRoom(ctx, cmd.RoomID)
+		if err != nil {
+			if errors.Is(err, domain.ErrRoomNotFound) {
+				// Room already gone: still run RemoveClient for bus cleanup (idempotent),
+				// but skip all metric decrements to avoid negative active-users.
+				_ = uc.hub.RemoveClient(ctx, cmd.SenderID, cmd.RoomID)
+				return nil
+			}
+			uc.logger.Error(ctx, "Error loading room before client removal", err)
+			return err
+		}
+		if _, ok := room.FindClient(cmd.SenderID); !ok {
+			// Duplicate leave / not a member: still run RemoveClient for bus cleanup,
+			// but skip all metric decrements to avoid negative active-users.
+			_ = uc.hub.RemoveClient(ctx, cmd.SenderID, cmd.RoomID)
+			return nil
+		}
+
 		if err := uc.hub.RemoveClient(ctx, cmd.SenderID, cmd.RoomID); err != nil {
 			uc.logger.Error(ctx, "Error removing client from room", err)
 			return err
@@ -47,7 +65,7 @@ func (uc *leaveRoomUseCase) Execute(ctx context.Context, cmd LeaveRoomCommand) e
 
 		// if room still exists, broadcast the updated state
 		// otherwise, decrement active rooms metric
-		room, err := uc.hub.LoadRoom(ctx, cmd.RoomID)
+		room, err = uc.hub.LoadRoom(ctx, cmd.RoomID)
 		if err == nil {
 			if err := uc.hub.BroadcastToRoom(ctx, room.ID, dto.NewRoomStateCommand(room)); err != nil {
 				uc.logger.Error(ctx, "Error broadcasting room state", err)

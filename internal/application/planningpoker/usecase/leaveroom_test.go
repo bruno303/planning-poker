@@ -44,7 +44,7 @@ func TestLeaveRoomUseCase_Execute_Success_RoomExists(t *testing.T) {
 	senderID := "client123"
 	room := &entity.Room{
 		ID:      roomID,
-		Clients: clientcollection.New(),
+		Clients: clientcollection.New(&entity.Client{ID: senderID}),
 	}
 
 	mockLockManager.EXPECT().
@@ -53,9 +53,12 @@ func TestLeaveRoomUseCase_Execute_Success_RoomExists(t *testing.T) {
 			return fn(ctx)
 		})
 
-	mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(nil)
-	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(nil)
+	gomock.InOrder(
+		mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil),
+		mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(nil),
+		mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil),
+		mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(nil),
+	)
 
 	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, testMetric)
 	cmd := LeaveRoomCommand{
@@ -89,6 +92,10 @@ func TestLeaveRoomUseCase_Execute_WhenRoomIsMissingAfterRemove_DecrementsRoomMet
 
 	roomID := "room123"
 	senderID := "client123"
+	roomBefore := &entity.Room{
+		ID:      roomID,
+		Clients: clientcollection.New(&entity.Client{ID: senderID}),
+	}
 
 	mockLockManager.EXPECT().
 		ExecuteWithLock(gomock.Any(), roomID, gomock.Any()).
@@ -96,8 +103,11 @@ func TestLeaveRoomUseCase_Execute_WhenRoomIsMissingAfterRemove_DecrementsRoomMet
 			return fn(ctx)
 		})
 
-	mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(nil)
-	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, domain.ErrRoomNotFound)
+	gomock.InOrder(
+		mockHub.EXPECT().LoadRoom(ctx, roomID).Return(roomBefore, nil),
+		mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(nil),
+		mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, domain.ErrRoomNotFound),
+	)
 
 	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, testMetric)
 	cmd := LeaveRoomCommand{
@@ -129,6 +139,10 @@ func TestLeaveRoomUseCase_Execute_RemoveClientError(t *testing.T) {
 
 	roomID := "room123"
 	senderID := "client123"
+	roomBefore := &entity.Room{
+		ID:      roomID,
+		Clients: clientcollection.New(&entity.Client{ID: senderID}),
+	}
 	expectedError := errors.New("remove client failed")
 
 	mockLockManager.EXPECT().
@@ -137,7 +151,10 @@ func TestLeaveRoomUseCase_Execute_RemoveClientError(t *testing.T) {
 			return fn(ctx)
 		})
 
-	mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(expectedError)
+	gomock.InOrder(
+		mockHub.EXPECT().LoadRoom(ctx, roomID).Return(roomBefore, nil),
+		mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(expectedError),
+	)
 
 	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, mockMetric)
 	cmd := LeaveRoomCommand{
@@ -168,7 +185,7 @@ func TestLeaveRoomUseCase_Execute_BroadcastError(t *testing.T) {
 	senderID := "client123"
 	room := &entity.Room{
 		ID:      roomID,
-		Clients: clientcollection.New(),
+		Clients: clientcollection.New(&entity.Client{ID: senderID}),
 	}
 
 	expectedError := errors.New("broadcast failed")
@@ -179,9 +196,12 @@ func TestLeaveRoomUseCase_Execute_BroadcastError(t *testing.T) {
 			return fn(ctx)
 		})
 
-	mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(nil)
-	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(expectedError)
+	gomock.InOrder(
+		mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil),
+		mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(nil),
+		mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil),
+		mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(expectedError),
+	)
 
 	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, mockMetric)
 	cmd := LeaveRoomCommand{
@@ -210,6 +230,10 @@ func TestLeaveRoomUseCase_Execute_LoadRoomErrorAfterRemove_ReturnsErrorWithoutDe
 
 	roomID := "room123"
 	senderID := "client123"
+	roomBefore := &entity.Room{
+		ID:      roomID,
+		Clients: clientcollection.New(&entity.Client{ID: senderID}),
+	}
 	expectedError := errors.New("load failed")
 
 	mockLockManager.EXPECT().
@@ -218,8 +242,11 @@ func TestLeaveRoomUseCase_Execute_LoadRoomErrorAfterRemove_ReturnsErrorWithoutDe
 			return fn(ctx)
 		})
 
-	mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(nil)
-	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, expectedError)
+	gomock.InOrder(
+		mockHub.EXPECT().LoadRoom(ctx, roomID).Return(roomBefore, nil),
+		mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(nil),
+		mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, expectedError),
+	)
 
 	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, testMetric)
 	cmd := LeaveRoomCommand{
@@ -239,5 +266,115 @@ func TestLeaveRoomUseCase_Execute_LoadRoomErrorAfterRemove_ReturnsErrorWithoutDe
 	}
 	if countMetricCallsWithValue(calls, metric.PlanningPokerActiveRoomsMetric, -1) != 0 {
 		t.Fatalf("expected no active room decrements, got %d", countMetricCallsWithValue(calls, metric.PlanningPokerActiveRoomsMetric, -1))
+	}
+}
+
+func TestLeaveRoomUseCase_Execute_DuplicateLeave_SkipsMetrics(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	mockHub := domain.NewMockHub(ctrl)
+	mockLockManager := lock.NewMockLockManager(ctrl)
+	testMetric, metricMeter := newTestPlanningPokerMetric(ctrl)
+
+	roomID := "room123"
+	senderID := "client123"
+	roomWithoutClient := &entity.Room{
+		ID:      roomID,
+		Clients: clientcollection.New(&entity.Client{ID: "otherClient"}),
+	}
+
+	mockLockManager.EXPECT().
+		ExecuteWithLock(gomock.Any(), roomID, gomock.Any()).
+		DoAndReturn(func(ctx context.Context, key string, fn func(context.Context) error) error {
+			return fn(ctx)
+		})
+
+	gomock.InOrder(
+		mockHub.EXPECT().LoadRoom(ctx, roomID).Return(roomWithoutClient, nil),
+		mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(nil),
+	)
+
+	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, testMetric)
+
+	err := uc.Execute(ctx, LeaveRoomCommand{RoomID: roomID, SenderID: senderID})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	calls := metricMeter.getCalls()
+	if len(calls) != 0 {
+		t.Fatalf("expected zero metric calls for duplicate leave, got %d: %+v", len(calls), calls)
+	}
+}
+
+func TestLeaveRoomUseCase_Execute_MissingRoom_SkipsMetrics(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	mockHub := domain.NewMockHub(ctrl)
+	mockLockManager := lock.NewMockLockManager(ctrl)
+	testMetric, metricMeter := newTestPlanningPokerMetric(ctrl)
+
+	roomID := "room123"
+	senderID := "client123"
+
+	mockLockManager.EXPECT().
+		ExecuteWithLock(gomock.Any(), roomID, gomock.Any()).
+		DoAndReturn(func(ctx context.Context, key string, fn func(context.Context) error) error {
+			return fn(ctx)
+		})
+
+	gomock.InOrder(
+		mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, domain.ErrRoomNotFound),
+		mockHub.EXPECT().RemoveClient(ctx, senderID, roomID).Return(nil),
+	)
+
+	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, testMetric)
+
+	err := uc.Execute(ctx, LeaveRoomCommand{RoomID: roomID, SenderID: senderID})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	calls := metricMeter.getCalls()
+	if len(calls) != 0 {
+		t.Fatalf("expected zero metric calls for missing room, got %d: %+v", len(calls), calls)
+	}
+}
+
+func TestLeaveRoomUseCase_Execute_LoadBeforeRemoveError_ReturnsErrorWithoutMetrics(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	mockHub := domain.NewMockHub(ctrl)
+	mockLockManager := lock.NewMockLockManager(ctrl)
+	testMetric, metricMeter := newTestPlanningPokerMetric(ctrl)
+
+	roomID := "room123"
+	senderID := "client123"
+	expectedError := errors.New("load before remove failed")
+
+	mockLockManager.EXPECT().
+		ExecuteWithLock(gomock.Any(), roomID, gomock.Any()).
+		DoAndReturn(func(ctx context.Context, key string, fn func(context.Context) error) error {
+			return fn(ctx)
+		})
+
+	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, expectedError)
+
+	uc := NewLeaveRoomUseCase(mockHub, mockLockManager, testMetric)
+
+	err := uc.Execute(ctx, LeaveRoomCommand{RoomID: roomID, SenderID: senderID})
+	if !errors.Is(err, expectedError) {
+		t.Fatalf("expected error %v, got %v", expectedError, err)
+	}
+
+	calls := metricMeter.getCalls()
+	if len(calls) != 0 {
+		t.Fatalf("expected zero metric calls on LoadBeforeRemoveError, got %d: %+v", len(calls), calls)
 	}
 }

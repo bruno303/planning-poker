@@ -48,7 +48,10 @@ func TestAdminRemoveClientUseCase_Execute_Success(t *testing.T) {
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
 	mockHub.EXPECT().GetBus(clientID).Return(mockBus, true)
 	mockLeaveRoom.EXPECT().Execute(ctx, LeaveRoomCommand{RoomID: roomID, SenderID: clientID}).Return(nil)
-	mockBus.EXPECT().Close().Return(nil)
+	gomock.InOrder(
+		mockBus.EXPECT().Detach(),
+		mockBus.EXPECT().Close().Return(nil),
+	)
 
 	uc := NewAdminRemoveClientUseCase(mockLeaveRoom, mockHub)
 	err := uc.Execute(ctx, AdminRemoveClientCommand{RoomID: roomID, ClientID: clientID})
@@ -189,7 +192,10 @@ func TestAdminRemoveClientUseCase_Execute_BusCloseError(t *testing.T) {
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
 	mockHub.EXPECT().GetBus(clientID).Return(mockBus, true)
 	mockLeaveRoom.EXPECT().Execute(ctx, LeaveRoomCommand{RoomID: roomID, SenderID: clientID}).Return(nil)
-	mockBus.EXPECT().Close().Return(errors.New("close error"))
+	gomock.InOrder(
+		mockBus.EXPECT().Detach(),
+		mockBus.EXPECT().Close().Return(errors.New("close error")),
+	)
 
 	uc := NewAdminRemoveClientUseCase(mockLeaveRoom, mockHub)
 	err := uc.Execute(ctx, AdminRemoveClientCommand{RoomID: roomID, ClientID: clientID})
