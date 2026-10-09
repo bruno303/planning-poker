@@ -63,6 +63,9 @@ func TestLeaveRoomUseCase_Execute_Success_RoomExists(t *testing.T) {
 		SenderID: senderID,
 	}
 
+	// model the prior join that legitimizes the active-user decrement
+	testMetric.IncrementActiveUsers(ctx)
+
 	err := uc.Execute(ctx, cmd)
 
 	if err != nil {
@@ -105,6 +108,10 @@ func TestLeaveRoomUseCase_Execute_WhenRoomIsMissingAfterRemove_DecrementsRoomMet
 		SenderID: senderID,
 	}
 
+	// model the prior join and room creation that legitimize the decrements
+	testMetric.IncrementActiveUsers(ctx)
+	testMetric.IncrementActiveRoomsCounter(ctx)
+
 	err := uc.Execute(ctx, cmd)
 
 	if err != nil {
@@ -113,6 +120,8 @@ func TestLeaveRoomUseCase_Execute_WhenRoomIsMissingAfterRemove_DecrementsRoomMet
 
 	calls := metricMeter.getCalls()
 	assertMetricCallSequence(t, calls,
+		expectedMetricCall{name: metric.PlanningPokerActiveUsersMetric, value: 1},
+		expectedMetricCall{name: metric.PlanningPokerActiveRoomsMetric, value: 1},
 		expectedMetricCall{name: metric.PlanningPokerActiveUsersMetric, value: -1},
 		expectedMetricCall{name: metric.PlanningPokerActiveRoomsMetric, value: -1},
 	)
@@ -226,6 +235,9 @@ func TestLeaveRoomUseCase_Execute_LoadRoomErrorAfterRemove_ReturnsErrorWithoutDe
 		RoomID:   roomID,
 		SenderID: senderID,
 	}
+
+	// model the prior join that legitimizes the active-user decrement
+	testMetric.IncrementActiveUsers(ctx)
 
 	err := uc.Execute(ctx, cmd)
 
