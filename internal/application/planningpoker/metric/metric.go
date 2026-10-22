@@ -3,12 +3,25 @@ package metric
 import (
 	"context"
 	"reflect"
+	"sync/atomic"
 
 	"github.com/bruno303/go-toolkit/pkg/metric"
 )
 
 type PlanningPokerMetric struct {
-	meter metric.Meter
+	meter  metric.Meter
+	active *activeCounters
+}
+
+// activeCounters holds the current values reported as gauges. OTel gauges
+// record an absolute value rather than a delta, so the running count has to be
+// kept in the process. It is shared by pointer because PlanningPokerMetric is
+// passed around by value. The backend runs a single replica per environment
+// (helm/values.yaml), so the in-process count is the cluster-wide one; scaling
+// out would need a shared counter instead.
+type activeCounters struct {
+	users atomic.Int64
+	rooms atomic.Int64
 }
 
 type noopMeter struct{}
@@ -20,7 +33,7 @@ const (
 )
 
 func NewPlanningPokerMetric() PlanningPokerMetric {
-	return PlanningPokerMetric{meter: noopMeter{}}
+	return newPlanningPokerMetric(noopMeter{})
 }
 
 func NewPlanningPokerMetricWithMeter(meter metric.Meter) PlanningPokerMetric {
@@ -28,7 +41,11 @@ func NewPlanningPokerMetricWithMeter(meter metric.Meter) PlanningPokerMetric {
 		return NewPlanningPokerMetric()
 	}
 
-	return PlanningPokerMetric{meter: meter}
+	return newPlanningPokerMetric(meter)
+}
+
+func newPlanningPokerMetric(meter metric.Meter) PlanningPokerMetric {
+	return PlanningPokerMetric{meter: meter, active: &activeCounters{}}
 }
 
 func isNilMeter(meter metric.Meter) bool {
@@ -54,11 +71,15 @@ func (noopMeter) AddGauge(context.Context, string, string, string, float64, ...m
 }
 
 func (m PlanningPokerMetric) IncrementActiveUsers(ctx context.Context) {
-	_ = m.meter.AddCounter(ctx, PlanningPokerActiveUsersMetric, "", "", 1)
+	m.recordActiveUsers(ctx, m.active.users.Add(1))
 }
 
 func (m PlanningPokerMetric) DecrementActiveUsers(ctx context.Context) {
-	_ = m.meter.AddCounter(ctx, PlanningPokerActiveUsersMetric, "", "", -1)
+	m.recordActiveUsers(ctx, m.active.users.Add(-1))
+}
+
+func (m PlanningPokerMetric) recordActiveUsers(ctx context.Context, value int64) {
+	_ = m.meter.AddGauge(ctx, PlanningPokerActiveUsersMetric, "", "", float64(value))
 }
 
 func (m PlanningPokerMetric) IncrementUsersTotal(ctx context.Context) {
@@ -69,10 +90,14 @@ func (m PlanningPokerMetric) DecrementUsersTotal(ctx context.Context) {
 	_ = m.meter.AddCounter(ctx, PlanningPokerUsersTotalMetric, "", "", -1)
 }
 
-func (m PlanningPokerMetric) IncrementActiveRoomsCounter(ctx context.Context) {
-	_ = m.meter.AddCounter(ctx, PlanningPokerActiveRoomsMetric, "", "", 1)
+func (m PlanningPokerMetric) IncrementActiveRooms(ctx context.Context) {
+	m.recordActiveRooms(ctx, m.active.rooms.Add(1))
 }
 
-func (m PlanningPokerMetric) DecrementActiveRoomsCounter(ctx context.Context) {
-	_ = m.meter.AddCounter(ctx, PlanningPokerActiveRoomsMetric, "", "", -1)
+func (m PlanningPokerMetric) DecrementActiveRooms(ctx context.Context) {
+	m.recordActiveRooms(ctx, m.active.rooms.Add(-1))
+}
+
+func (m PlanningPokerMetric) recordActiveRooms(ctx context.Context, value int64) {
+	_ = m.meter.AddGauge(ctx, PlanningPokerActiveRoomsMetric, "", "", float64(value))
 }

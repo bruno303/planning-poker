@@ -26,23 +26,29 @@ type metricRecorder struct {
 func newTestPlanningPokerMetric(ctrl *gomock.Controller) (appmetric.PlanningPokerMetric, *metricRecorder) {
 	recorder := &metricRecorder{}
 	mockMeter := appmetric.NewMockMeter(ctrl)
+	record := func(_ context.Context, name, description, unit string, value float64, attributes ...toolkitmetric.Attribute) error {
+		recorder.mu.Lock()
+		defer recorder.mu.Unlock()
+
+		recorder.calls = append(recorder.calls, metricCall{
+			name:        name,
+			description: description,
+			unit:        unit,
+			value:       value,
+			attributes:  append([]toolkitmetric.Attribute(nil), attributes...),
+		})
+
+		return nil
+	}
+
+	mockMeter.EXPECT().
+		AddGauge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		AnyTimes().
+		DoAndReturn(record)
 	mockMeter.EXPECT().
 		AddCounter(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		AnyTimes().
-		DoAndReturn(func(_ context.Context, name, description, unit string, value float64, attributes ...toolkitmetric.Attribute) error {
-			recorder.mu.Lock()
-			defer recorder.mu.Unlock()
-
-			recorder.calls = append(recorder.calls, metricCall{
-				name:        name,
-				description: description,
-				unit:        unit,
-				value:       value,
-				attributes:  append([]toolkitmetric.Attribute(nil), attributes...),
-			})
-
-			return nil
-		})
+		DoAndReturn(record)
 
 	return appmetric.NewPlanningPokerMetricWithMeter(mockMeter), recorder
 }

@@ -130,7 +130,7 @@ func (uc JoinRoomUseCase) recordJoinMetrics(ctx context.Context, autoCreated, is
 		uc.metric.IncrementActiveUsers(ctx)
 	}
 	if autoCreated {
-		uc.metric.IncrementActiveRoomsCounter(ctx)
+		uc.metric.IncrementActiveRooms(ctx)
 	}
 }
 

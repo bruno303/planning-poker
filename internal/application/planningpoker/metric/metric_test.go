@@ -8,8 +8,9 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-type recordedCounterCall struct {
+type recordedCall struct {
 	ctx         context.Context
+	gauge       bool
 	name        string
 	description string
 	unit        string
@@ -17,16 +18,15 @@ type recordedCounterCall struct {
 	attributes  []toolkitmetric.Attribute
 }
 
-func newRecordedMeter(ctrl *gomock.Controller) (*MockMeter, *[]recordedCounterCall) {
+func newRecordedMeter(ctrl *gomock.Controller) (*MockMeter, *[]recordedCall) {
 	mockMeter := NewMockMeter(ctrl)
-	calls := make([]recordedCounterCall, 0)
+	calls := make([]recordedCall, 0)
 
-	mockMeter.EXPECT().
-		AddCounter(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		AnyTimes().
-		DoAndReturn(func(ctx context.Context, name, description, unit string, value float64, attributes ...toolkitmetric.Attribute) error {
-			calls = append(calls, recordedCounterCall{
+	record := func(gauge bool) func(context.Context, string, string, string, float64, ...toolkitmetric.Attribute) error {
+		return func(ctx context.Context, name, description, unit string, value float64, attributes ...toolkitmetric.Attribute) error {
+			calls = append(calls, recordedCall{
 				ctx:         ctx,
+				gauge:       gauge,
 				name:        name,
 				description: description,
 				unit:        unit,
@@ -35,16 +35,29 @@ func newRecordedMeter(ctrl *gomock.Controller) (*MockMeter, *[]recordedCounterCa
 			})
 
 			return nil
-		})
+		}
+	}
+
+	mockMeter.EXPECT().
+		AddGauge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		AnyTimes().
+		DoAndReturn(record(true))
+	mockMeter.EXPECT().
+		AddCounter(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		AnyTimes().
+		DoAndReturn(record(false))
 
 	return mockMeter, &calls
 }
 
-func assertRecordedCounterCall(t *testing.T, call recordedCounterCall, expectedName string, expectedValue float64) {
+func assertRecordedCall(t *testing.T, call recordedCall, gauge bool, expectedName string, expectedValue float64) {
 	t.Helper()
 
 	if call.name != expectedName {
 		t.Fatalf("expected metric %q, got %q", expectedName, call.name)
+	}
+	if call.gauge != gauge {
+		t.Fatalf("expected gauge=%v, got %v", gauge, call.gauge)
 	}
 	if call.value != expectedValue {
 		t.Fatalf("expected value %v, got %v", expectedValue, call.value)
@@ -68,8 +81,8 @@ func TestNewPlanningPokerMetric_WithoutInjectedMeter_UsesNoopMeter(t *testing.T)
 	m.DecrementActiveUsers(ctx)
 	m.IncrementUsersTotal(ctx)
 	m.DecrementUsersTotal(ctx)
-	m.IncrementActiveRoomsCounter(ctx)
-	m.DecrementActiveRoomsCounter(ctx)
+	m.IncrementActiveRooms(ctx)
+	m.DecrementActiveRooms(ctx)
 }
 
 func TestNewPlanningPokerMetric_WithInjectedMeter_UsesProvidedMeter(t *testing.T) {
@@ -78,7 +91,7 @@ func TestNewPlanningPokerMetric_WithInjectedMeter_UsesProvidedMeter(t *testing.T
 	ctx := context.Background()
 
 	mockMeter.EXPECT().
-		AddCounter(ctx, PlanningPokerActiveUsersMetric, "", "", 1.0).
+		AddGauge(ctx, PlanningPokerActiveUsersMetric, "", "", 1.0).
 		Return(nil)
 
 	m := NewPlanningPokerMetricWithMeter(mockMeter)
@@ -94,11 +107,11 @@ func TestNewPlanningPokerMetric_WithTypedNilMeter_FallsBackToNoopMeter(t *testin
 	m.DecrementActiveUsers(ctx)
 	m.IncrementUsersTotal(ctx)
 	m.DecrementUsersTotal(ctx)
-	m.IncrementActiveRoomsCounter(ctx)
-	m.DecrementActiveRoomsCounter(ctx)
+	m.IncrementActiveRooms(ctx)
+	m.DecrementActiveRooms(ctx)
 }
 
-func TestPlanningPokerMetric_CounterMethods_RecordExpectedCalls(t *testing.T) {
+func TestPlanningPokerMetric_ActiveMetrics_RecordCurrentValue(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockMeter, calls := newRecordedMeter(ctrl)
 	m := NewPlanningPokerMetricWithMeter(mockMeter)
@@ -111,40 +124,34 @@ func TestPlanningPokerMetric_CounterMethods_RecordExpectedCalls(t *testing.T) {
 		expectedValue float64
 	}{
 		{
-			name:          "increment active users",
+			name:          "first active user",
 			invoke:        m.IncrementActiveUsers,
 			expectedName:  PlanningPokerActiveUsersMetric,
 			expectedValue: 1,
 		},
 		{
-			name:          "decrement active users",
+			name:          "second active user",
+			invoke:        m.IncrementActiveUsers,
+			expectedName:  PlanningPokerActiveUsersMetric,
+			expectedValue: 2,
+		},
+		{
+			name:          "user leaves",
 			invoke:        m.DecrementActiveUsers,
 			expectedName:  PlanningPokerActiveUsersMetric,
-			expectedValue: -1,
-		},
-		{
-			name:          "increment users total",
-			invoke:        m.IncrementUsersTotal,
-			expectedName:  PlanningPokerUsersTotalMetric,
 			expectedValue: 1,
 		},
 		{
-			name:          "decrement users total",
-			invoke:        m.DecrementUsersTotal,
-			expectedName:  PlanningPokerUsersTotalMetric,
-			expectedValue: -1,
-		},
-		{
-			name:          "increment active rooms",
-			invoke:        m.IncrementActiveRoomsCounter,
+			name:          "first active room",
+			invoke:        m.IncrementActiveRooms,
 			expectedName:  PlanningPokerActiveRoomsMetric,
 			expectedValue: 1,
 		},
 		{
-			name:          "decrement active rooms",
-			invoke:        m.DecrementActiveRoomsCounter,
+			name:          "room closes",
+			invoke:        m.DecrementActiveRooms,
 			expectedName:  PlanningPokerActiveRoomsMetric,
-			expectedValue: -1,
+			expectedValue: 0,
 		},
 	}
 
@@ -158,9 +165,42 @@ func TestPlanningPokerMetric_CounterMethods_RecordExpectedCalls(t *testing.T) {
 				t.Fatalf("expected one new call, got %d total calls", got)
 			}
 
-			assertRecordedCounterCall(t, (*calls)[got-1], tt.expectedName, tt.expectedValue)
+			assertRecordedCall(t, (*calls)[got-1], true, tt.expectedName, tt.expectedValue)
 		})
 	}
+}
+
+func TestPlanningPokerMetric_ActiveCountersAreSharedAcrossCopies(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockMeter, calls := newRecordedMeter(ctrl)
+	m := NewPlanningPokerMetricWithMeter(mockMeter)
+	copied := m
+	ctx := context.Background()
+
+	copied.IncrementActiveUsers(ctx)
+	m.IncrementActiveUsers(ctx)
+
+	if len(*calls) != 2 {
+		t.Fatalf("expected 2 calls, got %d", len(*calls))
+	}
+	assertRecordedCall(t, (*calls)[0], true, PlanningPokerActiveUsersMetric, 1)
+	assertRecordedCall(t, (*calls)[1], true, PlanningPokerActiveUsersMetric, 2)
+}
+
+func TestPlanningPokerMetric_UsersTotal_RecordsCounterCalls(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockMeter, calls := newRecordedMeter(ctrl)
+	m := NewPlanningPokerMetricWithMeter(mockMeter)
+	ctx := context.Background()
+
+	m.IncrementUsersTotal(ctx)
+	m.DecrementUsersTotal(ctx)
+
+	if len(*calls) != 2 {
+		t.Fatalf("expected 2 calls, got %d", len(*calls))
+	}
+	assertRecordedCall(t, (*calls)[0], false, PlanningPokerUsersTotalMetric, 1)
+	assertRecordedCall(t, (*calls)[1], false, PlanningPokerUsersTotalMetric, -1)
 }
 
 func TestPlanningPokerMetric_PropagatesContext(t *testing.T) {

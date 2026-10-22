@@ -54,7 +54,7 @@ func (uc *leaveRoomUseCase) Execute(ctx context.Context, cmd LeaveRoomCommand) e
 				return err
 			}
 		} else if errors.Is(err, domain.ErrRoomNotFound) {
-			uc.metric.DecrementActiveRoomsCounter(ctx)
+			uc.metric.DecrementActiveRooms(ctx)
 		} else {
 			uc.logger.Error(ctx, "Error loading room after client removal", err)
 			return err
