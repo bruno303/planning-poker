@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"context"
 	"time"
 
 	"planning-poker/internal/domain/entity"
@@ -67,6 +68,44 @@ func TestNewRoomStateCommand(t *testing.T) {
 	}
 }
 
+func TestNewRoomStateCommandPreservesClientOrderAndOwnerFallback(t *testing.T) {
+	owner := &entity.Client{ID: "owner", Name: "Zoe", IsOwner: true}
+	nextOwner := &entity.Client{ID: "next", Name: "Charlie"}
+	alphabeticallyFirst := &entity.Client{ID: "alphabetically-first", Name: "Alice"}
+	clients := clientcollection.New(owner, nextOwner, alphabeticallyFirst)
+	room := entity.NewRoomWithID("room1", clients)
+
+	got := NewRoomStateCommand(room)
+	wantNames := []string{"Alice", "Charlie", "Zoe"}
+	gotNames := make([]string, len(got.Participants))
+	for i, participant := range got.Participants {
+		gotNames[i] = participant.Name
+	}
+	if !reflect.DeepEqual(gotNames, wantNames) {
+		t.Fatalf("participant order = %v, want %v", gotNames, wantNames)
+	}
+
+	gotClients := room.Clients.Values()
+	wantIDs := []string{"owner", "next", "alphabetically-first"}
+	gotIDs := make([]string, len(gotClients))
+	for i, client := range gotClients {
+		gotIDs[i] = client.ID
+	}
+	if !reflect.DeepEqual(gotIDs, wantIDs) {
+		t.Fatalf("room client order after DTO mapping = %v, want %v", gotIDs, wantIDs)
+	}
+
+	if err := room.RemoveClient(context.Background(), owner.ID); err != nil {
+		t.Fatalf("RemoveClient() error = %v", err)
+	}
+	if !nextOwner.IsOwner {
+		t.Fatal("first joined remaining client did not become owner")
+	}
+	if alphabeticallyFirst.IsOwner {
+		t.Fatal("alphabetically first client became owner instead of first joined remaining client")
+	}
+}
+
 func TestNewRoomStateCommandIncludesDeckKind(t *testing.T) {
 	room := entity.NewRoomWithIDAndDeck("room1", clientcollection.New(), entity.DeckTypeTShirt)
 
@@ -90,9 +129,9 @@ func TestNewUpdateClientIDCommand(t *testing.T) {
 func TestMapToParticipants(t *testing.T) {
 	votedAt := time.Date(2026, time.September, 3, 12, 1, 0, 0, time.UTC)
 	clients := []*entity.Client{
+		{ID: "3", Name: "Charlie", CurrentVote: lo.ToPtr("?"), HasVoted: true, IsSpectator: true, IsOwner: false},
 		{ID: "1", Name: "Alice", CurrentVote: lo.ToPtr("5"), HasVoted: true, VotedAt: &votedAt, IsSpectator: false, IsOwner: false},
 		{ID: "2", Name: "Bob", CurrentVote: lo.ToPtr("3"), HasVoted: true, IsSpectator: false, IsOwner: true},
-		{ID: "3", Name: "Charlie", CurrentVote: lo.ToPtr("?"), HasVoted: true, IsSpectator: true, IsOwner: false},
 	}
 	participants := MapToParticipants(clients)
 
@@ -104,5 +143,8 @@ func TestMapToParticipants(t *testing.T) {
 
 	if !reflect.DeepEqual(participants, expected) {
 		t.Errorf("Expected %v, got %v", expected, participants)
+	}
+	if clients[0].ID != "3" || clients[1].ID != "1" || clients[2].ID != "2" {
+		t.Errorf("MapToParticipants reordered input clients: got %v", clients)
 	}
 }
