@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"context"
 	"time"
 
 	"planning-poker/internal/domain/entity"
@@ -10,6 +11,70 @@ import (
 
 	"github.com/samber/lo"
 )
+
+func TestNewRoomStateCommandDoesNotMutateRoomClients(t *testing.T) {
+	newRoomWithJoinOrder := func() *entity.Room {
+		room := entity.NewRoomWithIDAndStartedAt("room1", clientcollection.New(), time.Now().UTC())
+		// Join order is deliberately not alphabetical so DTO sorting stays observable.
+		for _, client := range []*entity.Client{
+			{ID: "charlie", Name: "Charlie", IsOwner: true},
+			{ID: "bob", Name: "Bob"},
+			{ID: "alice", Name: "Alice"},
+		} {
+			room.Clients.Add(client)
+		}
+		return room
+	}
+
+	clientIDs := func(clients []*entity.Client) []string {
+		ids := make([]string, 0, len(clients))
+		for _, client := range clients {
+			ids = append(ids, client.ID)
+		}
+		return ids
+	}
+
+	t.Run("keeps client join order", func(t *testing.T) {
+		room := newRoomWithJoinOrder()
+		want := clientIDs(room.Clients.Values())
+
+		_ = NewRoomStateCommand(room)
+
+		got := clientIDs(room.Clients.Values())
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("NewRoomStateCommand mutated client order: got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("keeps participants sorted by name", func(t *testing.T) {
+		room := newRoomWithJoinOrder()
+
+		state := NewRoomStateCommand(room)
+
+		got := lo.Map(state.Participants, func(p Participant, _ int) string { return p.Name })
+		want := []string{"Alice", "Bob", "Charlie"}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("participant order = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("owner fallback follows join order", func(t *testing.T) {
+		room := newRoomWithJoinOrder()
+		_ = NewRoomStateCommand(room)
+
+		if err := room.RemoveClient(context.Background(), "charlie"); err != nil {
+			t.Fatalf("RemoveClient() error = %v", err)
+		}
+
+		first, ok := room.Clients.First()
+		if !ok {
+			t.Fatal("expected a remaining client after removing the owner")
+		}
+		if first.ID != "bob" || !first.IsOwner {
+			t.Errorf("owner fallback promoted %q (owner=%v), want %q to become owner", first.ID, first.IsOwner, "bob")
+		}
+	})
+}
 
 func TestNewRoomStateCommand(t *testing.T) {
 	vote := "5"
