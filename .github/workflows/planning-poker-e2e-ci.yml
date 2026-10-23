@@ -23,6 +23,17 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v5
 
+      # compose builds pull Docker Hub images (redis and the Dockerfile base
+      # images). Anonymous pulls hit the shared-runner rate limit, so
+      # authenticate when the secrets are available and fall back to anonymous
+      # pulls otherwise (for example on fork pull requests).
+      - name: Log in to Docker Hub
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        continue-on-error: true
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Run E2E Tests
         env:
           E2E_READY_MAX_RETRIES: 120

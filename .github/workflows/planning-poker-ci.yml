@@ -33,7 +33,11 @@ jobs:
     
     services:
       redis:
-        image: redis:7-alpine
+        # Service containers are pulled by the runner before any step can log in
+        # to Docker Hub, so anonymous pulls hit the shared-runner rate limit
+        # ("toomanyrequests: You have reached your unauthenticated pull rate
+        # limit"). The Google mirror serves the same public image without it.
+        image: mirror.gcr.io/library/redis:7-alpine
         ports:
           - 6379:6379
         options: >-

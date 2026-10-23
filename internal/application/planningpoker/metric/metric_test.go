@@ -67,7 +67,6 @@ func TestNewPlanningPokerMetric_WithoutInjectedMeter_UsesNoopMeter(t *testing.T)
 	m.IncrementActiveUsers(ctx)
 	m.DecrementActiveUsers(ctx)
 	m.IncrementUsersTotal(ctx)
-	m.DecrementUsersTotal(ctx)
 	m.IncrementActiveRoomsCounter(ctx)
 	m.DecrementActiveRoomsCounter(ctx)
 }
@@ -93,7 +92,6 @@ func TestNewPlanningPokerMetric_WithTypedNilMeter_FallsBackToNoopMeter(t *testin
 	m.IncrementActiveUsers(ctx)
 	m.DecrementActiveUsers(ctx)
 	m.IncrementUsersTotal(ctx)
-	m.DecrementUsersTotal(ctx)
 	m.IncrementActiveRoomsCounter(ctx)
 	m.DecrementActiveRoomsCounter(ctx)
 }
@@ -106,6 +104,7 @@ func TestPlanningPokerMetric_CounterMethods_RecordExpectedCalls(t *testing.T) {
 
 	tests := []struct {
 		name          string
+		setup         func(context.Context)
 		invoke        func(context.Context)
 		expectedName  string
 		expectedValue float64
@@ -118,6 +117,7 @@ func TestPlanningPokerMetric_CounterMethods_RecordExpectedCalls(t *testing.T) {
 		},
 		{
 			name:          "decrement active users",
+			setup:         m.IncrementActiveUsers,
 			invoke:        m.DecrementActiveUsers,
 			expectedName:  PlanningPokerActiveUsersMetric,
 			expectedValue: -1,
@@ -129,12 +129,6 @@ func TestPlanningPokerMetric_CounterMethods_RecordExpectedCalls(t *testing.T) {
 			expectedValue: 1,
 		},
 		{
-			name:          "decrement users total",
-			invoke:        m.DecrementUsersTotal,
-			expectedName:  PlanningPokerUsersTotalMetric,
-			expectedValue: -1,
-		},
-		{
 			name:          "increment active rooms",
 			invoke:        m.IncrementActiveRoomsCounter,
 			expectedName:  PlanningPokerActiveRoomsMetric,
@@ -142,6 +136,7 @@ func TestPlanningPokerMetric_CounterMethods_RecordExpectedCalls(t *testing.T) {
 		},
 		{
 			name:          "decrement active rooms",
+			setup:         m.IncrementActiveRoomsCounter,
 			invoke:        m.DecrementActiveRoomsCounter,
 			expectedName:  PlanningPokerActiveRoomsMetric,
 			expectedValue: -1,
@@ -150,6 +145,10 @@ func TestPlanningPokerMetric_CounterMethods_RecordExpectedCalls(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.setup != nil {
+				tt.setup(ctx)
+			}
+
 			before := len(*calls)
 			tt.invoke(ctx)
 
@@ -180,6 +179,98 @@ func TestPlanningPokerMetric_PropagatesContext(t *testing.T) {
 	if got := (*calls)[0].ctx.Value(key); got != "abc-123" {
 		t.Fatalf("expected propagated context value %q, got %#v", "abc-123", got)
 	}
+}
+
+func TestPlanningPokerMetric_DecrementIsFlooredAtZero(t *testing.T) {
+	tests := []struct {
+		name       string
+		metricName string
+		increment  func(PlanningPokerMetric, context.Context)
+		decrement  func(PlanningPokerMetric, context.Context)
+	}{
+		{
+			name:       "active users",
+			metricName: PlanningPokerActiveUsersMetric,
+			increment:  PlanningPokerMetric.IncrementActiveUsers,
+			decrement:  PlanningPokerMetric.DecrementActiveUsers,
+		},
+		{
+			name:       "active rooms",
+			metricName: PlanningPokerActiveRoomsMetric,
+			increment:  PlanningPokerMetric.IncrementActiveRoomsCounter,
+			decrement:  PlanningPokerMetric.DecrementActiveRoomsCounter,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name+": decrement without increment emits nothing", func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockMeter, calls := newRecordedMeter(ctrl)
+			m := NewPlanningPokerMetricWithMeter(mockMeter)
+			ctx := context.Background()
+
+			tt.decrement(m, ctx)
+
+			if len(*calls) != 0 {
+				t.Fatalf("expected no metric calls, got %d", len(*calls))
+			}
+		})
+
+		t.Run(tt.name+": increment then decrement emits one positive and one negative", func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockMeter, calls := newRecordedMeter(ctrl)
+			m := NewPlanningPokerMetricWithMeter(mockMeter)
+			ctx := context.Background()
+
+			tt.increment(m, ctx)
+			tt.decrement(m, ctx)
+
+			if len(*calls) != 2 {
+				t.Fatalf("expected 2 metric calls, got %d", len(*calls))
+			}
+			assertRecordedCounterCall(t, (*calls)[0], tt.metricName, 1)
+			assertRecordedCounterCall(t, (*calls)[1], tt.metricName, -1)
+		})
+
+		t.Run(tt.name+": repeated decrements emit exactly one negative", func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockMeter, calls := newRecordedMeter(ctrl)
+			m := NewPlanningPokerMetricWithMeter(mockMeter)
+			ctx := context.Background()
+
+			tt.increment(m, ctx)
+			tt.decrement(m, ctx)
+			tt.decrement(m, ctx)
+
+			if len(*calls) != 2 {
+				t.Fatalf("expected 2 metric calls, got %d", len(*calls))
+			}
+			assertRecordedCounterCall(t, (*calls)[0], tt.metricName, 1)
+			assertRecordedCounterCall(t, (*calls)[1], tt.metricName, -1)
+		})
+	}
+}
+
+func TestPlanningPokerMetric_ValueCopiesShareCounterState(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockMeter, calls := newRecordedMeter(ctrl)
+	original := NewPlanningPokerMetricWithMeter(mockMeter)
+	ctx := context.Background()
+
+	copied := original
+
+	original.IncrementActiveUsers(ctx)
+	original.IncrementActiveRoomsCounter(ctx)
+	copied.DecrementActiveUsers(ctx)
+	copied.DecrementActiveRoomsCounter(ctx)
+
+	if len(*calls) != 4 {
+		t.Fatalf("expected 4 metric calls, got %d", len(*calls))
+	}
+	assertRecordedCounterCall(t, (*calls)[0], PlanningPokerActiveUsersMetric, 1)
+	assertRecordedCounterCall(t, (*calls)[1], PlanningPokerActiveRoomsMetric, 1)
+	assertRecordedCounterCall(t, (*calls)[2], PlanningPokerActiveUsersMetric, -1)
+	assertRecordedCounterCall(t, (*calls)[3], PlanningPokerActiveRoomsMetric, -1)
 }
 
 func TestPlanningPokerMetric_MetricNames(t *testing.T) {

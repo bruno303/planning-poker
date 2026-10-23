@@ -48,9 +48,12 @@ func TestAdminKickClientUseCase_Execute_Success(t *testing.T) {
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
 	mockHub.EXPECT().GetBus(clientID).Return(mockBus, true)
-	mockLeaveRoom.EXPECT().Execute(ctx, LeaveRoomCommand{RoomID: roomID, SenderID: clientID}).Return(nil)
-	mockBus.EXPECT().Send(ctx, dto.NewKickNotification()).Return(nil)
-	mockBus.EXPECT().Close().Return(nil)
+	leaveRoomCall := mockLeaveRoom.EXPECT().Execute(ctx, LeaveRoomCommand{RoomID: roomID, SenderID: clientID}).Return(nil)
+	sendCall := mockBus.EXPECT().Send(ctx, dto.NewKickNotification()).Return(nil)
+	detachCall := mockBus.EXPECT().Detach()
+	closeCall := mockBus.EXPECT().Close().Return(nil)
+
+	gomock.InOrder(leaveRoomCall, sendCall, detachCall, closeCall)
 
 	uc := NewAdminKickClientUseCase(mockLeaveRoom, mockHub)
 	err := uc.Execute(ctx, AdminKickClientCommand{RoomID: roomID, ClientID: clientID})
@@ -225,9 +228,12 @@ func TestAdminKickClientUseCase_Execute_BusCloseError(t *testing.T) {
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
 	mockHub.EXPECT().GetBus(clientID).Return(mockBus, true)
-	mockLeaveRoom.EXPECT().Execute(ctx, LeaveRoomCommand{RoomID: roomID, SenderID: clientID}).Return(nil)
-	mockBus.EXPECT().Send(ctx, dto.NewKickNotification()).Return(nil)
-	mockBus.EXPECT().Close().Return(errors.New("close error"))
+	leaveRoomCall := mockLeaveRoom.EXPECT().Execute(ctx, LeaveRoomCommand{RoomID: roomID, SenderID: clientID}).Return(nil)
+	sendCall := mockBus.EXPECT().Send(ctx, dto.NewKickNotification()).Return(nil)
+	detachCall := mockBus.EXPECT().Detach()
+	closeCall := mockBus.EXPECT().Close().Return(errors.New("close error"))
+
+	gomock.InOrder(leaveRoomCall, sendCall, detachCall, closeCall)
 
 	uc := NewAdminKickClientUseCase(mockLeaveRoom, mockHub)
 	err := uc.Execute(ctx, AdminKickClientCommand{RoomID: roomID, ClientID: clientID})
@@ -257,9 +263,12 @@ func TestAdminKickClientUseCase_Execute_SendError(t *testing.T) {
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
 	mockHub.EXPECT().GetBus(clientID).Return(mockBus, true)
-	mockLeaveRoom.EXPECT().Execute(ctx, LeaveRoomCommand{RoomID: roomID, SenderID: clientID}).Return(nil)
-	mockBus.EXPECT().Send(ctx, dto.NewKickNotification()).Return(errors.New("send error"))
-	mockBus.EXPECT().Close().Return(nil)
+	leaveRoomCall := mockLeaveRoom.EXPECT().Execute(ctx, LeaveRoomCommand{RoomID: roomID, SenderID: clientID}).Return(nil)
+	sendCall := mockBus.EXPECT().Send(ctx, dto.NewKickNotification()).Return(errors.New("send error"))
+	detachCall := mockBus.EXPECT().Detach()
+	closeCall := mockBus.EXPECT().Close().Return(nil)
+
+	gomock.InOrder(leaveRoomCall, sendCall, detachCall, closeCall)
 
 	uc := NewAdminKickClientUseCase(mockLeaveRoom, mockHub)
 	err := uc.Execute(ctx, AdminKickClientCommand{RoomID: roomID, ClientID: clientID})

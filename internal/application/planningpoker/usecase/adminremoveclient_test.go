@@ -47,8 +47,11 @@ func TestAdminRemoveClientUseCase_Execute_Success(t *testing.T) {
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
 	mockHub.EXPECT().GetBus(clientID).Return(mockBus, true)
-	mockLeaveRoom.EXPECT().Execute(ctx, LeaveRoomCommand{RoomID: roomID, SenderID: clientID}).Return(nil)
-	mockBus.EXPECT().Close().Return(nil)
+	leaveRoomCall := mockLeaveRoom.EXPECT().Execute(ctx, LeaveRoomCommand{RoomID: roomID, SenderID: clientID}).Return(nil)
+	detachCall := mockBus.EXPECT().Detach()
+	closeCall := mockBus.EXPECT().Close().Return(nil)
+
+	gomock.InOrder(leaveRoomCall, detachCall, closeCall)
 
 	uc := NewAdminRemoveClientUseCase(mockLeaveRoom, mockHub)
 	err := uc.Execute(ctx, AdminRemoveClientCommand{RoomID: roomID, ClientID: clientID})
@@ -188,8 +191,11 @@ func TestAdminRemoveClientUseCase_Execute_BusCloseError(t *testing.T) {
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
 	mockHub.EXPECT().GetBus(clientID).Return(mockBus, true)
-	mockLeaveRoom.EXPECT().Execute(ctx, LeaveRoomCommand{RoomID: roomID, SenderID: clientID}).Return(nil)
-	mockBus.EXPECT().Close().Return(errors.New("close error"))
+	leaveRoomCall := mockLeaveRoom.EXPECT().Execute(ctx, LeaveRoomCommand{RoomID: roomID, SenderID: clientID}).Return(nil)
+	detachCall := mockBus.EXPECT().Detach()
+	closeCall := mockBus.EXPECT().Close().Return(errors.New("close error"))
+
+	gomock.InOrder(leaveRoomCall, detachCall, closeCall)
 
 	uc := NewAdminRemoveClientUseCase(mockLeaveRoom, mockHub)
 	err := uc.Execute(ctx, AdminRemoveClientCommand{RoomID: roomID, ClientID: clientID})
