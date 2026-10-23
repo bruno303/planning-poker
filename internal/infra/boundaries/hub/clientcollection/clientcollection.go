@@ -1,6 +1,8 @@
 package clientcollection
 
 import (
+	"slices"
+
 	"planning-poker/internal/domain/entity"
 )
 
@@ -27,8 +29,16 @@ func (cc *InMemoryClientCollection) Remove(clientID string) {
 	}
 }
 
+// Values returns a defensive copy so callers cannot reorder the collection's
+// internal slice. DTO mapping sorts participants by name, and sorting the
+// internal slice used to leak into ownership fallback and persisted client
+// order.
+// Values returns a defensive copy so callers cannot reorder the collection's
+// internal slice. DTO mapping sorts participants by name, and sorting the
+// internal slice used to leak into ownership fallback and persisted client
+// order.
 func (cc *InMemoryClientCollection) Values() []*entity.Client {
-	return cc.clients
+	return slices.Clone(cc.clients)
 }
 
 func (cc *InMemoryClientCollection) Count() int {
