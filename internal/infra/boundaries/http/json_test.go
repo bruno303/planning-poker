@@ -18,6 +18,12 @@ func assertJSONResponse(t *testing.T, w *httptest.ResponseRecorder, wantStatus i
 	if contentType := w.Header().Get("Content-Type"); contentType != "application/json" {
 		t.Errorf("response Content-Type = %v, want application/json", contentType)
 	}
+	if wantBody == "" {
+		if w.Body.Len() != 0 {
+			t.Errorf("response body = %q, want empty body", w.Body.String())
+		}
+		return
+	}
 
 	var got, want any
 	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
@@ -113,8 +119,22 @@ func TestSendJsonResponse(t *testing.T) {
 			name:       "should send JSON response with nil",
 			statusCode: http.StatusNoContent,
 			response:   nil,
-			wantBody:   `null`,
+			wantBody:   "",
 			wantStatus: http.StatusNoContent,
+		},
+		{
+			name:       "should send null body for nil response with 200",
+			statusCode: http.StatusOK,
+			response:   nil,
+			wantBody:   `null`,
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "should send encoding error when response cannot be marshaled",
+			statusCode: http.StatusOK,
+			response:   make(chan int),
+			wantBody:   `{"error":"failed to encode JSON response"}`,
+			wantStatus: http.StatusInternalServerError,
 		},
 	}
 

@@ -15,10 +15,20 @@ type ErrorResponse struct {
 
 func SendJsonResponse(w http.ResponseWriter, statusCode int, res any) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	if err := json.NewEncoder(w).Encode(res); err != nil {
-		SendJsonErrorMsg(w, http.StatusInternalServerError, "failed to encode JSON response")
+
+	if statusCode == http.StatusNoContent {
+		w.WriteHeader(statusCode)
+		return
 	}
+
+	body, err := json.Marshal(res)
+	if err != nil {
+		SendJsonErrorMsg(w, http.StatusInternalServerError, "failed to encode JSON response")
+		return
+	}
+
+	w.WriteHeader(statusCode)
+	_, _ = w.Write(append(body, '\n'))
 }
 
 func SendJsonError(w http.ResponseWriter, statusCode int, err error) {
