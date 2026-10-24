@@ -16,8 +16,8 @@ type (
 		round     *VotingRound
 		backlog   *Backlog
 
-		DeckType    DeckType
-		RoomVersion uint64
+		DeckType DeckType
+		version  RoomVersion
 	}
 )
 
@@ -57,6 +57,18 @@ func NewRoomWithIDAndDeck(id string, clients ClientCollection, deckType DeckType
 // ID returns the room's stable identifier.
 func (r *Room) ID() string {
 	return r.id
+}
+
+// Version returns the aggregate's optimistic-concurrency revision.
+func (r *Room) Version() RoomVersion {
+	return r.version
+}
+
+// SetVersion applies a revision produced by a persistence adapter. Domain
+// operations must never call it; only hubs bump the version after a successful
+// save.
+func (r *Room) SetVersion(v RoomVersion) {
+	r.version = v
 }
 
 // Clients returns the room's client collection.

@@ -95,7 +95,7 @@ func TestRedisHub_SaveRoom_WhenRedisFailsWrapsError(t *testing.T) {
 
 	hub := newErrorTestHub(mockRedis)
 	room := entity.NewRoomWithID("room-1", clientcollection.New())
-	expectedVersion := room.RoomVersion
+	expectedVersion := room.Version().Uint64()
 	err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion)
 
 	assert.ErrorIs(t, err, wantErr)

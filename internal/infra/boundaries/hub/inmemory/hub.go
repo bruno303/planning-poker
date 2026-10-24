@@ -210,22 +210,22 @@ func (h *InMemoryHub) refreshSavedRoom(room *entity.Room) {
 	if !ok {
 		return
 	}
-	snapshot := cloneRoom(room)
-	snapshot.RoomVersion = saved.RoomVersion
-	h.saved[room.ID()] = snapshot
+	snapshot := room.Snapshot()
+	snapshot.Version = saved.Version()
+	h.saved[room.ID()] = entity.NewRoomFromSnapshot(snapshot, clientcollection.New())
 }
 
 func (h *InMemoryHub) SaveRoom(_ context.Context, room *entity.Room) error {
 	h.roomMu.Lock()
 	defer h.roomMu.Unlock()
-	next := room.RoomVersion + 1
+	next := room.Version().Next()
 	if saved, ok := h.saved[room.ID()]; ok {
-		next = saved.RoomVersion + 1
+		next = saved.Version().Next()
 	}
 	saved := cloneRoom(room)
-	saved.RoomVersion = next
+	saved.SetVersion(next)
 	h.saved[room.ID()] = saved
-	room.RoomVersion = next
+	room.SetVersion(next)
 	return nil
 }
 
@@ -237,21 +237,21 @@ func (h *InMemoryHub) SaveRoomIfVersion(_ context.Context, room *entity.Room, ex
 		return domain.ErrStaleRoomVersion
 	}
 
-	persistedVersion := uint64(0)
+	persistedVersion := entity.NewRoomVersion(0)
 	if saved, ok := h.saved[room.ID()]; ok {
-		persistedVersion = saved.RoomVersion
+		persistedVersion = saved.Version()
 	}
-	if expectedVersion == nil || persistedVersion != *expectedVersion {
+	if expectedVersion == nil || persistedVersion.Uint64() != *expectedVersion {
 		if saved, ok := h.saved[room.ID()]; ok && h.Rooms[room.ID()] == room {
 			h.Rooms[room.ID()] = cloneRoom(saved)
 		}
 		return domain.ErrStaleRoomVersion
 	}
-	next := persistedVersion + 1
+	next := persistedVersion.Next()
 	saved := cloneRoom(room)
-	saved.RoomVersion = next
+	saved.SetVersion(next)
 	h.saved[room.ID()] = saved
-	room.RoomVersion = next
+	room.SetVersion(next)
 	h.Rooms[room.ID()] = room
 	return nil
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/bruno303/go-toolkit/pkg/log"
 
 	"planning-poker/internal/domain/entity"
+	"planning-poker/internal/infra/boundaries/hub/clientcollection"
 )
 
 type (
@@ -82,10 +83,19 @@ func SerializeRoom(room *entity.Room) ([]byte, error) {
 		BacklogMode:        room.BacklogMode(),
 		Stories:            serializeStories(room.Stories()),
 		CurrentStoryIndex:  room.CurrentStoryIndex(),
-		RoomVersion:        room.RoomVersion,
+		RoomVersion:        room.Version().Uint64(),
 	}
 
 	return json.Marshal(serialized)
+}
+
+// SerializeRoomAtVersion serializes the room as it will be persisted under the
+// given version, without mutating the aggregate.
+func SerializeRoomAtVersion(room *entity.Room, version uint64) ([]byte, error) {
+	snapshot := room.Snapshot()
+	snapshot.Version = entity.NewRoomVersion(version)
+
+	return SerializeRoom(entity.NewRoomFromSnapshot(snapshot, clientcollection.New()))
 }
 
 func outcomeResult(outcome *entity.RoundOutcome) *float32 {
@@ -172,7 +182,7 @@ func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 		ID:                serialized.ID,
 		StartedAt:         entity.UTCTimeOrZero(serialized.StartedAt),
 		DeckType:          serialized.DeckType,
-		Version:           serialized.RoomVersion,
+		Version:           entity.NewRoomVersion(serialized.RoomVersion),
 		CurrentStory:      serialized.CurrentStory,
 		Revealed:          serialized.Reveal,
 		Outcome:           outcomeFromSerialized(serialized),

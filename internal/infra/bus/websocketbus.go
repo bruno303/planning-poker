@@ -220,7 +220,7 @@ func (c *WebsocketBus) process(ctx context.Context, msg WebSocketMessage) {
 			room, loadErr := c.hub.LoadRoom(ctx, c.roomID)
 			version := uint64(0)
 			if loadErr == nil {
-				version = room.RoomVersion
+				version = room.Version().Uint64()
 			}
 			_ = c.Send(ctx, map[string]any{"type": "stale-command", "roomVersion": version})
 			return

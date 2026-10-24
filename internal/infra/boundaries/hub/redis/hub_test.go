@@ -84,7 +84,7 @@ func TestRedisHub_SaveRoomConditionally(t *testing.T) {
 
 			hub := &RedisHub{client: mockRedis}
 			room := entity.NewRoomWithID("room-conditional", clientcollection.New())
-			room.RoomVersion = 3
+			room.SetVersion(entity.NewRoomVersion(3))
 			expectedVersion := uint64(2)
 			err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion)
 			if test.wantError != nil {
@@ -92,7 +92,7 @@ func TestRedisHub_SaveRoomConditionally(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
-			if test.wantSaved && room.RoomVersion != 3 {
+			if test.wantSaved && room.Version().Uint64() != 3 {
 				t.Fatalf("saved room version was not advanced")
 			}
 		})

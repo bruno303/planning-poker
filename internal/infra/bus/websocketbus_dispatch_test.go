@@ -285,7 +285,7 @@ func TestWebsocketBus_Process_WhenUseCaseReportsStaleVersion(t *testing.T) {
 	serverConn, clientConn := websocketPair(t)
 	defer clientConn.Close()
 	room := entity.NewRoomWithID("room-1", clientcollection.New())
-	room.RoomVersion = 6
+	room.SetVersion(entity.NewRoomVersion(6))
 	hub := domain.NewMockHub(ctrl)
 	hub.EXPECT().LoadRoom(gomock.Any(), "room-1").Return(room, nil)
 	calls := map[string]useCaseCall{

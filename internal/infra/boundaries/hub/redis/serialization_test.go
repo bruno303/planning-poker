@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"bytes"
 	"encoding/json"
 	"reflect"
 	"testing"
@@ -96,8 +97,8 @@ func assertSerializedRoomProperties(t *testing.T, originalRoom, deserializedRoom
 	if deserializedRoom.SpecialVoteCount() != originalRoom.SpecialVoteCount() {
 		t.Errorf("Expected special vote count %d, got %d", originalRoom.SpecialVoteCount(), deserializedRoom.SpecialVoteCount())
 	}
-	if deserializedRoom.RoomVersion != originalRoom.RoomVersion {
-		t.Errorf("Expected room version %d, got %d", originalRoom.RoomVersion, deserializedRoom.RoomVersion)
+	if deserializedRoom.Version() != originalRoom.Version() {
+		t.Errorf("Expected room version %d, got %d", originalRoom.Version().Uint64(), deserializedRoom.Version().Uint64())
 	}
 }
 
@@ -156,6 +157,103 @@ func assertSerializedClients(t *testing.T, originalRoom, deserializedRoom *entit
 	}
 	if deserializedClient2.VotedAt == nil || !deserializedClient2.VotedAt.Equal(*originalClient2.VotedAt) || deserializedClient2.VotedAt.Location() != time.UTC {
 		t.Errorf("Expected client 2 vote time %v in UTC, got %v", originalClient2.VotedAt, deserializedClient2.VotedAt)
+	}
+}
+
+func TestSerializeRoom_WireCompatibilityGolden(t *testing.T) {
+	startedAt := time.Date(2026, time.September, 3, 12, 0, 0, 0, time.FixedZone("BRT", -3*60*60))
+	room := entity.NewRoomFromSnapshot(entity.RoomSnapshot{
+		ID:        "room-golden",
+		StartedAt: startedAt,
+		DeckType:  entity.DeckTypeTShirt,
+		Version:   42,
+		Clients: []entity.ClientSnapshot{
+			{
+				ID:       "client-owner",
+				Name:     "Alice",
+				Vote:     entity.VotePtr("8"),
+				HasVoted: true,
+				VotedAt:  lo.ToPtr(startedAt.Add(time.Minute)),
+				IsOwner:  true,
+			},
+			{
+				ID:       "client-voter",
+				Name:     "Bob",
+				Vote:     entity.VotePtr("5"),
+				HasVoted: true,
+				VotedAt:  lo.ToPtr(startedAt.Add(2 * time.Minute)),
+			},
+		},
+		CurrentStory: "Checkout",
+		Revealed:     true,
+		Outcome: &entity.RoundOutcome{
+			Result:             lo.ToPtr(float32(5.5)),
+			MostAppearingVotes: []string{"5"},
+			Consensus:          "High",
+			LowestVote:         lo.ToPtr("3"),
+			HighestVote:        lo.ToPtr("8"),
+			VoteRange:          lo.ToPtr(5),
+			VoteSpread:         lo.ToPtr(2),
+			SpecialVoteCount:   1,
+		},
+		BacklogMode: true,
+		Stories: []entity.Story{{
+			ID:                 "story-1",
+			Name:               "Checkout",
+			Result:             lo.ToPtr(float32(5.5)),
+			MostAppearingVotes: []string{"5"},
+			Voted:              true,
+		}},
+		CurrentStoryIndex: 0,
+	}, clientcollection.New())
+
+	data, err := SerializeRoom(room)
+	if err != nil {
+		t.Fatalf("SerializeRoom returned error: %v", err)
+	}
+
+	const want = `{"id":"room-golden","startedAt":"2026-09-03T15:00:00Z","clients":[{"id":"client-owner","name":"Alice","currentVote":"8","hasVoted":true,"votedAt":"2026-09-03T15:01:00Z","isSpectator":false,"isOwner":true},{"id":"client-voter","name":"Bob","currentVote":"5","hasVoted":true,"votedAt":"2026-09-03T15:02:00Z","isSpectator":false,"isOwner":false}],"deckType":"t-shirt","currentStory":"Checkout","reveal":true,"result":5.5,"mostAppearingVotes":["5"],"consensus":"High","lowestVote":"3","highestVote":"8","voteRange":5,"voteSpread":2,"specialVoteCount":1,"backlogMode":true,"stories":[{"id":"story-1","name":"Checkout","result":5.5,"mostAppearingVotes":["5"],"voted":true}],"currentStoryIndex":0,"roomVersion":42}`
+	if string(data) != want {
+		t.Fatalf("serialized room does not match the pre-refactor wire contract:\n got: %s\nwant: %s", data, want)
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	var wire map[string]any
+	if err := decoder.Decode(&wire); err != nil {
+		t.Fatalf("serialized room is invalid JSON: %v", err)
+	}
+	version, ok := wire["roomVersion"].(json.Number)
+	if !ok {
+		t.Fatalf("roomVersion is not a JSON number: %T", wire["roomVersion"])
+	}
+	if version.String() != "42" {
+		t.Fatalf("roomVersion = %s, want 42", version)
+	}
+}
+
+func TestSerializeRoomAtVersionOverridesPersistedVersion(t *testing.T) {
+	room := entity.NewRoomFromSnapshot(entity.RoomSnapshot{
+		ID:      "room-versioned",
+		Version: 4,
+	}, clientcollection.New())
+
+	data, err := SerializeRoomAtVersion(room, 9)
+	if err != nil {
+		t.Fatalf("SerializeRoomAtVersion returned error: %v", err)
+	}
+
+	var wire struct {
+		RoomVersion uint64 `json:"roomVersion"`
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		t.Fatalf("serialized room is invalid JSON: %v", err)
+	}
+	if wire.RoomVersion != 9 {
+		t.Fatalf("serialized roomVersion = %d, want 9", wire.RoomVersion)
+	}
+	if room.Version().Uint64() != 4 {
+		t.Fatalf("SerializeRoomAtVersion mutated the room version to %d", room.Version().Uint64())
 	}
 }
 

@@ -78,7 +78,7 @@ func NewRoomStateCommand(room *entity.Room) RoomState {
 		BacklogMode:        room.BacklogMode(),
 		Stories:            mapStories(room.Stories()),
 		CurrentStoryIndex:  room.CurrentStoryIndex(),
-		RoomVersion:        room.RoomVersion,
+		RoomVersion:        room.Version().Uint64(),
 	}
 }
 

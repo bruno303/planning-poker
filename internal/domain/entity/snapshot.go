@@ -9,7 +9,7 @@ type (
 		ID                string
 		StartedAt         time.Time
 		DeckType          DeckType
-		Version           uint64
+		Version           RoomVersion
 		Clients           []ClientSnapshot
 		CurrentStory      string
 		Revealed          bool
@@ -48,7 +48,7 @@ func (r *Room) Snapshot() RoomSnapshot {
 		ID:                r.id,
 		StartedAt:         r.startedAt,
 		DeckType:          r.DeckType,
-		Version:           r.RoomVersion,
+		Version:           r.version,
 		Clients:           clients,
 		CurrentStory:      r.round.CurrentStoryName(),
 		Revealed:          r.round.Revealed(),
@@ -74,13 +74,13 @@ func NewRoomFromSnapshot(s RoomSnapshot, clients ClientCollection) *Room {
 	backlog.restore(s.BacklogMode, cloneStories(s.Stories), s.CurrentStoryIndex)
 
 	room := &Room{
-		id:          s.ID,
-		startedAt:   s.StartedAt.UTC(),
-		presence:    NewPresence(s.ID, clients),
-		round:       round,
-		backlog:     backlog,
-		DeckType:    s.DeckType,
-		RoomVersion: s.Version,
+		id:        s.ID,
+		startedAt: s.StartedAt.UTC(),
+		presence:  NewPresence(s.ID, clients),
+		round:     round,
+		backlog:   backlog,
+		DeckType:  s.DeckType,
+		version:   s.Version,
 	}
 
 	for _, snapshot := range s.Clients {

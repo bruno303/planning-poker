@@ -440,8 +440,27 @@ func TestRoom_ToggleReveal(t *testing.T) {
 
 func TestRoomMutationsDoNotChangeVersion(t *testing.T) {
 	room := NewRoom(newTestCollection())
-	if room.RoomVersion != 0 {
-		t.Fatalf("initial room version = %d, want 0", room.RoomVersion)
+	if room.Version().Uint64() != 0 {
+		t.Fatalf("initial room version = %d, want 0", room.Version().Uint64())
+	}
+}
+
+func TestRoomVersionValueObject(t *testing.T) {
+	version := NewRoomVersion(3)
+	if version.Uint64() != 3 {
+		t.Fatalf("version = %d, want 3", version.Uint64())
+	}
+	if next := version.Next(); next.Uint64() != 4 {
+		t.Fatalf("next version = %d, want 4", next.Uint64())
+	}
+	if version.String() != "3" {
+		t.Fatalf("version string = %q, want %q", version.String(), "3")
+	}
+
+	room := NewRoom(newTestCollection())
+	room.SetVersion(version)
+	if room.Version() != version {
+		t.Fatalf("room version = %s, want %s", room.Version(), version)
 	}
 }
 
