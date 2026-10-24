@@ -41,6 +41,6 @@ func (uc ReorderStoryUseCase) Execute(ctx context.Context, cmd ReorderStoryComma
 		if err := uc.hub.SaveRoomIfVersion(ctx, room, cmd.ExpectedRoomVersion); err != nil {
 			return err
 		}
-		return uc.hub.BroadcastToRoom(ctx, room.ID, dto.NewRoomStateCommand(room))
+		return uc.hub.BroadcastToRoom(ctx, room.ID(), dto.NewRoomStateCommand(room))
 	})
 }

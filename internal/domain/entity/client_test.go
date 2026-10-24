@@ -3,8 +3,6 @@ package entity
 import (
 	"context"
 	"testing"
-
-	"go.uber.org/mock/gomock"
 )
 
 func assertNewClient(t *testing.T, client *Client, wantID string) {
@@ -39,15 +37,15 @@ func assertNewClient(t *testing.T, client *Client, wantID string) {
 	}
 }
 
-func assertVoteResult(t *testing.T, client *Client, wantVote *string, wantHasVoted bool) {
+func assertVoteResult(t *testing.T, client *Client, wantVote *Vote, wantHasVoted bool) {
 	t.Helper()
 
 	if wantVote == nil {
 		if client.CurrentVote != nil {
-			t.Errorf("Vote() CurrentVote = %v, want nil", *client.CurrentVote)
+			t.Errorf("Vote() CurrentVote = %v, want nil", client.CurrentVote.Label())
 		}
-	} else if client.CurrentVote == nil || *client.CurrentVote != *wantVote {
-		t.Errorf("Vote() CurrentVote = %v, want %v", client.CurrentVote, *wantVote)
+	} else if client.CurrentVote == nil || client.CurrentVote.Label() != wantVote.Label() {
+		t.Errorf("Vote() CurrentVote = %v, want %v", client.CurrentVote, wantVote.Label())
 	}
 	if client.HasVoted != wantHasVoted {
 		t.Errorf("Vote() HasVoted = %v, want %v", client.HasVoted, wantHasVoted)
@@ -81,53 +79,53 @@ func TestNewClient(t *testing.T) {
 }
 
 func TestClient_Vote(t *testing.T) {
-	vote1 := "1"
-	vote2 := "2"
-	vote3 := "3"
-	vote5 := "5"
-	vote8 := "8"
-	emptyVote := ""
+	vote1 := VotePtr("1")
+	vote2 := VotePtr("2")
+	vote3 := VotePtr("3")
+	vote5 := VotePtr("5")
+	vote8 := VotePtr("8")
+	emptyVote := VotePtr("")
 
 	tests := []struct {
 		name         string
 		reveal       bool
-		vote         *string
-		wantVote     *string
+		vote         *Vote
+		wantVote     *Vote
 		wantHasVoted bool
 	}{
 		{
 			name:         "should accept vote when not revealed - vote 1",
 			reveal:       false,
-			vote:         &vote1,
-			wantVote:     &vote1,
+			vote:         vote1,
+			wantVote:     vote1,
 			wantHasVoted: true,
 		},
 		{
 			name:         "should accept vote when not revealed - vote 2",
 			reveal:       false,
-			vote:         &vote2,
-			wantVote:     &vote2,
+			vote:         vote2,
+			wantVote:     vote2,
 			wantHasVoted: true,
 		},
 		{
 			name:         "should accept vote when not revealed - vote 3",
 			reveal:       false,
-			vote:         &vote3,
-			wantVote:     &vote3,
+			vote:         vote3,
+			wantVote:     vote3,
 			wantHasVoted: true,
 		},
 		{
 			name:         "should accept vote when not revealed - vote 5",
 			reveal:       false,
-			vote:         &vote5,
-			wantVote:     &vote5,
+			vote:         vote5,
+			wantVote:     vote5,
 			wantHasVoted: true,
 		},
 		{
 			name:         "should accept vote when not revealed - vote 8",
 			reveal:       false,
-			vote:         &vote8,
-			wantVote:     &vote8,
+			vote:         vote8,
+			wantVote:     vote8,
 			wantHasVoted: true,
 		},
 		{
@@ -140,14 +138,14 @@ func TestClient_Vote(t *testing.T) {
 		{
 			name:         "should accept empty vote when not revealed",
 			reveal:       false,
-			vote:         &emptyVote,
-			wantVote:     &emptyVote,
+			vote:         emptyVote,
+			wantVote:     emptyVote,
 			wantHasVoted: false,
 		},
 		{
 			name:         "should ignore vote when revealed",
 			reveal:       true,
-			vote:         &vote5,
+			vote:         vote5,
 			wantVote:     nil,
 			wantHasVoted: false,
 		},
@@ -165,15 +163,12 @@ func TestClient_Vote(t *testing.T) {
 			ctx := context.Background()
 			client := newClient("test-client")
 
-			// Create a room and attach to client
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-			mockClientCollection := NewMockClientCollection(ctrl)
-			room := NewRoom(mockClientCollection)
+			room := NewRoom(newTestCollection(client))
 			room.Reveal = tt.reveal
-			client.room = room
 
-			client.Vote(ctx, tt.vote)
+			if err := room.Vote(ctx, client.ID, tt.vote); err != nil {
+				t.Fatalf("Vote() error = %v", err)
+			}
 
 			assertVoteResult(t, client, tt.wantVote, tt.wantHasVoted)
 		})
@@ -183,87 +178,57 @@ func TestClient_Vote(t *testing.T) {
 func TestClient_Vote_UpdateVote(t *testing.T) {
 	ctx := context.Background()
 
-	vote1 := "1"
-	vote5 := "5"
-	vote8 := "8"
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	vote1 := VotePtr("1")
+	vote5 := VotePtr("5")
+	vote8 := VotePtr("8")
 
 	client := newClient("test-client")
-	mockClientCollection := NewMockClientCollection(ctrl)
-	room := NewRoom(mockClientCollection)
+	other := newClient("other-client")
+	room := NewRoom(newTestCollection(client, other))
 	room.Reveal = false
-	client.room = room
 
 	// First vote
-	client.Vote(ctx, &vote1)
-	if client.CurrentVote == nil || *client.CurrentVote != vote1 {
-		t.Errorf("First Vote() CurrentVote = %v, want %v", client.CurrentVote, vote1)
+	if err := room.Vote(ctx, client.ID, vote1); err != nil {
+		t.Fatalf("Vote() error = %v", err)
+	}
+	if client.CurrentVote == nil || client.CurrentVote.Label() != vote1.Label() {
+		t.Errorf("First Vote() CurrentVote = %v, want %v", client.CurrentVote, vote1.Label())
 	}
 	if !client.HasVoted {
 		t.Error("First Vote() HasVoted = false, want true")
 	}
 
 	// Change vote
-	client.Vote(ctx, &vote5)
-	if client.CurrentVote == nil || *client.CurrentVote != vote5 {
-		t.Errorf("Second Vote() CurrentVote = %v, want %v", client.CurrentVote, vote5)
+	if err := room.Vote(ctx, client.ID, vote5); err != nil {
+		t.Fatalf("Vote() error = %v", err)
+	}
+	if client.CurrentVote == nil || client.CurrentVote.Label() != vote5.Label() {
+		t.Errorf("Second Vote() CurrentVote = %v, want %v", client.CurrentVote, vote5.Label())
 	}
 	if !client.HasVoted {
 		t.Error("Second Vote() HasVoted = false, want true")
 	}
 
 	// Change vote again
-	client.Vote(ctx, &vote8)
-	if client.CurrentVote == nil || *client.CurrentVote != vote8 {
-		t.Errorf("Third Vote() CurrentVote = %v, want %v", client.CurrentVote, vote8)
+	if err := room.Vote(ctx, client.ID, vote8); err != nil {
+		t.Fatalf("Vote() error = %v", err)
+	}
+	if client.CurrentVote == nil || client.CurrentVote.Label() != vote8.Label() {
+		t.Errorf("Third Vote() CurrentVote = %v, want %v", client.CurrentVote, vote8.Label())
 	}
 	if !client.HasVoted {
 		t.Error("Third Vote() HasVoted = false, want true")
 	}
 
 	// Clear vote
-	client.Vote(ctx, nil)
+	if err := room.Vote(ctx, client.ID, nil); err != nil {
+		t.Fatalf("Vote() error = %v", err)
+	}
 	if client.CurrentVote != nil {
 		t.Errorf("Clear Vote() CurrentVote = %v, want nil", client.CurrentVote)
 	}
 	if client.HasVoted {
 		t.Error("Clear Vote() HasVoted = true, want false")
-	}
-}
-
-func TestClient_Room(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	client := newClient("test-client")
-	mockClientCollection := NewMockClientCollection(ctrl)
-	room := NewRoom(mockClientCollection)
-	client.room = room
-
-	gotRoom := client.Room()
-
-	if gotRoom == nil {
-		t.Fatal("Room() returned nil")
-	}
-
-	if gotRoom != room {
-		t.Error("Room() returned different room instance")
-	}
-
-	if gotRoom.ID != room.ID {
-		t.Errorf("Room() ID = %v, want %v", gotRoom.ID, room.ID)
-	}
-}
-
-func TestClient_Room_Nil(t *testing.T) {
-	client := newClient("test-client")
-
-	gotRoom := client.Room()
-
-	if gotRoom != nil {
-		t.Errorf("Room() = %v, want nil", gotRoom)
 	}
 }
 
@@ -336,23 +301,23 @@ func TestClient_UpdateName_Multiple(t *testing.T) {
 
 func TestClient_VoteBeforeAndAfterReveal(t *testing.T) {
 	ctx := context.Background()
-	vote5 := "5"
-	vote8 := "8"
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	vote5 := VotePtr("5")
+	vote8 := VotePtr("8")
 
 	client := newClient("test-client")
-	room := NewRoom(NewMockClientCollection(ctrl))
+	room := NewRoom(newTestCollection(client))
 	room.Reveal = false
-	client.room = room
 
-	client.Vote(ctx, &vote5)
-	assertVoteResult(t, client, &vote5, true)
+	if err := room.Vote(ctx, client.ID, vote5); err != nil {
+		t.Fatalf("Vote() error = %v", err)
+	}
+	assertVoteResult(t, client, vote5, true)
 
 	room.Reveal = true
-	client.Vote(ctx, &vote8)
-	assertVoteResult(t, client, &vote5, true)
+	if err := room.Vote(ctx, client.ID, vote8); err != nil {
+		t.Fatalf("Vote() error = %v", err)
+	}
+	assertVoteResult(t, client, vote5, true)
 }
 
 func TestClient_SpectatorAndOwnerFlags(t *testing.T) {

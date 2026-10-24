@@ -1,7 +1,5 @@
 package entity
 
-//go:generate go tool mockgen -destination mocks.go -package entity . ClientCollection
-
 import (
 	"context"
 	"fmt"
@@ -11,25 +9,14 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/samber/lo"
-
-	"planning-poker/internal/domain/domainerror"
 )
 
 type (
-	ClientCollection interface {
-		Add(client *Client)
-		Remove(clientID string)
-		Count() int
-		First() (*Client, bool)
-		ForEach(f func(client *Client))
-		Filter(f func(client *Client) bool) ClientCollection
-		Values() []*Client
-	}
-
 	Room struct {
-		ID                 string
-		startedAt          time.Time
-		Clients            ClientCollection
+		id        string
+		startedAt time.Time
+		presence  *Presence
+
 		DeckType           DeckType
 		CurrentStory       string
 		Reveal             bool
@@ -59,9 +46,9 @@ func NewRoomWithID(id string, clients ClientCollection) *Room {
 // NewRoomWithIDAndStartedAt creates a room with a persisted start time.
 func NewRoomWithIDAndStartedAt(id string, clients ClientCollection, startedAt time.Time) *Room {
 	return &Room{
-		ID:           id,
+		id:           id,
 		startedAt:    startedAt.UTC(),
-		Clients:      clients,
+		presence:     NewPresence(id, clients),
 		DeckType:     DeckTypeFibonacci,
 		CurrentStory: "",
 		Reveal:       false,
@@ -83,6 +70,16 @@ func NewRoomWithIDAndDeck(id string, clients ClientCollection, deckType DeckType
 	return room
 }
 
+// ID returns the room's stable identifier.
+func (r *Room) ID() string {
+	return r.id
+}
+
+// Clients returns the room's client collection.
+func (r *Room) Clients() ClientCollection {
+	return r.presence.Clients()
+}
+
 // Deck returns the room's immutable deck descriptor. Unknown or empty deck
 // types resolve to Fibonacci so repository tests and zero-value rooms stay
 // usable.
@@ -96,38 +93,19 @@ func (r *Room) StartedAt() time.Time {
 }
 
 func (r *Room) NewClient(id string) *Client {
-	client := newClient(id)
-	r.Clients.Add(client)
-	client.room = r
-
-	if r.Clients.Count() == 1 {
-		client.IsOwner = true
-	}
-
-	return client
+	return r.presence.Add(id)
 }
 
 func (r *Room) RemoveClient(ctx context.Context, clientID string) error {
-	r.Clients.Remove(clientID)
-
-	if r.CountOwners() == 0 && r.Clients.Count() > 0 {
-		if client, ok := r.Clients.First(); ok {
-			client.IsOwner = true
-		}
-	}
-
+	r.presence.Remove(clientID)
 	r.checkReveal()
 
 	return nil
 }
 
 func (r *Room) ToggleBacklogMode(ctx context.Context, clientID string) error {
-	client, ok := r.FindClient(clientID)
-	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
-	}
-	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can toggle backlog mode")
+	if _, err := r.presence.RequireOwner(clientID, "toggle backlog mode"); err != nil {
+		return err
 	}
 
 	if !r.BacklogMode {
@@ -148,12 +126,8 @@ func (r *Room) ToggleBacklogMode(ctx context.Context, clientID string) error {
 }
 
 func (r *Room) AddStory(ctx context.Context, clientID string, name string) error {
-	client, ok := r.FindClient(clientID)
-	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
-	}
-	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can add a story")
+	if _, err := r.presence.RequireOwner(clientID, "add a story"); err != nil {
+		return err
 	}
 
 	if !r.BacklogMode {
@@ -168,19 +142,15 @@ func (r *Room) AddStory(ctx context.Context, clientID string, name string) error
 }
 
 func (r *Room) RemoveStory(ctx context.Context, clientID string, storyID string) error {
-	client, ok := r.FindClient(clientID)
-	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
-	}
-	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can remove a story")
+	if _, err := r.presence.RequireOwner(clientID, "remove a story"); err != nil {
+		return err
 	}
 	if storyID == "" {
 		return fmt.Errorf("story ID cannot be empty")
 	}
 	index := r.storyIndexByID(storyID)
 	if index == -1 {
-		return fmt.Errorf("story %s not found in room %s", storyID, r.ID)
+		return fmt.Errorf("story %s not found in room %s", storyID, r.id)
 	}
 
 	if index == r.CurrentStoryIndex {
@@ -188,17 +158,13 @@ func (r *Room) RemoveStory(ctx context.Context, clientID string, storyID string)
 			r.CurrentStoryIndex = 0
 			r.Stories = nil
 			r.reveal(false)
-			r.Clients.ForEach(func(c *Client) {
-				c.Vote(ctx, nil)
-			})
+			r.presence.ClearVotes()
 			return nil
 		} else if index == len(r.Stories)-1 {
 			r.CurrentStoryIndex--
 		}
 		r.reveal(false)
-		r.Clients.ForEach(func(c *Client) {
-			c.Vote(ctx, nil)
-		})
+		r.presence.ClearVotes()
 	} else if index < r.CurrentStoryIndex {
 		r.CurrentStoryIndex--
 	}
@@ -209,12 +175,8 @@ func (r *Room) RemoveStory(ctx context.Context, clientID string, storyID string)
 
 // SelectStory selects a pending story and starts a fresh voting round.
 func (r *Room) SelectStory(ctx context.Context, clientID string, storyID string) error {
-	client, ok := r.FindClient(clientID)
-	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
-	}
-	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can select a story")
+	if _, err := r.presence.RequireOwner(clientID, "select a story"); err != nil {
+		return err
 	}
 	if storyID == "" {
 		return fmt.Errorf("story ID cannot be empty")
@@ -222,7 +184,7 @@ func (r *Room) SelectStory(ctx context.Context, clientID string, storyID string)
 
 	index := r.storyIndexByID(storyID)
 	if index == -1 {
-		return fmt.Errorf("story %s not found in room %s", storyID, r.ID)
+		return fmt.Errorf("story %s not found in room %s", storyID, r.id)
 	}
 	if index == r.CurrentStoryIndex {
 		return fmt.Errorf("story %s is already the current story", storyID)
@@ -233,9 +195,7 @@ func (r *Room) SelectStory(ctx context.Context, clientID string, storyID string)
 
 	r.CurrentStoryIndex = index
 	r.reveal(false)
-	r.Clients.ForEach(func(c *Client) {
-		c.Vote(ctx, nil)
-	})
+	r.presence.ClearVotes()
 	return nil
 }
 
@@ -259,12 +219,8 @@ func (r *Room) ReorderStory(ctx context.Context, clientID string, storyID string
 }
 
 func (r *Room) validateReorderStory(clientID string, storyID string, targetIndex int) (int, error) {
-	client, ok := r.FindClient(clientID)
-	if !ok {
-		return 0, fmt.Errorf("client %s not found in room %s", clientID, r.ID)
-	}
-	if !client.IsOwner {
-		return 0, fmt.Errorf("only the room owner can reorder stories")
+	if _, err := r.presence.RequireOwner(clientID, "reorder stories"); err != nil {
+		return 0, err
 	}
 	if storyID == "" {
 		return 0, fmt.Errorf("story ID cannot be empty")
@@ -275,7 +231,7 @@ func (r *Room) validateReorderStory(clientID string, storyID string, targetIndex
 
 	storyIndex := r.storyIndexByID(storyID)
 	if storyIndex == -1 {
-		return 0, fmt.Errorf("story %s not found in room %s", storyID, r.ID)
+		return 0, fmt.Errorf("story %s not found in room %s", storyID, r.id)
 	}
 
 	return storyIndex, nil
@@ -315,39 +271,27 @@ func (r *Room) storyIndexByID(storyID string) int {
 }
 
 func (r *Room) AdvanceToNextStory(ctx context.Context, clientID string) error {
-	client, ok := r.FindClient(clientID)
-	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
-	}
-	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can advance to the next story")
+	if _, err := r.presence.RequireOwner(clientID, "advance to the next story"); err != nil {
+		return err
 	}
 
 	if r.CurrentStoryIndex < len(r.Stories)-1 {
 		r.CurrentStoryIndex++
 		r.reveal(false)
-		r.Clients.ForEach(func(c *Client) {
-			c.Vote(ctx, nil)
-		})
+		r.presence.ClearVotes()
 	}
 	return nil
 }
 
 func (r *Room) PrevStory(ctx context.Context, clientID string) error {
-	client, ok := r.FindClient(clientID)
-	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
-	}
-	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can go to the previous story")
+	if _, err := r.presence.RequireOwner(clientID, "go to the previous story"); err != nil {
+		return err
 	}
 
 	if r.CurrentStoryIndex > 0 {
 		r.CurrentStoryIndex--
 		r.reveal(false)
-		r.Clients.ForEach(func(c *Client) {
-			c.Vote(ctx, nil)
-		})
+		r.presence.ClearVotes()
 	}
 	return nil
 }
@@ -367,121 +311,54 @@ func (r *Room) getCurrentStoryName() string {
 }
 
 func (r *Room) ResetVoting(ctx context.Context, clientID string) error {
-	client, ok := r.FindClient(clientID)
-	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
-	}
-	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can reset voting")
+	if _, err := r.presence.RequireOwner(clientID, "reset voting"); err != nil {
+		return err
 	}
 
 	r.reveal(false)
 
-	r.Clients.ForEach(func(c *Client) {
-		c.Vote(ctx, nil)
-	})
+	r.presence.ClearVotes()
 	return nil
 }
 
 func (r *Room) checkReveal() {
-	activeClients := r.Clients.Filter(func(client *Client) bool {
-		return !client.IsSpectator
-	})
-
-	if lo.EveryBy(activeClients.Values(), func(client *Client) bool {
-		return client.HasVoted
-	}) {
+	if r.presence.AllActiveVoted() {
 		r.reveal(true)
 	}
 }
 
 func (r *Room) CountOwners() int {
-	return r.Clients.Filter(func(client *Client) bool {
-		return client.IsOwner
-	}).Count()
+	return r.presence.OwnerCount()
 }
 
 func (r *Room) ToggleSpectator(ctx context.Context, clientID string, targetClientID string) error {
-	client, ok := r.FindClient(clientID)
-	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
-	}
-	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can toggle ownership")
+	if err := r.presence.ToggleSpectator(ctx, clientID, targetClientID); err != nil {
+		return err
 	}
 
-	if targetClient, ok := r.FindClient(targetClientID); ok {
-		targetClient.IsSpectator = !targetClient.IsSpectator
-		targetClient.Vote(ctx, nil)
-		r.checkReveal()
-	} else {
-		return fmt.Errorf("target client %s not found in room %s", targetClientID, r.ID)
+	// Votes are only cleared while the round is hidden, mirroring the previous
+	// Client.Vote behaviour.
+	if target, ok := r.presence.Find(targetClientID); ok && !r.Reveal {
+		r.presence.SetVote(target, nil)
 	}
+
+	r.checkReveal()
 	return nil
 }
 
 func (r *Room) ToggleOwner(ctx context.Context, clientID string, targetClientID string) error {
-	client, ok := r.FindClient(clientID)
-	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
-	}
-	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can toggle ownership")
-	}
-
-	owners := r.Clients.Filter(func(client *Client) bool {
-		return client.IsOwner
-	})
-
-	ownerCount := owners.Count()
-
-	if ownerCount == 1 {
-		if first, ok := owners.First(); ok && first.ID == targetClientID && first.IsOwner {
-			// Prevent removing the last owner
-			return nil
-		}
-	}
-
-	if targetClient, ok := r.FindClient(targetClientID); ok {
-		targetClient.IsOwner = !targetClient.IsOwner
-	} else {
-		return fmt.Errorf("target client %s not found in room %s", targetClientID, r.ID)
-	}
-	return nil
+	return r.presence.ToggleOwner(ctx, clientID, targetClientID)
 }
 
 // AdminToggleOwner toggles a client's owner status without checking
 // that the caller is an owner
 func (r *Room) AdminToggleOwner(ctx context.Context, targetClientID string) error {
-	owners := r.Clients.Filter(func(client *Client) bool {
-		return client.IsOwner
-	})
-
-	ownerCount := owners.Count()
-
-	// Prevent removing the last owner
-	if ownerCount == 1 {
-		if first, ok := owners.First(); ok && first.ID == targetClientID && first.IsOwner {
-			return domainerror.ErrLastOwner
-		}
-	}
-
-	if targetClient, ok := r.FindClient(targetClientID); ok {
-		targetClient.IsOwner = !targetClient.IsOwner
-	} else {
-		return fmt.Errorf("target client %s not found in room %s: %w", targetClientID, r.ID, domainerror.ErrClientNotFound)
-	}
-
-	return nil
+	return r.presence.AdminToggleOwner(ctx, targetClientID)
 }
 
 func (r *Room) SetCurrentStory(ctx context.Context, clientID string, story string) error {
-	client, ok := r.FindClient(clientID)
-	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
-	}
-	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can set the current story")
+	if _, err := r.presence.RequireOwner(clientID, "set the current story"); err != nil {
+		return err
 	}
 
 	if r.BacklogMode && r.CurrentStoryIndex >= 0 && r.CurrentStoryIndex < len(r.Stories) {
@@ -493,12 +370,8 @@ func (r *Room) SetCurrentStory(ctx context.Context, clientID string, story strin
 }
 
 func (r *Room) ToggleReveal(ctx context.Context, clientID string) error {
-	client, ok := r.FindClient(clientID)
-	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
-	}
-	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can toggle reveal")
+	if _, err := r.presence.RequireOwner(clientID, "toggle reveal"); err != nil {
+		return err
 	}
 
 	r.reveal(!r.Reveal)
@@ -552,12 +425,12 @@ type voteMetrics struct {
 func (r *Room) collectVotes(deck Deck) voteMetrics {
 	metrics := voteMetrics{counts: make(map[string]int)}
 
-	for _, client := range r.Clients.Values() {
+	for _, client := range r.presence.Values() {
 		if client.IsSpectator || client.CurrentVote == nil {
 			continue
 		}
 
-		vote := *client.CurrentVote
+		vote := client.CurrentVote.Label()
 		if vote == "" {
 			continue
 		}
@@ -691,38 +564,41 @@ func (r *Room) clearConsensus() {
 }
 
 func (r *Room) IsEmpty() bool {
-	return r.Clients.Count() == 0
+	return r.presence.IsEmpty()
 }
 
 func (r *Room) FindClient(clientID string) (*Client, bool) {
-	return r.Clients.Filter(func(client *Client) bool {
-		return client.ID == clientID
-	}).First()
+	return r.presence.Find(clientID)
 }
 
-func (r *Room) Vote(ctx context.Context, clientID string, vote *string) error {
-	client, ok := r.FindClient(clientID)
-	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+func (r *Room) Vote(ctx context.Context, clientID string, vote *Vote) error {
+	client, err := r.presence.Require(clientID)
+	if err != nil {
+		return err
 	}
 
-	if vote != nil && *vote != "" {
+	if vote != nil && !vote.IsEmpty() {
 		deck := r.Deck()
-		if !deck.HasCard(*vote) {
-			return fmt.Errorf("vote %q is not part of deck %s", *vote, deck.ID)
+		if !deck.HasCard(vote.Label()) {
+			return fmt.Errorf("vote %q is not part of deck %s", vote.Label(), deck.ID)
 		}
 	}
 
-	client.Vote(ctx, vote)
+	if r.Reveal {
+		r.checkReveal()
+		return nil
+	}
+
+	r.presence.SetVote(client, vote)
 	r.checkReveal()
 
 	return nil
 }
 
 func (r *Room) UpdateClientName(ctx context.Context, clientID string, name string) error {
-	client, ok := r.FindClient(clientID)
-	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+	client, err := r.presence.Require(clientID)
+	if err != nil {
+		return err
 	}
 
 	client.UpdateName(ctx, name)

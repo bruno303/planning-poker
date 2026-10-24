@@ -44,8 +44,8 @@ func (uc CreateRoomUseCase) Execute(ctx context.Context, cmd CreateRoomCommand) 
 		return CreateRoomOutput{}, err
 	}
 
-	uc.logger.Info(ctx, "Room created with ID: %s", room.ID)
+	uc.logger.Info(ctx, "Room created with ID: %s", room.ID())
 	uc.metric.IncrementActiveRoomsCounter(ctx)
 
-	return CreateRoomOutput{RoomID: room.ID}, nil
+	return CreateRoomOutput{RoomID: room.ID()}, nil
 }

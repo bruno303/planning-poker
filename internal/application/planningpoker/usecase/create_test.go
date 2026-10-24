@@ -18,7 +18,7 @@ func TestCreateRoomUseCase_Execute_Success(t *testing.T) {
 	ctx := context.Background()
 	mockHub := domain.NewMockHub(ctrl)
 	planningPokerMetric, recorder := newTestPlanningPokerMetric(ctrl)
-	room := &entity.Room{ID: "room-123", Clients: clientcollection.New(), DeckType: entity.DeckTypeTShirt}
+	room := entity.NewRoomWithIDAndDeck("room-123", clientcollection.New(), entity.DeckTypeTShirt)
 
 	mockHub.EXPECT().NewRoomWithDeck(ctx, entity.DeckTypeTShirt).Return(room, nil)
 
@@ -29,8 +29,8 @@ func TestCreateRoomUseCase_Execute_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if got.RoomID != room.ID {
-		t.Fatalf("expected room ID %q, got %q", room.ID, got.RoomID)
+	if got.RoomID != room.ID() {
+		t.Fatalf("expected room ID %q, got %q", room.ID(), got.RoomID)
 	}
 	assertMetricCallSequence(t, recorder.getCalls(), expectedMetricCall{
 		name:  "planning_poker_active_rooms",

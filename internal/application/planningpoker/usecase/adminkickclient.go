@@ -44,7 +44,7 @@ func (uc *adminKickClientUseCase) Execute(ctx context.Context, cmd AdminKickClie
 		return fmt.Errorf("load room: %w", err)
 	}
 
-	if room.Clients.Filter(func(c *entity.Client) bool { return c.ID == cmd.ClientID }).Count() == 0 {
+	if room.Clients().Filter(func(c *entity.Client) bool { return c.ID == cmd.ClientID }).Count() == 0 {
 		uc.logger.Warn(ctx, "Client %s not found in room %s", cmd.ClientID, cmd.RoomID)
 		return fmt.Errorf("client %s not found: %w", cmd.ClientID, domain.ErrClientNotFound)
 	}

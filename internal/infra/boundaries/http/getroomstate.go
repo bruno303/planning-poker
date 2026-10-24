@@ -77,7 +77,7 @@ func (api GetRoomStateAPI) execute() http.Handler {
 
 func mapRoom(room *entity.Room) GetRoomStateResponse {
 	return GetRoomStateResponse{
-		ID:      room.ID,
-		Clients: mapClients(room.Clients),
+		ID:      room.ID(),
+		Clients: mapClients(room.Clients()),
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"planning-poker/internal/application/planningpoker/usecase"
 	"planning-poker/internal/domain"
 	"planning-poker/internal/domain/entity"
+	"planning-poker/internal/infra/boundaries/hub/clientcollection"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
 	"github.com/gorilla/websocket"
@@ -283,7 +284,8 @@ func TestWebsocketBus_Process_WhenUseCaseReportsStaleVersion(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	serverConn, clientConn := websocketPair(t)
 	defer clientConn.Close()
-	room := &entity.Room{RoomVersion: 6}
+	room := entity.NewRoomWithID("room-1", clientcollection.New())
+	room.RoomVersion = 6
 	hub := domain.NewMockHub(ctrl)
 	hub.EXPECT().LoadRoom(gomock.Any(), "room-1").Return(room, nil)
 	calls := map[string]useCaseCall{

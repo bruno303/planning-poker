@@ -70,8 +70,8 @@ func mapRooms(rooms []*entity.Room) []GetRoomStateResponse {
 	res := make([]GetRoomStateResponse, len(rooms))
 	for i, room := range rooms {
 		r := GetRoomStateResponse{
-			ID:      room.ID,
-			Clients: mapClients(room.Clients),
+			ID:      room.ID(),
+			Clients: mapClients(room.Clients()),
 		}
 		res[i] = r
 	}

@@ -185,27 +185,28 @@ func (h *RedisHub) FindClientByID(clientID string) (*entity.Client, bool) {
 		return nil, false
 	}
 
-	client, ok := room.Clients.Filter(func(c *entity.Client) bool {
+	client, ok := room.Clients().Filter(func(c *entity.Client) bool {
 		return c.ID == clientID
 	}).First()
 
 	return client, ok
 }
 
-func (h *RedisHub) AddClient(c *entity.Client) {
-	ctx := context.Background()
-	key := clientKeyPrefix + c.ID
+func (h *RedisHub) AddClient(ctx context.Context, room *entity.Room, client *entity.Client) error {
+	key := clientKeyPrefix + client.ID
 
-	if err := h.client.Set(ctx, key, c.Room().ID, twentyFourHours).Err(); err != nil {
-		h.logger.Error(ctx, fmt.Sprintf("Failed to save client %s to Redis", c.ID), err)
-		return
+	if err := h.client.Set(ctx, key, room.ID(), twentyFourHours).Err(); err != nil {
+		h.logger.Error(ctx, fmt.Sprintf("Failed to save client %s to Redis", client.ID), err)
+		return fmt.Errorf("save client %s: %w", client.ID, err)
 	}
 
 	// Save the updated room state to Redis after adding the client
-	room := c.Room()
 	if err := h.saveRoom(ctx, room); err != nil {
-		h.logger.Error(ctx, fmt.Sprintf("Failed to save room %s after adding client %s", room.ID, c.ID), err)
+		h.logger.Error(ctx, fmt.Sprintf("Failed to save room %s after adding client %s", room.ID(), client.ID), err)
+		return fmt.Errorf("save room %s after adding client %s: %w", room.ID(), client.ID, err)
 	}
+
+	return nil
 }
 
 func (h *RedisHub) AddBus(ctx context.Context, clientID string, bus domain.Bus) error {
@@ -335,7 +336,7 @@ func (h *RedisHub) RemoveClient(ctx context.Context, clientID string, roomID str
 		}
 
 		if room.IsEmpty() {
-			h.RemoveRoom(room.ID)
+			h.RemoveRoom(room.ID())
 		} else {
 			if err := h.saveRoom(ctx, room); err != nil {
 				return nil, err
@@ -408,7 +409,7 @@ func (h *RedisHub) saveRoom(ctx context.Context, room *entity.Room) error {
 		return fmt.Errorf("failed to serialize room: %w", err)
 	}
 
-	key := roomKeyPrefix + room.ID
+	key := roomKeyPrefix + room.ID()
 	result, err := h.client.Eval(ctx, saveRoomScript, []string{key}, data, twentyFourHours.Milliseconds()).Result()
 	if err != nil {
 		return fmt.Errorf("failed to save room to Redis: %w", err)
@@ -431,7 +432,7 @@ func (h *RedisHub) saveInitialRoom(ctx context.Context, room *entity.Room) error
 	if err != nil {
 		return fmt.Errorf("failed to serialize room: %w", err)
 	}
-	if err := h.client.Set(ctx, roomKeyPrefix+room.ID, data, twentyFourHours).Err(); err != nil {
+	if err := h.client.Set(ctx, roomKeyPrefix+room.ID(), data, twentyFourHours).Err(); err != nil {
 		return fmt.Errorf("failed to save room to Redis: %w", err)
 	}
 	return nil
@@ -467,7 +468,7 @@ func (h *RedisHub) saveRoomConditionally(ctx context.Context, room *entity.Room,
 	if err != nil {
 		return fmt.Errorf("failed to serialize room: %w", err)
 	}
-	result, err := h.client.Eval(ctx, compareAndSaveRoomScript, []string{roomKeyPrefix + room.ID}, expectedVersion, data, twentyFourHours.Milliseconds()).Result()
+	result, err := h.client.Eval(ctx, compareAndSaveRoomScript, []string{roomKeyPrefix + room.ID()}, expectedVersion, data, twentyFourHours.Milliseconds()).Result()
 	if err != nil {
 		return fmt.Errorf("failed to conditionally save room to Redis: %w", err)
 	}
@@ -509,7 +510,7 @@ func (h *RedisHub) forwardToLocalClients(ctx context.Context, roomID string, mes
 		return
 	}
 
-	for _, client := range room.Clients.Values() {
+	for _, client := range room.Clients().Values() {
 		bus, ok := h.buses[client.ID]
 		if !ok {
 			continue

@@ -44,7 +44,7 @@ func (uc ToggleOwnerUseCase) Execute(ctx context.Context, cmd ToggleOwnerCommand
 			return err
 		}
 
-		if err := uc.hub.BroadcastToRoom(ctx, room.ID, dto.NewRoomStateCommand(room)); err != nil {
+		if err := uc.hub.BroadcastToRoom(ctx, room.ID(), dto.NewRoomStateCommand(room)); err != nil {
 			return err
 		}
 

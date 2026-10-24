@@ -22,10 +22,7 @@ func TestAdminToggleOwnerUseCase_Execute_Success(t *testing.T) {
 
 	roomID := "room123"
 	targetID := "client123"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 
 	owner := room.NewClient("owner123")
 	owner.IsOwner = true
@@ -99,10 +96,7 @@ func TestAdminToggleOwnerUseCase_Execute_SaveRoomError(t *testing.T) {
 
 	roomID := "room123"
 	targetID := "client123"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 
 	owner := room.NewClient("owner123")
 	owner.IsOwner = true
@@ -144,10 +138,7 @@ func TestAdminToggleOwnerUseCase_Execute_BroadcastError(t *testing.T) {
 
 	roomID := "room123"
 	targetID := "client123"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 
 	owner := room.NewClient("owner123")
 	owner.IsOwner = true
@@ -191,10 +182,7 @@ func TestAdminToggleOwnerUseCase_Execute_LastOwnerRefused(t *testing.T) {
 
 	roomID := "room123"
 	targetID := "client123"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 
 	// Only one client in the room, and they are the owner — so AdminToggleOwner returns ErrLastOwner
 	client := room.NewClient(targetID)

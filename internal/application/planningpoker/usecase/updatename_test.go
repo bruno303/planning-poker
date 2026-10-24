@@ -34,10 +34,7 @@ func TestUpdateNameUseCase_Execute_Success(t *testing.T) {
 	roomID := "room123"
 	senderID := "client123"
 	username := "Alice"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 
 	room.NewClient(senderID)
 
@@ -69,10 +66,7 @@ func TestUpdateNameUseCase_Execute_SaveRoomError(t *testing.T) {
 	roomID := "room123"
 	senderID := "client123"
 	username := "Alice"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 
 	room.NewClient(senderID)
 	expectedError := errors.New("failed to save room")
@@ -134,10 +128,7 @@ func TestUpdateNameUseCase_Execute_BroadcastError(t *testing.T) {
 
 	roomID := "room123"
 	senderID := "client123"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 
 	room.NewClient(senderID)
 	expectedError := errors.New("broadcast failed")

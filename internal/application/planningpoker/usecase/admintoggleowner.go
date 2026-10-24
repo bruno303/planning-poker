@@ -52,7 +52,7 @@ func (uc *adminToggleOwnerUseCase) Execute(ctx context.Context, cmd AdminToggleO
 			return fmt.Errorf("save room: %w", err)
 		}
 
-		if err := uc.hub.BroadcastToRoom(ctx, room.ID, dto.NewRoomStateCommand(room)); err != nil {
+		if err := uc.hub.BroadcastToRoom(ctx, room.ID(), dto.NewRoomStateCommand(room)); err != nil {
 			uc.logger.Error(ctx, "Error broadcasting room state", err)
 			return err
 		}

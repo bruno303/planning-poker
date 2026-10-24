@@ -60,10 +60,7 @@ func TestJoinRoomUseCase_Execute_Success(t *testing.T) {
 	mockBus := domain.NewMockBus(ctrl)
 
 	roomID := "room123"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 
 	mockLockManager.EXPECT().
 		WithLock(gomock.Any(), roomID, gomock.Any()).
@@ -72,7 +69,7 @@ func TestJoinRoomUseCase_Execute_Success(t *testing.T) {
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().AddClient(gomock.Any())
+	mockHub.EXPECT().AddClient(gomock.Any(), gomock.Any(), gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
 
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(nil)
@@ -128,7 +125,7 @@ func TestJoinRoomUseCase_Execute_AutoCreatesMissingRoom(t *testing.T) {
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, domain.ErrRoomNotFound)
 	mockHub.EXPECT().NewRoomWithID(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().AddClient(gomock.Any())
+	mockHub.EXPECT().AddClient(gomock.Any(), gomock.Any(), gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(nil)
@@ -279,10 +276,7 @@ func TestJoinRoomUseCase_Execute_SendError(t *testing.T) {
 	mockBus := domain.NewMockBus(ctrl)
 
 	roomID := "room123"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 
 	expectedError := errors.New("send failed")
 
@@ -293,7 +287,7 @@ func TestJoinRoomUseCase_Execute_SendError(t *testing.T) {
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().AddClient(gomock.Any())
+	mockHub.EXPECT().AddClient(gomock.Any(), gomock.Any(), gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(expectedError)
 	mockHub.EXPECT().RemoveClient(gomock.Any(), gomock.Any(), roomID).Return(nil)
@@ -331,10 +325,7 @@ func TestJoinRoomUseCase_Execute_SendErrorOnAutoCreatedRoom_RollsBackJoinInitial
 	mockBus := domain.NewMockBus(ctrl)
 
 	roomID := "auto-created-room"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 	expectedError := errors.New("send failed")
 
 	mockLockManager.EXPECT().
@@ -345,7 +336,7 @@ func TestJoinRoomUseCase_Execute_SendErrorOnAutoCreatedRoom_RollsBackJoinInitial
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, domain.ErrRoomNotFound)
 	mockHub.EXPECT().NewRoomWithID(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().AddClient(gomock.Any())
+	mockHub.EXPECT().AddClient(gomock.Any(), gomock.Any(), gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(expectedError)
 	mockHub.EXPECT().RemoveClient(gomock.Any(), gomock.Any(), roomID).Return(nil)
@@ -386,10 +377,7 @@ func TestJoinRoomUseCase_Execute_SendErrorOnAutoCreatedRoom_DoesNotReloadRoomOrE
 	mockBus := domain.NewMockBus(ctrl)
 
 	roomID := "auto-created-room"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 	expectedError := errors.New("send failed")
 	loadError := errors.New("load room failed")
 
@@ -401,7 +389,7 @@ func TestJoinRoomUseCase_Execute_SendErrorOnAutoCreatedRoom_DoesNotReloadRoomOrE
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, domain.ErrRoomNotFound)
 	mockHub.EXPECT().NewRoomWithID(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().AddClient(gomock.Any())
+	mockHub.EXPECT().AddClient(gomock.Any(), gomock.Any(), gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(expectedError)
 	mockHub.EXPECT().RemoveClient(gomock.Any(), gomock.Any(), roomID).Return(nil)
@@ -445,10 +433,7 @@ func TestJoinRoomUseCase_Execute_SendErrorWhenRollbackCleanupFails_DoesNotDecrem
 	mockBus := domain.NewMockBus(ctrl)
 
 	roomID := "auto-created-room"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 	sendErr := errors.New("send failed")
 	removeErr := errors.New("remove client failed")
 
@@ -460,7 +445,7 @@ func TestJoinRoomUseCase_Execute_SendErrorWhenRollbackCleanupFails_DoesNotDecrem
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, domain.ErrRoomNotFound)
 	mockHub.EXPECT().NewRoomWithID(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().AddClient(gomock.Any())
+	mockHub.EXPECT().AddClient(gomock.Any(), gomock.Any(), gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(sendErr)
 	mockHub.EXPECT().RemoveClient(gomock.Any(), gomock.Any(), roomID).Return(removeErr)
@@ -504,10 +489,7 @@ func TestJoinRoomUseCase_Execute_BroadcastErrorAfterSend_RollsBackWithoutEmittin
 	mockBus := domain.NewMockBus(ctrl)
 
 	roomID := "room123"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 	broadcastErr := errors.New("broadcast failed")
 
 	mockLockManager.EXPECT().
@@ -517,7 +499,7 @@ func TestJoinRoomUseCase_Execute_BroadcastErrorAfterSend_RollsBackWithoutEmittin
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().AddClient(gomock.Any())
+	mockHub.EXPECT().AddClient(gomock.Any(), gomock.Any(), gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(broadcastErr)
@@ -568,10 +550,7 @@ func TestJoinRoomUseCase_Execute_BroadcastErrorAfterSendOnAutoCreatedRoom_DoesNo
 	mockBus := domain.NewMockBus(ctrl)
 
 	roomID := "auto-created-room"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 	broadcastErr := errors.New("broadcast failed")
 
 	mockLockManager.EXPECT().
@@ -582,7 +561,7 @@ func TestJoinRoomUseCase_Execute_BroadcastErrorAfterSendOnAutoCreatedRoom_DoesNo
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(nil, domain.ErrRoomNotFound)
 	mockHub.EXPECT().NewRoomWithID(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().AddClient(gomock.Any())
+	mockHub.EXPECT().AddClient(gomock.Any(), gomock.Any(), gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).Return(nil)
 	mockHub.EXPECT().BroadcastToRoom(ctx, roomID, gomock.Any()).Return(broadcastErr)
@@ -633,10 +612,7 @@ func TestJoinRoomUseCase_Execute_SendFailsFromCanceledContext_UsesActiveRollback
 	mockBus := domain.NewMockBus(ctrl)
 
 	roomID := "room123"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 
 	mockLockManager.EXPECT().
 		WithLock(gomock.Any(), roomID, gomock.Any()).
@@ -645,7 +621,7 @@ func TestJoinRoomUseCase_Execute_SendFailsFromCanceledContext_UsesActiveRollback
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().AddClient(gomock.Any())
+	mockHub.EXPECT().AddClient(gomock.Any(), gomock.Any(), gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).DoAndReturn(func(sendCtx context.Context, _ any) error {
 		cancel()
@@ -692,10 +668,7 @@ func TestJoinRoomUseCase_Execute_BroadcastFailsFromCanceledContext_UsesActiveRol
 	mockBus := domain.NewMockBus(ctrl)
 
 	roomID := "room123"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 
 	mockLockManager.EXPECT().
 		WithLock(gomock.Any(), roomID, gomock.Any()).
@@ -704,7 +677,7 @@ func TestJoinRoomUseCase_Execute_BroadcastFailsFromCanceledContext_UsesActiveRol
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().AddClient(gomock.Any())
+	mockHub.EXPECT().AddClient(gomock.Any(), gomock.Any(), gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), gomock.Any(), gomock.Any())
 	mockBus.EXPECT().Send(gomock.Any(), gomock.Any()).DoAndReturn(func(context.Context, any) error {
 		cancel()
@@ -759,10 +732,7 @@ func TestJoinRoomUseCase_Execute_ReconnectClientExists(t *testing.T) {
 
 	roomID := "room123"
 	clientID := "existing-client"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 	room.NewClient(clientID)
 
 	mockLockManager.EXPECT().
@@ -823,10 +793,7 @@ func TestJoinRoomUseCase_Execute_ReconnectNoOldBus(t *testing.T) {
 
 	roomID := "room123"
 	clientID := "existing-client"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 	room.NewClient(clientID)
 
 	mockLockManager.EXPECT().
@@ -882,10 +849,7 @@ func TestJoinRoomUseCase_Execute_ReconnectSendErrorRollback(t *testing.T) {
 
 	roomID := "room123"
 	clientID := "existing-client"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 	room.NewClient(clientID)
 	sendErr := errors.New("send failed")
 
@@ -939,10 +903,7 @@ func TestJoinRoomUseCase_Execute_ReconnectBroadcastErrorRollback(t *testing.T) {
 
 	roomID := "room123"
 	clientID := "existing-client"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 	room.NewClient(clientID)
 	broadcastErr := errors.New("broadcast failed")
 
@@ -997,10 +958,7 @@ func TestJoinRoomUseCase_Execute_AddBusErrorRollsBackNewClient(t *testing.T) {
 
 	roomID := "room123"
 	clientID := "new-client"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 	addBusErr := errors.New("subscription setup failed")
 
 	mockLockManager.EXPECT().
@@ -1010,7 +968,7 @@ func TestJoinRoomUseCase_Execute_AddBusErrorRollsBackNewClient(t *testing.T) {
 		})
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
-	mockHub.EXPECT().AddClient(gomock.Any())
+	mockHub.EXPECT().AddClient(gomock.Any(), gomock.Any(), gomock.Any())
 	mockHub.EXPECT().AddBus(gomock.Any(), clientID, mockBus).Return(addBusErr)
 	mockHub.EXPECT().RemoveClient(gomock.Any(), clientID, roomID).Return(nil)
 

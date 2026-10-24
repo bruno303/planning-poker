@@ -37,10 +37,7 @@ func TestVoteUseCase_Execute_Success(t *testing.T) {
 	roomID := "room123"
 	senderID := "client123"
 	vote := "5"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 
 	room.NewClient(senderID)
 
@@ -79,10 +76,7 @@ func TestVoteUseCase_Execute_SaveRoomError(t *testing.T) {
 	roomID := "room123"
 	senderID := "client123"
 	vote := "5"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 
 	room.NewClient(senderID)
 	expectedError := errors.New("failed to save room")
@@ -159,10 +153,7 @@ func TestVoteUseCase_Execute_BroadcastError(t *testing.T) {
 	roomID := "room123"
 	senderID := "client123"
 	vote := "5"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 
 	room.NewClient(senderID)
 	expectedError := errors.New("broadcast failed")

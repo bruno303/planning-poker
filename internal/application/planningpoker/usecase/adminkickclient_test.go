@@ -39,10 +39,7 @@ func TestAdminKickClientUseCase_Execute_Success(t *testing.T) {
 
 	roomID := "room123"
 	clientID := "client456"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(&entity.Client{ID: clientID}),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New(&entity.Client{ID: clientID}))
 
 	mockBus := domain.NewMockBus(ctrl)
 
@@ -73,10 +70,7 @@ func TestAdminKickClientUseCase_Execute_Success_NoBus(t *testing.T) {
 
 	roomID := "room123"
 	clientID := "client456"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(&entity.Client{ID: clientID}),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New(&entity.Client{ID: clientID}))
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
 	mockHub.EXPECT().GetBus(clientID).Return(nil, false)
@@ -124,10 +118,7 @@ func TestAdminKickClientUseCase_Execute_ClientNotFound(t *testing.T) {
 
 	roomID := "room123"
 	clientID := "absentClient"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(&entity.Client{ID: "otherClient"}),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New(&entity.Client{ID: "otherClient"}))
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
 
@@ -152,10 +143,7 @@ func TestAdminKickClientUseCase_Execute_LeaveRoomError(t *testing.T) {
 
 	roomID := "room123"
 	clientID := "client456"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(&entity.Client{ID: clientID}),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New(&entity.Client{ID: clientID}))
 
 	leaveRoomErr := errors.New("leave room failed")
 
@@ -184,10 +172,7 @@ func TestAdminKickClientUseCase_Execute_LeaveRoomError_WithBus(t *testing.T) {
 
 	roomID := "room123"
 	clientID := "client456"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(&entity.Client{ID: clientID}),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New(&entity.Client{ID: clientID}))
 
 	leaveRoomErr := errors.New("leave room failed")
 
@@ -219,10 +204,7 @@ func TestAdminKickClientUseCase_Execute_BusCloseError(t *testing.T) {
 
 	roomID := "room123"
 	clientID := "client456"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(&entity.Client{ID: clientID}),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New(&entity.Client{ID: clientID}))
 
 	mockBus := domain.NewMockBus(ctrl)
 
@@ -254,10 +236,7 @@ func TestAdminKickClientUseCase_Execute_SendError(t *testing.T) {
 
 	roomID := "room123"
 	clientID := "client456"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(&entity.Client{ID: clientID}),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New(&entity.Client{ID: clientID}))
 
 	mockBus := domain.NewMockBus(ctrl)
 

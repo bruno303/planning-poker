@@ -62,16 +62,11 @@ func TestGetAllRoomsStateAPI_Handle_Success(t *testing.T) {
 		IsOwner:     false,
 	}
 
-	rooms := []*entity.Room{
-		{
-			ID:      "room1",
-			Clients: clientcollection.New(client1),
-		},
-		{
-			ID:      "room2",
-			Clients: clientcollection.New(client2),
-		},
-	}
+	rooms := make([]*entity.Room, 0, 2)
+	rooms = append(rooms,
+		entity.NewRoomWithID("room1", clientcollection.New(client1)),
+		entity.NewRoomWithID("room2", clientcollection.New(client2)),
+	)
 
 	mockHub.EXPECT().
 		GetRooms().
@@ -135,7 +130,7 @@ func TestGetAllRoomsStateAPI_Handle_EmptyRooms(t *testing.T) {
 
 	mockHub.EXPECT().
 		GetRooms().
-		Return([]*entity.Room{})
+		Return(make([]*entity.Room, 0))
 
 	handler := api.Handle()
 	req := httptest.NewRequest(http.MethodGet, "/admin/rooms", nil)

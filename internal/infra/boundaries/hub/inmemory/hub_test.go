@@ -5,6 +5,7 @@ import (
 	"errors"
 	"planning-poker/internal/domain"
 	"planning-poker/internal/domain/entity"
+	"planning-poker/internal/infra/boundaries/hub/clientcollection"
 	"sync"
 	"testing"
 
@@ -25,11 +26,11 @@ func TestNewRoom(t *testing.T) {
 	if len(hub.Rooms) != 1 {
 		t.Errorf("expected hub.Rooms to have 1 room, got %d", len(hub.Rooms))
 	}
-	if hub.Rooms[room.ID] != room {
+	if hub.Rooms[room.ID()] != room {
 		t.Errorf("expected hub.Rooms[0] to be the created room")
 	}
-	if room.Clients == nil {
-		t.Error("expected room.Clients to be initialized")
+	if room.Clients() == nil {
+		t.Error("expected room.Clients() to be initialized")
 	}
 }
 
@@ -45,10 +46,10 @@ func TestNewRoomWithID(t *testing.T) {
 	if room == nil {
 		t.Fatal("expected room to be non-nil")
 	}
-	if room.ID != "room-123" {
-		t.Fatalf("expected room ID room-123, got %s", room.ID)
+	if room.ID() != "room-123" {
+		t.Fatalf("expected room ID room-123, got %s", room.ID())
 	}
-	if hub.Rooms[room.ID] != room {
+	if hub.Rooms[room.ID()] != room {
 		t.Fatal("expected hub to store room under explicit ID")
 	}
 }
@@ -67,7 +68,7 @@ func TestNewRoomWithDeck(t *testing.T) {
 	if room.DeckType != entity.DeckTypeTShirt {
 		t.Fatalf("expected deck type %q, got %q", entity.DeckTypeTShirt, room.DeckType)
 	}
-	if hub.Rooms[room.ID] != room {
+	if hub.Rooms[room.ID()] != room {
 		t.Fatal("expected hub to store deck room under its ID")
 	}
 }
@@ -80,7 +81,7 @@ func TestLoadRoom(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	got, err := hub.LoadRoom(ctx, room.ID)
+	got, err := hub.LoadRoom(ctx, room.ID())
 	if err != nil {
 		t.Fatalf("expected to find room but got error: %v", err)
 	}
@@ -110,14 +111,14 @@ func TestRemoveRoom(t *testing.T) {
 		t.Fatalf("expected 2 rooms, got %d", len(hub.Rooms))
 	}
 
-	hub.RemoveRoom(room1.ID)
+	hub.RemoveRoom(room1.ID())
 	if len(hub.Rooms) != 1 {
 		t.Errorf("expected 1 room after removal, got %d", len(hub.Rooms))
 	}
-	if hub.Rooms[room2.ID] != room2 {
+	if hub.Rooms[room2.ID()] != room2 {
 		t.Errorf("expected remaining room to be room2")
 	}
-	if _, ok := hub.saved[room1.ID]; ok {
+	if _, ok := hub.saved[room1.ID()]; ok {
 		t.Error("expected removed room snapshot to be deleted")
 	}
 
@@ -130,9 +131,10 @@ func TestRemoveRoom(t *testing.T) {
 
 func TestAddAndFindClient(t *testing.T) {
 	hub := NewHub()
+	room := entity.NewRoom(clientcollection.New())
 	client := &entity.Client{ID: "client1", Name: "Alice"}
 
-	hub.AddClient(client)
+	hub.AddClient(context.Background(), room, client)
 
 	got, ok := hub.FindClientByID(client.ID)
 	if !ok {
@@ -222,7 +224,7 @@ func TestRemoveClient_Success(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	client := &entity.Client{ID: "client1", Name: "Alice"}
-	hub.AddClient(client)
+	hub.AddClient(ctx, room, client)
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -230,9 +232,9 @@ func TestRemoveClient_Success(t *testing.T) {
 	hub.AddBus(ctx, client.ID, mockBus)
 
 	// Add client to room
-	room.Clients.Add(client)
+	room.Clients().Add(client)
 
-	err = hub.RemoveClient(ctx, client.ID, room.ID)
+	err = hub.RemoveClient(ctx, client.ID, room.ID())
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -258,18 +260,18 @@ func TestRemoveClient_RefreshesSavedSnapshotWithoutAdvancingRoomVersion(t *testi
 	}
 	client1 := room.NewClient("client1")
 	client2 := room.NewClient("client2")
-	hub.AddClient(client1)
-	hub.AddClient(client2)
+	hub.AddClient(context.Background(), room, client1)
+	hub.AddClient(context.Background(), room, client2)
 	expectedVersion := uint64(0)
 	if err := hub.SaveRoomIfVersion(ctx, room, &expectedVersion); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := hub.RemoveClient(ctx, client2.ID, room.ID); err != nil {
+	if err := hub.RemoveClient(ctx, client2.ID, room.ID()); err != nil {
 		t.Fatal(err)
 	}
 
-	snapshot := hub.saved[room.ID]
+	snapshot := hub.saved[room.ID()]
 	if snapshot == nil {
 		t.Fatal("expected saved room snapshot")
 	}
@@ -288,8 +290,9 @@ func TestRemoveClient_RoomNotFound(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
 
+	room := entity.NewRoom(clientcollection.New())
 	client := &entity.Client{ID: "client1", Name: "Alice"}
-	hub.AddClient(client)
+	hub.AddClient(ctx, room, client)
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -321,20 +324,20 @@ func TestRemoveClient_EmptyRoomRemoval(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	client := &entity.Client{ID: "client1", Name: "Alice"}
-	hub.AddClient(client)
+	hub.AddClient(ctx, room, client)
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockBus := domain.NewMockBus(ctrl)
 	hub.AddBus(ctx, client.ID, mockBus)
 
-	room.Clients.Add(client)
+	room.Clients().Add(client)
 
 	if len(hub.Rooms) != 1 {
 		t.Fatalf("expected 1 room, got %d", len(hub.Rooms))
 	}
 
-	err = hub.RemoveClient(ctx, client.ID, room.ID)
+	err = hub.RemoveClient(ctx, client.ID, room.ID())
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -359,10 +362,10 @@ func TestBroadcastToRoom_Success(t *testing.T) {
 	client1 := &entity.Client{ID: "client1", Name: "Alice"}
 	client2 := &entity.Client{ID: "client2", Name: "Bob"}
 
-	hub.AddClient(client1)
-	hub.AddClient(client2)
-	room.Clients.Add(client1)
-	room.Clients.Add(client2)
+	hub.AddClient(context.Background(), room, client1)
+	hub.AddClient(context.Background(), room, client2)
+	room.Clients().Add(client1)
+	room.Clients().Add(client2)
 
 	mockBus1 := domain.NewMockBus(ctrl)
 	mockBus2 := domain.NewMockBus(ctrl)
@@ -374,7 +377,7 @@ func TestBroadcastToRoom_Success(t *testing.T) {
 	mockBus1.EXPECT().Send(gomock.Any(), message).Return(nil)
 	mockBus2.EXPECT().Send(gomock.Any(), message).Return(nil)
 
-	err = hub.BroadcastToRoom(ctx, room.ID, message)
+	err = hub.BroadcastToRoom(ctx, room.ID(), message)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -404,13 +407,13 @@ func TestBroadcastToRoom_BusNotFound(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	client := &entity.Client{ID: "client1", Name: "Alice"}
-	hub.AddClient(client)
-	room.Clients.Add(client)
+	hub.AddClient(ctx, room, client)
+	room.Clients().Add(client)
 
 	// No bus added for client
 	message := map[string]string{"type": "test"}
 
-	err = hub.BroadcastToRoom(ctx, room.ID, message)
+	err = hub.BroadcastToRoom(ctx, room.ID(), message)
 	// Should not error, just log warning
 	if err != nil {
 		t.Fatalf("expected no error when bus not found, got %v", err)
@@ -429,8 +432,8 @@ func TestBroadcastToRoom_SendError(t *testing.T) {
 	}
 
 	client := &entity.Client{ID: "client1", Name: "Alice"}
-	hub.AddClient(client)
-	room.Clients.Add(client)
+	hub.AddClient(ctx, room, client)
+	room.Clients().Add(client)
 
 	mockBus := domain.NewMockBus(ctrl)
 	hub.AddBus(ctx, client.ID, mockBus)
@@ -440,7 +443,7 @@ func TestBroadcastToRoom_SendError(t *testing.T) {
 
 	mockBus.EXPECT().Send(gomock.Any(), message).Return(expectedError)
 
-	err = hub.BroadcastToRoom(ctx, room.ID, message)
+	err = hub.BroadcastToRoom(ctx, room.ID(), message)
 	if err == nil {
 		t.Fatal("expected error when send fails, got nil")
 	}
@@ -481,16 +484,16 @@ func TestGetRooms(t *testing.T) {
 	// Check all rooms are in the slice
 	roomIDs := make(map[string]bool)
 	for _, room := range rooms {
-		roomIDs[room.ID] = true
+		roomIDs[room.ID()] = true
 	}
 
-	if !roomIDs[room1.ID] {
+	if !roomIDs[room1.ID()] {
 		t.Error("room1 not found in GetRooms result")
 	}
-	if !roomIDs[room2.ID] {
+	if !roomIDs[room2.ID()] {
 		t.Error("room2 not found in GetRooms result")
 	}
-	if !roomIDs[room3.ID] {
+	if !roomIDs[room3.ID()] {
 		t.Error("room3 not found in GetRooms result")
 	}
 }
@@ -516,7 +519,7 @@ func TestSaveRoom(t *testing.T) {
 	}
 
 	// Retrieve the room and check the state
-	got, err := hub.LoadRoom(ctx, room.ID)
+	got, err := hub.LoadRoom(ctx, room.ID())
 	if err != nil {
 		t.Fatalf("expected to find room after SaveRoom, got error: %v", err)
 	}
@@ -558,7 +561,7 @@ func TestSaveRoomIfVersion_StaleMutationDoesNotChangeStoredRoom(t *testing.T) {
 	if err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion); !errors.Is(err, domain.ErrStaleRoomVersion) {
 		t.Fatalf("expected stale error, got %v", err)
 	}
-	stored, err := hub.LoadRoom(context.Background(), room.ID)
+	stored, err := hub.LoadRoom(context.Background(), room.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -574,20 +577,20 @@ func TestSaveRoomIfVersion_StaleMutationPreservesJoinedClient(t *testing.T) {
 		t.Fatal(err)
 	}
 	room.NewClient("client1")
-	hub.AddClient(room.Clients.Values()[0])
+	hub.AddClient(context.Background(), room, room.Clients().Values()[0])
 	expectedVersion := uint64(0)
 	if err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion); err != nil {
 		t.Fatal(err)
 	}
 
 	joined := room.NewClient("client2")
-	hub.AddClient(joined)
+	hub.AddClient(context.Background(), room, joined)
 	room.Reveal = true
 	if err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion); !errors.Is(err, domain.ErrStaleRoomVersion) {
 		t.Fatalf("expected stale error, got %v", err)
 	}
 
-	stored, err := hub.LoadRoom(context.Background(), room.ID)
+	stored, err := hub.LoadRoom(context.Background(), room.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -607,14 +610,14 @@ func TestSaveRoomIfVersion_StaleMutationDoesNotResurrectRemovedClient(t *testing
 	}
 	client1 := room.NewClient("client1")
 	client2 := room.NewClient("client2")
-	hub.AddClient(client1)
-	hub.AddClient(client2)
+	hub.AddClient(context.Background(), room, client1)
+	hub.AddClient(context.Background(), room, client2)
 	expectedVersion := uint64(0)
 	if err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := hub.RemoveClient(context.Background(), client2.ID, room.ID); err != nil {
+	if err := hub.RemoveClient(context.Background(), client2.ID, room.ID()); err != nil {
 		t.Fatal(err)
 	}
 	room.Reveal = true
@@ -622,7 +625,7 @@ func TestSaveRoomIfVersion_StaleMutationDoesNotResurrectRemovedClient(t *testing
 		t.Fatalf("expected stale error, got %v", err)
 	}
 
-	stored, err := hub.LoadRoom(context.Background(), room.ID)
+	stored, err := hub.LoadRoom(context.Background(), room.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -642,15 +645,15 @@ func TestSaveRoomIfVersion_DoesNotResurrectRemovedRoom(t *testing.T) {
 	if err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion); err != nil {
 		t.Fatal(err)
 	}
-	hub.RemoveRoom(room.ID)
+	hub.RemoveRoom(room.ID())
 
 	if err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion); !errors.Is(err, domain.ErrStaleRoomVersion) {
 		t.Fatalf("expected stale error, got %v", err)
 	}
-	if _, ok := hub.Rooms[room.ID]; ok {
+	if _, ok := hub.Rooms[room.ID()]; ok {
 		t.Fatal("stale save resurrected removed room")
 	}
-	if _, ok := hub.saved[room.ID]; ok {
+	if _, ok := hub.saved[room.ID()]; ok {
 		t.Fatal("stale save recreated removed room snapshot")
 	}
 }
@@ -705,7 +708,7 @@ func TestSaveRoomIfVersion_RejectsStaleNoOpAndTracksSuccessfulSave(t *testing.T)
 		t.Fatalf("expected stale no-op to be rejected, got %v", err)
 	}
 
-	room, err = hub.LoadRoom(context.Background(), room.ID)
+	room, err = hub.LoadRoom(context.Background(), room.ID())
 	if err != nil {
 		t.Fatal(err)
 	}

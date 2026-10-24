@@ -49,7 +49,7 @@ func (uc *leaveRoomUseCase) Execute(ctx context.Context, cmd LeaveRoomCommand) e
 		// otherwise, decrement active rooms metric
 		room, err := uc.hub.LoadRoom(ctx, cmd.RoomID)
 		if err == nil {
-			if err := uc.hub.BroadcastToRoom(ctx, room.ID, dto.NewRoomStateCommand(room)); err != nil {
+			if err := uc.hub.BroadcastToRoom(ctx, room.ID(), dto.NewRoomStateCommand(room)); err != nil {
 				uc.logger.Error(ctx, "Error broadcasting room state", err)
 				return err
 			}

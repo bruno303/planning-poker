@@ -66,7 +66,7 @@ func NewRoomStateCommand(room *entity.Room) RoomState {
 		Deck:               room.Deck(),
 		CurrentStory:       room.EffectiveCurrentStory(),
 		Reveal:             room.Reveal,
-		Participants:       MapToParticipants(room.Clients.Values()),
+		Participants:       MapToParticipants(room.Clients().Values()),
 		Result:             room.Result,
 		MostAppearingVotes: room.MostAppearingVotes,
 		Consensus:          room.Consensus,
@@ -118,7 +118,7 @@ func MapToParticipants(clients []*entity.Client) []Participant {
 			return Participant{
 				ID:          client.ID,
 				Name:        client.Name,
-				Vote:        client.CurrentVote,
+				Vote:        entity.OptionalVoteLabel(client.CurrentVote),
 				HasVoted:    client.HasVoted,
 				VotedAt:     entity.OptionalUTCTimePtr(client.VotedAt),
 				IsSpectator: client.IsSpectator,

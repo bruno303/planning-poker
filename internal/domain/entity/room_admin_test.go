@@ -95,7 +95,7 @@ func TestRoom_AdminToggleOwner(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			room := &entity.Room{ID: "room1", Clients: clientcollection.New()}
+			room := entity.NewRoomWithID("room1", clientcollection.New())
 			targetID := tt.setup(room)
 
 			assertAdminToggleOwnerResult(t, room, targetID, tt.wantIsOwner, tt.wantErrLastOwner, tt.wantErrSentinel, tt.wantErr)

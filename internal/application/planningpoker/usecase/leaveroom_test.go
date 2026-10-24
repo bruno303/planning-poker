@@ -42,10 +42,7 @@ func TestLeaveRoomUseCase_Execute_Success_RoomExists(t *testing.T) {
 
 	roomID := "room123"
 	senderID := "client123"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 
 	mockLockManager.EXPECT().
 		ExecuteWithLock(gomock.Any(), roomID, gomock.Any()).
@@ -175,10 +172,7 @@ func TestLeaveRoomUseCase_Execute_BroadcastError(t *testing.T) {
 
 	roomID := "room123"
 	senderID := "client123"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 
 	expectedError := errors.New("broadcast failed")
 

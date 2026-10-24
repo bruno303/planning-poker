@@ -12,13 +12,12 @@ import (
 )
 
 func newBacklogRoom(stories []entity.Story, currentIndex int) (*entity.Room, *entity.Client, *entity.Client) {
-	room := &entity.Room{
+	room := entity.NewRoomFromSnapshot(entity.RoomSnapshot{
 		ID:                "room-1",
-		Clients:           clientcollection.New(),
 		BacklogMode:       true,
 		Stories:           stories,
 		CurrentStoryIndex: currentIndex,
-	}
+	}, clientcollection.New())
 	owner := room.NewClient("owner")
 	owner.IsOwner = true
 	participant := room.NewClient("participant")
@@ -160,9 +159,9 @@ func TestRoomSelectStoryResetsActiveVotingAndPreservesEstimates(t *testing.T) {
 		{ID: "estimated", Name: "Estimated", Result: &estimatedResult, MostAppearingVotes: []string{"8"}, Voted: true},
 	}, 0)
 	vote := "5"
-	owner.CurrentVote = &vote
+	owner.CurrentVote = entity.VotePtr(vote)
 	owner.HasVoted = true
-	participant.CurrentVote = &vote
+	participant.CurrentVote = entity.VotePtr(vote)
 	participant.HasVoted = true
 	room.Reveal = true
 	room.Result = lo.ToPtr(float32(5))
@@ -190,10 +189,10 @@ func TestRoomAutomaticRevealRecordsCurrentStoryEstimate(t *testing.T) {
 		{ID: "pending", Name: "Pending"},
 	}, 0)
 
-	if err := room.Vote(context.Background(), owner.ID, lo.ToPtr("5")); err != nil {
+	if err := room.Vote(context.Background(), owner.ID, entity.VotePtr("5")); err != nil {
 		t.Fatalf("owner Vote returned error: %v", err)
 	}
-	if err := room.Vote(context.Background(), participant.ID, lo.ToPtr("8")); err != nil {
+	if err := room.Vote(context.Background(), participant.ID, entity.VotePtr("8")); err != nil {
 		t.Fatalf("participant Vote returned error: %v", err)
 	}
 
@@ -234,10 +233,10 @@ func TestRoomAutomaticRevealEstimateIsStableAfterParticipantChange(t *testing.T)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			room, owner, participant := newBacklogRoom([]entity.Story{{ID: "current", Name: "Current"}}, 0)
-			if err := room.Vote(context.Background(), owner.ID, lo.ToPtr("5")); err != nil {
+			if err := room.Vote(context.Background(), owner.ID, entity.VotePtr("5")); err != nil {
 				t.Fatalf("owner Vote returned error: %v", err)
 			}
-			if err := room.Vote(context.Background(), participant.ID, lo.ToPtr("8")); err != nil {
+			if err := room.Vote(context.Background(), participant.ID, entity.VotePtr("8")); err != nil {
 				t.Fatalf("participant Vote returned error: %v", err)
 			}
 

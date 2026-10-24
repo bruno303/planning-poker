@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"planning-poker/internal/domain"
 	"planning-poker/internal/domain/entity"
+	"planning-poker/internal/infra/boundaries/hub/clientcollection"
 	"testing"
 
 	"github.com/gorilla/mux"
@@ -49,9 +50,7 @@ func TestGetRoomAPI_Handle_Success(t *testing.T) {
 	api := NewGetRoomAPI(mockHub)
 
 	roomID := "room123"
-	expectedRoom := &entity.Room{
-		ID: roomID,
-	}
+	expectedRoom := entity.NewRoomWithID(roomID, clientcollection.New())
 
 	mockHub.EXPECT().
 		LoadRoom(gomock.Any(), roomID).
@@ -194,7 +193,7 @@ func TestGetRoomAPI_Handle_ContextPropagation(t *testing.T) {
 		LoadRoom(gomock.Any(), "room123").
 		DoAndReturn(func(ctx context.Context, roomID string) (*entity.Room, error) {
 			capturedCtx = ctx
-			return &entity.Room{ID: roomID}, nil
+			return entity.NewRoomWithID(roomID, clientcollection.New()), nil
 		})
 
 	handler := api.Handle()

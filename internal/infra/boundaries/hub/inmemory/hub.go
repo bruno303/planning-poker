@@ -43,9 +43,9 @@ func (h *InMemoryHub) NewRoom(ctx context.Context) (*entity.Room, error) {
 	room, _ := trace.Trace(ctx, trace.NameConfig("InMemoryHub", "NewRoom"), func(ctx context.Context) (any, error) {
 		room := entity.NewRoom(clientcollection.New())
 		h.roomMu.Lock()
-		h.Rooms[room.ID] = room
-		h.saved[room.ID] = cloneRoom(room)
-		h.removed[room.ID] = make(chan struct{})
+		h.Rooms[room.ID()] = room
+		h.saved[room.ID()] = cloneRoom(room)
+		h.removed[room.ID()] = make(chan struct{})
 		h.roomMu.Unlock()
 		return room, nil
 	})
@@ -57,9 +57,9 @@ func (h *InMemoryHub) NewRoomWithID(ctx context.Context, roomID string) (*entity
 	room, _ := trace.Trace(ctx, trace.NameConfig("InMemoryHub", "NewRoomWithID"), func(ctx context.Context) (any, error) {
 		room := entity.NewRoomWithID(roomID, clientcollection.New())
 		h.roomMu.Lock()
-		h.Rooms[room.ID] = room
-		h.saved[room.ID] = cloneRoom(room)
-		h.removed[room.ID] = make(chan struct{})
+		h.Rooms[room.ID()] = room
+		h.saved[room.ID()] = cloneRoom(room)
+		h.removed[room.ID()] = make(chan struct{})
 		h.roomMu.Unlock()
 		return room, nil
 	})
@@ -71,9 +71,9 @@ func (h *InMemoryHub) NewRoomWithDeck(ctx context.Context, deckType entity.DeckT
 	room, _ := trace.Trace(ctx, trace.NameConfig("InMemoryHub", "NewRoomWithDeck"), func(ctx context.Context) (any, error) {
 		room := entity.NewRoomWithDeck(clientcollection.New(), deckType)
 		h.roomMu.Lock()
-		h.Rooms[room.ID] = room
-		h.saved[room.ID] = cloneRoom(room)
-		h.removed[room.ID] = make(chan struct{})
+		h.Rooms[room.ID()] = room
+		h.saved[room.ID()] = cloneRoom(room)
+		h.removed[room.ID()] = make(chan struct{})
 		h.roomMu.Unlock()
 		return room, nil
 	})
@@ -141,17 +141,14 @@ func (h *InMemoryHub) FindClientByID(clientID string) (*entity.Client, bool) {
 	return client, ok
 }
 
-func (h *InMemoryHub) AddClient(c *entity.Client) {
+func (h *InMemoryHub) AddClient(_ context.Context, room *entity.Room, client *entity.Client) error {
 	h.roomMu.Lock()
-	h.Clients[c.ID] = c
-	room := c.Room()
-	if room != nil {
-		h.removedClients[room.ID+"\x00"+c.ID] = make(chan struct{})
-	}
+	h.Clients[client.ID] = client
+	h.removedClients[room.ID()+"\x00"+client.ID] = make(chan struct{})
 	h.roomMu.Unlock()
-	if room != nil {
-		h.refreshSavedRoom(room)
-	}
+	h.refreshSavedRoom(room)
+
+	return nil
 }
 
 func (h *InMemoryHub) AddBus(_ context.Context, clientID string, bus domain.Bus) error {
@@ -188,7 +185,7 @@ func (h *InMemoryHub) RemoveClient(ctx context.Context, clientID string, roomID 
 			return nil, err
 		}
 		if room.IsEmpty() {
-			h.RemoveRoom(room.ID)
+			h.RemoveRoom(room.ID())
 		} else {
 			h.refreshSavedRoom(room)
 		}
@@ -209,25 +206,25 @@ func (h *InMemoryHub) refreshSavedRoom(room *entity.Room) {
 	h.roomMu.Lock()
 	defer h.roomMu.Unlock()
 
-	saved, ok := h.saved[room.ID]
+	saved, ok := h.saved[room.ID()]
 	if !ok {
 		return
 	}
 	snapshot := cloneRoom(room)
 	snapshot.RoomVersion = saved.RoomVersion
-	h.saved[room.ID] = snapshot
+	h.saved[room.ID()] = snapshot
 }
 
 func (h *InMemoryHub) SaveRoom(_ context.Context, room *entity.Room) error {
 	h.roomMu.Lock()
 	defer h.roomMu.Unlock()
 	next := room.RoomVersion + 1
-	if saved, ok := h.saved[room.ID]; ok {
+	if saved, ok := h.saved[room.ID()]; ok {
 		next = saved.RoomVersion + 1
 	}
 	saved := cloneRoom(room)
 	saved.RoomVersion = next
-	h.saved[room.ID] = saved
+	h.saved[room.ID()] = saved
 	room.RoomVersion = next
 	return nil
 }
@@ -236,31 +233,31 @@ func (h *InMemoryHub) SaveRoomIfVersion(_ context.Context, room *entity.Room, ex
 	h.roomMu.Lock()
 	defer h.roomMu.Unlock()
 
-	if h.Rooms[room.ID] != room {
+	if h.Rooms[room.ID()] != room {
 		return domain.ErrStaleRoomVersion
 	}
 
 	persistedVersion := uint64(0)
-	if saved, ok := h.saved[room.ID]; ok {
+	if saved, ok := h.saved[room.ID()]; ok {
 		persistedVersion = saved.RoomVersion
 	}
 	if expectedVersion == nil || persistedVersion != *expectedVersion {
-		if saved, ok := h.saved[room.ID]; ok && h.Rooms[room.ID] == room {
-			h.Rooms[room.ID] = cloneRoom(saved)
+		if saved, ok := h.saved[room.ID()]; ok && h.Rooms[room.ID()] == room {
+			h.Rooms[room.ID()] = cloneRoom(saved)
 		}
 		return domain.ErrStaleRoomVersion
 	}
 	next := persistedVersion + 1
 	saved := cloneRoom(room)
 	saved.RoomVersion = next
-	h.saved[room.ID] = saved
+	h.saved[room.ID()] = saved
 	room.RoomVersion = next
-	h.Rooms[room.ID] = room
+	h.Rooms[room.ID()] = room
 	return nil
 }
 
 func cloneRoom(room *entity.Room) *entity.Room {
-	clone := entity.NewRoomWithIDAndStartedAt(room.ID, clientcollection.New(), room.StartedAt())
+	clone := entity.NewRoomWithIDAndStartedAt(room.ID(), clientcollection.New(), room.StartedAt())
 	clone.DeckType = room.DeckType
 	clone.CurrentStory = room.CurrentStory
 	clone.Reveal = room.Reveal
@@ -280,16 +277,14 @@ func cloneRoom(room *entity.Room) *entity.Room {
 	}
 	clone.CurrentStoryIndex = room.CurrentStoryIndex
 	clone.RoomVersion = room.RoomVersion
-	if room.Clients != nil {
-		for _, client := range room.Clients.Values() {
-			copied := clone.NewClient(client.ID)
-			copied.Name = client.Name
-			copied.CurrentVote = cloneString(client.CurrentVote)
-			copied.HasVoted = client.HasVoted
-			copied.VotedAt = entity.OptionalUTCTimePtr(client.VotedAt)
-			copied.IsSpectator = client.IsSpectator
-			copied.IsOwner = client.IsOwner
-		}
+	for _, client := range room.Clients().Values() {
+		copied := clone.NewClient(client.ID)
+		copied.Name = client.Name
+		copied.CurrentVote = client.CurrentVote
+		copied.HasVoted = client.HasVoted
+		copied.VotedAt = entity.OptionalUTCTimePtr(client.VotedAt)
+		copied.IsSpectator = client.IsSpectator
+		copied.IsOwner = client.IsOwner
 	}
 	return clone
 }
@@ -326,7 +321,7 @@ func (h *InMemoryHub) BroadcastToRoom(ctx context.Context, roomID string, messag
 			return nil, err
 		}
 
-		for _, client := range room.Clients.Values() {
+		for _, client := range room.Clients().Values() {
 			bus, ok := h.GetBus(client.ID)
 			if !ok {
 				h.logger.Warn(ctx, "bus not found for client %s", client.ID)

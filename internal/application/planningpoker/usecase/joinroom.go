@@ -95,18 +95,18 @@ func (uc JoinRoomUseCase) loadOrCreateRoom(ctx context.Context, cmd JoinRoomComm
 		return nil, false, fmt.Errorf("failed to auto-create room %s: %w", cmd.RoomID, err)
 	}
 
-	uc.logger.Info(ctx, "Room auto-created with ID: %s during join by: %s", room.ID, cmd.SenderID)
+	uc.logger.Info(ctx, "Room auto-created with ID: %s during join by: %s", room.ID(), cmd.SenderID)
 	return room, true, nil
 }
 
 func (uc JoinRoomUseCase) notifyJoin(ctx context.Context, cmd JoinRoomCommand, room *entity.Room, client *entity.Client) error {
-	uc.logger.Debug(ctx, "sending update client ID command for client %s on room %s", client.ID, room.ID)
+	uc.logger.Debug(ctx, "sending update client ID command for client %s on room %s", client.ID, room.ID())
 	if err := cmd.Bus.Send(ctx, dto.NewUpdateClientIDCommand(client.ID)); err != nil {
 		return fmt.Errorf("failed to send update client ID command: %w", err)
 	}
 
-	uc.logger.Debug(ctx, "broadcasting room state for room %s", room.ID)
-	if err := uc.hub.BroadcastToRoom(ctx, room.ID, dto.NewRoomStateCommand(room)); err != nil {
+	uc.logger.Debug(ctx, "broadcasting room state for room %s", room.ID())
+	if err := uc.hub.BroadcastToRoom(ctx, room.ID(), dto.NewRoomStateCommand(room)); err != nil {
 		return fmt.Errorf("failed to broadcast room state: %w", err)
 	}
 
@@ -141,7 +141,7 @@ func (uc JoinRoomUseCase) joinClient(ctx context.Context, room *entity.Room, cmd
 		rollbackFunc, err = uc.reconnectClient(ctx, cmd)
 	} else {
 		client = room.NewClient(cmd.SenderID)
-		rollbackFunc, err = uc.createNewClient(ctx, cmd, client)
+		rollbackFunc, err = uc.createNewClient(ctx, cmd, room, client)
 	}
 
 	return
@@ -168,9 +168,11 @@ func (uc JoinRoomUseCase) reconnectClient(ctx context.Context, cmd JoinRoomComma
 	return rollbackFunc, nil
 }
 
-func (uc JoinRoomUseCase) createNewClient(ctx context.Context, cmd JoinRoomCommand, client *entity.Client) (func(context.Context) error, error) {
+func (uc JoinRoomUseCase) createNewClient(ctx context.Context, cmd JoinRoomCommand, room *entity.Room, client *entity.Client) (func(context.Context) error, error) {
 	uc.logger.Debug(ctx, "creating client for room %s", cmd.RoomID)
-	uc.hub.AddClient(client)
+	if err := uc.hub.AddClient(ctx, room, client); err != nil {
+		return func(context.Context) error { return nil }, fmt.Errorf("failed to add client %s: %w", client.ID, err)
+	}
 
 	uc.logger.Debug(ctx, "creating bus for client %s on room %s", client.ID, cmd.RoomID)
 	rollbackFunc := func(cleanupCtx context.Context) error {

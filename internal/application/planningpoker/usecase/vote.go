@@ -5,6 +5,7 @@ import (
 	"planning-poker/internal/application/lock"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
 	"planning-poker/internal/domain"
+	"planning-poker/internal/domain/entity"
 )
 
 type (
@@ -35,7 +36,7 @@ func (uc *voteUseCase) Execute(ctx context.Context, cmd VoteCommand) error {
 			return err
 		}
 
-		if err := room.Vote(ctx, cmd.SenderID, cmd.Vote); err != nil {
+		if err := room.Vote(ctx, cmd.SenderID, entity.VotePtrFromLabel(cmd.Vote)); err != nil {
 			return err
 		}
 
@@ -43,7 +44,7 @@ func (uc *voteUseCase) Execute(ctx context.Context, cmd VoteCommand) error {
 			return err
 		}
 
-		if err := uc.hub.BroadcastToRoom(ctx, room.ID, dto.NewRoomStateCommand(room)); err != nil {
+		if err := uc.hub.BroadcastToRoom(ctx, room.ID(), dto.NewRoomStateCommand(room)); err != nil {
 			return err
 		}
 

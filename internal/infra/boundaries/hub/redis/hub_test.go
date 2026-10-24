@@ -21,8 +21,7 @@ func TestRedisHub_NewRoom_SaveRoom_LoadRoom(t *testing.T) {
 	mockRedis := NewMockRedisClient(ctrl)
 	logger := log.NewLogger("test")
 
-	room := entity.NewRoom(clientcollection.New())
-	room.ID = "room1"
+	room := entity.NewRoomWithID("room1", clientcollection.New())
 
 	// Serialize room for mock return
 	roomBytes, _ := SerializeRoom(room)
@@ -53,7 +52,7 @@ func TestRedisHub_NewRoom_SaveRoom_LoadRoom(t *testing.T) {
 	// LoadRoom
 	gotRoom, err := hub.LoadRoom(context.Background(), "room1")
 	assert.NoError(t, err)
-	assert.Equal(t, room.ID, gotRoom.ID)
+	assert.Equal(t, room.ID(), gotRoom.ID())
 }
 
 func TestRedisHub_SaveRoomConditionally(t *testing.T) {
@@ -84,7 +83,8 @@ func TestRedisHub_SaveRoomConditionally(t *testing.T) {
 			mockRedis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{roomKeyPrefix + "room-conditional"}, gomock.Any(), gomock.Any(), gomock.Any()).Return(cmd)
 
 			hub := &RedisHub{client: mockRedis}
-			room := &entity.Room{ID: "room-conditional", Clients: clientcollection.New(), RoomVersion: 3}
+			room := entity.NewRoomWithID("room-conditional", clientcollection.New())
+			room.RoomVersion = 3
 			expectedVersion := uint64(2)
 			err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion)
 			if test.wantError != nil {
@@ -154,7 +154,7 @@ func TestRedisHub_NewRoomWithID(t *testing.T) {
 	room, err := hub.NewRoomWithID(context.Background(), "room-explicit")
 	assert.NoError(t, err)
 	assert.NotNil(t, room)
-	assert.Equal(t, "room-explicit", room.ID)
+	assert.Equal(t, "room-explicit", room.ID())
 }
 
 func TestRedisHub_NewRoomWithDeck(t *testing.T) {
@@ -186,13 +186,11 @@ func TestRedisHub_AddClient_RemoveRoom(t *testing.T) {
 	mockRedis := NewMockRedisClient(ctrl)
 	logger := log.NewLogger("test")
 
-	room := entity.NewRoom(clientcollection.New())
-	room.ID = "room2"
+	room := entity.NewRoomWithID("room2", clientcollection.New())
 	client := room.NewClient("client1")
-	client.WithRoom(room)
-	room.Clients.Add(client)
+	room.Clients().Add(client)
 
-	mockRedis.EXPECT().Set(gomock.Any(), "planning-poker:client:client1", room.ID, time.Duration(24*time.Hour)).Return(redis.NewStatusCmd(context.Background()))
+	mockRedis.EXPECT().Set(gomock.Any(), "planning-poker:client:client1", room.ID(), time.Duration(24*time.Hour)).Return(redis.NewStatusCmd(context.Background()))
 	mockRedis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{"planning-poker:room:room2"}, gomock.Any(), gomock.Any()).Return(saveResultCmd())
 
 	hub := &RedisHub{
@@ -203,10 +201,10 @@ func TestRedisHub_AddClient_RemoveRoom(t *testing.T) {
 		roomClientCounts: make(map[string]int),
 	}
 
-	hub.AddClient(client)
+	assert.NoError(t, hub.AddClient(context.Background(), room, client))
 
 	mockRedis.EXPECT().Del(gomock.Any(), "planning-poker:room:room2").Return(redis.NewIntCmd(context.Background()))
-	hub.RemoveRoom(room.ID)
+	hub.RemoveRoom(room.ID())
 }
 
 func TestRedisHub_AddBus_SubscriptionSetupFails_CleansUpBus(t *testing.T) {
@@ -248,21 +246,19 @@ func TestRedisHub_FindClientByID(t *testing.T) {
 	mockRedis := NewMockRedisClient(ctrl)
 	logger := log.NewLogger("test")
 
-	room := entity.NewRoom(clientcollection.New())
-	room.ID = "room3"
+	room := entity.NewRoomWithID("room3", clientcollection.New())
 	client := room.NewClient("client2")
-	client.WithRoom(room)
-	room.Clients.Add(client)
+	room.Clients().Add(client)
 
 	// Serialize room for mock return
 	roomBytes, _ := SerializeRoom(room)
 	stringCmdRoom := redis.NewStringCmd(context.Background())
 	stringCmdRoom.SetVal(string(roomBytes))
 	stringCmdClient := redis.NewStringCmd(context.Background())
-	stringCmdClient.SetVal(room.ID)
+	stringCmdClient.SetVal(room.ID())
 
 	mockRedis.EXPECT().Get(gomock.Any(), "planning-poker:client:client2").Return(stringCmdClient)
-	mockRedis.EXPECT().Get(gomock.Any(), "planning-poker:room:"+room.ID).Return(stringCmdRoom)
+	mockRedis.EXPECT().Get(gomock.Any(), "planning-poker:room:"+room.ID()).Return(stringCmdRoom)
 
 	hub := &RedisHub{
 		client:           mockRedis,
@@ -282,13 +278,10 @@ func TestRedisHub_RemoveClient(t *testing.T) {
 	mockRedis := NewMockRedisClient(ctrl)
 	logger := log.NewLogger("test")
 
-	room := entity.NewRoom(clientcollection.New())
-	room.ID = "room4"
+	room := entity.NewRoomWithID("room4", clientcollection.New())
 	client := room.NewClient("client3")
-	client.WithRoom(room)
-	anotherClient := room.NewClient("client4")
-	anotherClient.WithRoom(room)
-	room.Clients.Add(client)
+	room.NewClient("client4")
+	room.Clients().Add(client)
 
 	// Serialize room for mock return
 	roomBytes, _ := SerializeRoom(room)
@@ -300,8 +293,8 @@ func TestRedisHub_RemoveClient(t *testing.T) {
 	statusCmd.SetVal("OK")
 
 	mockRedis.EXPECT().Del(gomock.Any(), "planning-poker:client:client3").Return(intCmd)
-	mockRedis.EXPECT().Get(gomock.Any(), "planning-poker:room:"+room.ID).Return(stringCmdRoom)
-	mockRedis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{"planning-poker:room:" + room.ID}, gomock.Any(), gomock.Any()).Return(saveResultCmd())
+	mockRedis.EXPECT().Get(gomock.Any(), "planning-poker:room:"+room.ID()).Return(stringCmdRoom)
+	mockRedis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{"planning-poker:room:" + room.ID()}, gomock.Any(), gomock.Any()).Return(saveResultCmd())
 
 	hub := &RedisHub{
 		client:           mockRedis,
@@ -311,7 +304,7 @@ func TestRedisHub_RemoveClient(t *testing.T) {
 		roomClientCounts: make(map[string]int),
 	}
 
-	err := hub.RemoveClient(context.Background(), "client3", room.ID)
+	err := hub.RemoveClient(context.Background(), "client3", room.ID())
 	assert.NoError(t, err)
 }
 
@@ -350,12 +343,9 @@ func TestRedisHub_RemoveClient_ClientDeleteFailsAndRoomSavesSuccessfully_Returns
 	mockRedis := NewMockRedisClient(ctrl)
 	logger := log.NewLogger("test")
 
-	room := entity.NewRoom(clientcollection.New())
-	room.ID = "room4"
-	client := room.NewClient("client3")
-	client.WithRoom(room)
-	anotherClient := room.NewClient("client4")
-	anotherClient.WithRoom(room)
+	room := entity.NewRoomWithID("room4", clientcollection.New())
+	room.NewClient("client3")
+	room.NewClient("client4")
 
 	deleteErr := errors.New("delete failed")
 	intCmd := redis.NewIntCmd(context.Background())
@@ -392,12 +382,9 @@ func TestRedisHub_RemoveClient_SaveRoomFails_PropagatesError(t *testing.T) {
 	mockRedis := NewMockRedisClient(ctrl)
 	logger := log.NewLogger("test")
 
-	room := entity.NewRoom(clientcollection.New())
-	room.ID = "room4"
-	client := room.NewClient("client3")
-	client.WithRoom(room)
-	anotherClient := room.NewClient("client4")
-	anotherClient.WithRoom(room)
+	room := entity.NewRoomWithID("room4", clientcollection.New())
+	room.NewClient("client3")
+	room.NewClient("client4")
 
 	intCmd := redis.NewIntCmd(context.Background())
 	intCmd.SetVal(1)
@@ -489,8 +476,7 @@ func TestRedisHub_GetRooms(t *testing.T) {
 	mockRedis := NewMockRedisClient(ctrl)
 	logger := log.NewLogger("test")
 
-	validRoom := entity.NewRoom(clientcollection.New())
-	validRoom.ID = "room-valid"
+	validRoom := entity.NewRoomWithID("room-valid", clientcollection.New())
 	validRoomBytes, _ := SerializeRoom(validRoom)
 
 	keysCmd := redis.NewStringSliceCmd(context.Background())
@@ -515,5 +501,5 @@ func TestRedisHub_GetRooms(t *testing.T) {
 
 	rooms := hub.GetRooms()
 	assert.Len(t, rooms, 1)
-	assert.Equal(t, validRoom.ID, rooms[0].ID)
+	assert.Equal(t, validRoom.ID(), rooms[0].ID())
 }

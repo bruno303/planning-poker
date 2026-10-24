@@ -43,7 +43,7 @@ func (uc ToggleBacklogModeUseCase) Execute(ctx context.Context, cmd ToggleBacklo
 			return err
 		}
 
-		if err := uc.hub.BroadcastToRoom(ctx, room.ID, dto.NewRoomStateCommand(room)); err != nil {
+		if err := uc.hub.BroadcastToRoom(ctx, room.ID(), dto.NewRoomStateCommand(room)); err != nil {
 			return err
 		}
 

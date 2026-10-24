@@ -12,9 +12,7 @@ type (
 		ID   string
 		Name string
 
-		room *Room
-
-		CurrentVote *string
+		CurrentVote *Vote
 		HasVoted    bool
 		VotedAt     *time.Time
 		IsSpectator bool
@@ -34,32 +32,6 @@ func newClient(id string) *Client {
 func (c *Client) WithLogger(logger log.Logger) *Client {
 	c.logger = logger
 	return c
-}
-
-func (c *Client) WithRoom(room *Room) *Client {
-	c.room = room
-	return c
-}
-
-func (c *Client) Vote(ctx context.Context, vote *string) {
-	if c.room.Reveal {
-		c.logger.Debug(ctx, "Vote ignored for client %s because votes are already revealed", c.ID)
-		return
-	}
-
-	c.CurrentVote = vote
-	if vote != nil && *vote != "" {
-		c.HasVoted = true
-		now := time.Now().UTC()
-		c.VotedAt = &now
-	} else {
-		c.HasVoted = false
-		c.VotedAt = nil
-	}
-}
-
-func (c *Client) Room() *Room {
-	return c.room
 }
 
 func (c *Client) UpdateName(ctx context.Context, name string) {

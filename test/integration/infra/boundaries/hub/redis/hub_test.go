@@ -31,30 +31,29 @@ func TestIntegration_RoomLifecycle(t *testing.T) {
 	room, err := hub.NewRoom(context.Background())
 	assert.NoError(t, err)
 	assert.NotNil(t, room)
-	assert.NotEmpty(t, room.ID)
+	assert.NotEmpty(t, room.ID())
 
 	// Room should be persisted in Redis
-	persisted, err := hub.LoadRoom(context.Background(), room.ID)
+	persisted, err := hub.LoadRoom(context.Background(), room.ID())
 	assert.NoError(t, err)
-	assert.Equal(t, room.ID, persisted.ID)
+	assert.Equal(t, room.ID(), persisted.ID())
 
 	// Add client and verify mapping
 	client1 := room.NewClient("client1")
-	room.Clients.Add(client1)
-	client1.WithRoom(room)
-	hub.AddClient(client1)
+	room.Clients().Add(client1)
+	assert.NoError(t, hub.AddClient(context.Background(), room, client1))
 	found, ok := hub.FindClientByID("client1")
 	assert.True(t, ok)
 	assert.Equal(t, client1.ID, found.ID)
 
 	// Remove client and verify cleanup
-	hub.RemoveClient(context.Background(), "client1", room.ID)
+	hub.RemoveClient(context.Background(), "client1", room.ID())
 	_, ok = hub.FindClientByID("client1")
 	assert.False(t, ok)
 
 	// Remove room and verify deletion
-	hub.RemoveRoom(room.ID)
-	_, err = hub.LoadRoom(context.Background(), room.ID)
+	hub.RemoveRoom(room.ID())
+	_, err = hub.LoadRoom(context.Background(), room.ID())
 	assert.ErrorIs(t, err, domain.ErrRoomNotFound)
 }
 
@@ -70,22 +69,21 @@ func TestIntegration_RemoveClient_WhenRoomIsAlreadyMissing_CleansUpAndSucceeds(t
 	assert.NoError(t, err)
 
 	client1 := room.NewClient("client-missing-room-1")
-	room.Clients.Add(client1)
-	client1.WithRoom(room)
-	hub.AddClient(client1)
-	hub.AddBus(context.Background(), client1.ID, &mockBus{roomID: room.ID})
+	room.Clients().Add(client1)
+	assert.NoError(t, hub.AddClient(context.Background(), room, client1))
+	hub.AddBus(context.Background(), client1.ID, &mockBus{roomID: room.ID()})
 
-	hub.RemoveRoom(room.ID)
+	hub.RemoveRoom(room.ID())
 
-	err = hub.RemoveClient(context.Background(), client1.ID, room.ID)
+	err = hub.RemoveClient(context.Background(), client1.ID, room.ID())
 	assert.NoError(t, err)
 
 	_, ok := hub.FindClientByID(client1.ID)
 	assert.False(t, ok)
 	_, ok = hub.GetBus(client1.ID)
 	assert.False(t, ok)
-	assert.Zero(t, hub.GetClientsOfRoom(room.ID))
-	_, err = hub.LoadRoom(context.Background(), room.ID)
+	assert.Zero(t, hub.GetClientsOfRoom(room.ID()))
+	_, err = hub.LoadRoom(context.Background(), room.ID())
 	assert.ErrorIs(t, err, domain.ErrRoomNotFound)
 }
 
@@ -101,11 +99,11 @@ func TestIntegration_RoomTTLExpiry(t *testing.T) {
 	assert.NotNil(t, room)
 
 	// Set short TTL for test
-	key := "planning-poker:room:" + room.ID
+	key := "planning-poker:room:" + room.ID()
 	client.Expire(context.Background(), key, 2*time.Second)
 
 	time.Sleep(3 * time.Second)
-	_, err = hub.LoadRoom(context.Background(), room.ID)
+	_, err = hub.LoadRoom(context.Background(), room.ID())
 	assert.True(t, errors.Is(err, domain.ErrRoomNotFound))
 }
 
@@ -121,11 +119,10 @@ func TestIntegration_GetBus(t *testing.T) {
 	assert.NotNil(t, room)
 
 	client1 := room.NewClient("client-getbus-1")
-	room.Clients.Add(client1)
-	client1.WithRoom(room)
-	hub.AddClient(client1)
+	room.Clients().Add(client1)
+	assert.NoError(t, hub.AddClient(context.Background(), room, client1))
 
-	bus := &mockBus{roomID: room.ID}
+	bus := &mockBus{roomID: room.ID()}
 	hub.AddBus(context.Background(), client1.ID, bus)
 
 	foundBus, ok := hub.GetBus(client1.ID)
@@ -148,19 +145,18 @@ func TestIntegration_PubSubInvalidMessage(t *testing.T) {
 	assert.NotNil(t, room)
 
 	client1 := room.NewClient("client-pubsub-1")
-	room.Clients.Add(client1)
-	client1.WithRoom(room)
-	hub.AddClient(client1)
+	room.Clients().Add(client1)
+	assert.NoError(t, hub.AddClient(context.Background(), room, client1))
 
 	receivedMessages := make(chan any, 10)
-	bus := &mockBusWithReceive{roomID: room.ID, received: receivedMessages}
+	bus := &mockBusWithReceive{roomID: room.ID(), received: receivedMessages}
 	hub.AddBus(context.Background(), client1.ID, bus)
 
 	// Give listener time to start
 	time.Sleep(100 * time.Millisecond)
 
 	// Publish an invalid JSON message directly to Redis to trigger unmarshal error
-	channel := "planning-poker:updates:" + room.ID
+	channel := "planning-poker:updates:" + room.ID()
 	err = client.Publish(context.Background(), channel, "not-valid-json").Err()
 	assert.NoError(t, err)
 
@@ -176,7 +172,7 @@ func TestIntegration_PubSubInvalidMessage(t *testing.T) {
 	}
 
 	// Now publish a valid message to verify the listener is still working
-	validMsg := `{"roomId":"` + room.ID + `","payload":{"test":"data"}}`
+	validMsg := `{"roomId":"` + room.ID() + `","payload":{"test":"data"}}`
 	err = client.Publish(context.Background(), channel, validMsg).Err()
 	assert.NoError(t, err)
 
@@ -202,17 +198,15 @@ func TestIntegration_PubSubUnsubscribe(t *testing.T) {
 
 	// Add two clients to the same room
 	client1 := room.NewClient("client-unsub-1")
-	room.Clients.Add(client1)
-	client1.WithRoom(room)
-	hub.AddClient(client1)
+	room.Clients().Add(client1)
+	assert.NoError(t, hub.AddClient(context.Background(), room, client1))
 
 	client2 := room.NewClient("client-unsub-2")
-	room.Clients.Add(client2)
-	client2.WithRoom(room)
-	hub.AddClient(client2)
+	room.Clients().Add(client2)
+	assert.NoError(t, hub.AddClient(context.Background(), room, client2))
 
-	bus1 := &mockBus{roomID: room.ID}
-	bus2 := &mockBus{roomID: room.ID}
+	bus1 := &mockBus{roomID: room.ID()}
+	bus2 := &mockBus{roomID: room.ID()}
 	hub.AddBus(context.Background(), client1.ID, bus1)
 	hub.AddBus(context.Background(), client2.ID, bus2)
 
@@ -220,19 +214,19 @@ func TestIntegration_PubSubUnsubscribe(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify pub/sub is active (RoomClientCounts should show 2 clients)
-	assert.Equal(t, 2, hub.GetClientsOfRoom(room.ID))
+	assert.Equal(t, 2, hub.GetClientsOfRoom(room.ID()))
 
 	// Remove first bus - should still have subscription
 	hub.RemoveBus(context.Background(), client1.ID)
 	time.Sleep(100 * time.Millisecond)
-	assert.Equal(t, 1, hub.GetClientsOfRoom(room.ID))
+	assert.Equal(t, 1, hub.GetClientsOfRoom(room.ID()))
 
 	// Remove second bus - should unsubscribe and trigger channel close (!ok path)
 	hub.RemoveBus(context.Background(), client2.ID)
 	time.Sleep(200 * time.Millisecond)
 
 	// Verify the room client count is removed
-	exists := hub.GetClientsOfRoom(room.ID) > 0
+	exists := hub.GetClientsOfRoom(room.ID()) > 0
 	assert.False(t, exists, "room client count should be removed after all clients disconnect")
 }
 
@@ -248,12 +242,11 @@ func TestIntegration_BroadcastToRoom(t *testing.T) {
 	assert.NotNil(t, room)
 
 	client1 := room.NewClient("client-broadcast-1")
-	room.Clients.Add(client1)
-	client1.WithRoom(room)
-	hub.AddClient(client1)
+	room.Clients().Add(client1)
+	assert.NoError(t, hub.AddClient(context.Background(), room, client1))
 
 	receivedMessages := make(chan any, 10)
-	bus := &mockBusWithReceive{roomID: room.ID, received: receivedMessages}
+	bus := &mockBusWithReceive{roomID: room.ID(), received: receivedMessages}
 	hub.AddBus(context.Background(), client1.ID, bus)
 
 	// Give listener time to start
@@ -261,7 +254,7 @@ func TestIntegration_BroadcastToRoom(t *testing.T) {
 
 	// Broadcast a message to the room
 	testMessage := map[string]string{"type": "test", "data": "hello"}
-	err = hub.BroadcastToRoom(context.Background(), room.ID, testMessage)
+	err = hub.BroadcastToRoom(context.Background(), room.ID(), testMessage)
 	assert.NoError(t, err)
 
 	// Should receive the message
@@ -299,11 +292,11 @@ func TestIntegration_GetRooms(t *testing.T) {
 	// Verify all rooms are present
 	roomIDs := make(map[string]bool)
 	for _, r := range rooms {
-		roomIDs[r.ID] = true
+		roomIDs[r.ID()] = true
 	}
-	assert.True(t, roomIDs[room1.ID])
-	assert.True(t, roomIDs[room2.ID])
-	assert.True(t, roomIDs[room3.ID])
+	assert.True(t, roomIDs[room1.ID()])
+	assert.True(t, roomIDs[room2.ID()])
+	assert.True(t, roomIDs[room3.ID()])
 }
 
 func TestIntegration_SaveRoom(t *testing.T) {
@@ -328,7 +321,7 @@ func TestIntegration_SaveRoom(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Retrieve and verify the changes were persisted
-	retrieved, err := hub.LoadRoom(context.Background(), room.ID)
+	retrieved, err := hub.LoadRoom(context.Background(), room.ID())
 	assert.NoError(t, err)
 	assert.Equal(t, "Updated Story", retrieved.CurrentStory)
 	assert.True(t, retrieved.Reveal)
@@ -346,11 +339,10 @@ func TestIntegration_Close(t *testing.T) {
 	room, err := hub.NewRoom(context.Background())
 	assert.NoError(t, err)
 	client1 := room.NewClient("client-close-1")
-	room.Clients.Add(client1)
-	client1.WithRoom(room)
-	hub.AddClient(client1)
+	room.Clients().Add(client1)
+	assert.NoError(t, hub.AddClient(context.Background(), room, client1))
 
-	bus := &mockBus{roomID: room.ID}
+	bus := &mockBus{roomID: room.ID()}
 	hub.AddBus(context.Background(), client1.ID, bus)
 
 	// Give listener time to start

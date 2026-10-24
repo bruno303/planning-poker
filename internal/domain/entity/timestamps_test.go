@@ -36,7 +36,7 @@ func TestClientVoteTracksLatestNonEmptySelectionAndClearsOnReset(t *testing.T) {
 	room.NewClient("participant")
 
 	firstVote := "5"
-	if err := room.Vote(context.Background(), owner.ID, &firstVote); err != nil {
+	if err := room.Vote(context.Background(), owner.ID, entity.VotePtr(firstVote)); err != nil {
 		t.Fatalf("first vote returned error: %v", err)
 	}
 	if owner.VotedAt == nil {
@@ -45,7 +45,7 @@ func TestClientVoteTracksLatestNonEmptySelectionAndClearsOnReset(t *testing.T) {
 	firstVotedAt := owner.VotedAt
 
 	secondVote := "8"
-	if err := room.Vote(context.Background(), owner.ID, &secondVote); err != nil {
+	if err := room.Vote(context.Background(), owner.ID, entity.VotePtr(secondVote)); err != nil {
 		t.Fatalf("second vote returned error: %v", err)
 	}
 	if owner.VotedAt == nil {
@@ -105,7 +105,7 @@ func TestRoomRoundResetsClearParticipantVoteTimestamps(t *testing.T) {
 			vote := "5"
 			votedAt := time.Date(2026, time.September, 3, 12, 0, 0, 0, time.UTC)
 			for _, client := range []*entity.Client{owner, participant} {
-				client.CurrentVote = &vote
+				client.CurrentVote = entity.VotePtr(vote)
 				client.HasVoted = true
 				client.VotedAt = &votedAt
 			}
@@ -133,7 +133,7 @@ func TestRoomRemovingOnlyActiveStoryClearsVoteTimestamps(t *testing.T) {
 	vote := "5"
 	votedAt := time.Now().UTC()
 	for _, client := range []*entity.Client{owner, participant} {
-		client.CurrentVote = &vote
+		client.CurrentVote = entity.VotePtr(vote)
 		client.HasVoted = true
 		client.VotedAt = &votedAt
 	}
@@ -154,14 +154,14 @@ func TestRoomStoryTitleEditPreservesVoteTimestamp(t *testing.T) {
 	room.Stories = []entity.Story{{ID: "current", Name: "Original"}}
 	vote := "5"
 	votedAt := time.Date(2026, time.September, 3, 12, 0, 0, 0, time.UTC)
-	owner.CurrentVote = &vote
+	owner.CurrentVote = entity.VotePtr(vote)
 	owner.HasVoted = true
 	owner.VotedAt = &votedAt
 
 	if err := room.SetCurrentStory(context.Background(), owner.ID, "Edited"); err != nil {
 		t.Fatalf("story title edit returned error: %v", err)
 	}
-	if owner.VotedAt == nil || !owner.VotedAt.Equal(votedAt) || owner.CurrentVote == nil || *owner.CurrentVote != vote {
+	if owner.VotedAt == nil || !owner.VotedAt.Equal(votedAt) || owner.CurrentVote == nil || owner.CurrentVote.Label() != vote {
 		t.Fatalf("story title edit changed vote state: %+v", owner)
 	}
 }

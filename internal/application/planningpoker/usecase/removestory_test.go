@@ -36,10 +36,7 @@ func TestRemoveStoryUseCase_Execute_Success(t *testing.T) {
 
 	roomID := "room123"
 	clientID := "client123"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 
 	client := room.NewClient(clientID)
 	client.IsOwner = true
@@ -79,10 +76,7 @@ func TestRemoveStoryUseCase_Execute_SaveRoomError(t *testing.T) {
 
 	roomID := "room123"
 	senderID := "client123"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 
 	client := room.NewClient(senderID)
 	client.IsOwner = true
@@ -160,10 +154,7 @@ func TestRemoveStoryUseCase_Execute_BroadcastError(t *testing.T) {
 
 	roomID := "room123"
 	clientID := "client123"
-	room := &entity.Room{
-		ID:      roomID,
-		Clients: clientcollection.New(),
-	}
+	room := entity.NewRoomWithID(roomID, clientcollection.New())
 
 	client := room.NewClient(clientID)
 	client.IsOwner = true

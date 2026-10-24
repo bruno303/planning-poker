@@ -67,7 +67,7 @@ func TestGetRoomStateAPI_Handle_Success(t *testing.T) {
 	roomID := "room1"
 	mockHub.EXPECT().
 		LoadRoom(gomock.Any(), roomID).
-		Return(&entity.Room{ID: roomID, Clients: clientcollection.New(client1, client2)}, nil)
+		Return(entity.NewRoomWithID(roomID, clientcollection.New(client1, client2)), nil)
 
 	handler := api.Handle()
 	router := mux.NewRouter()
@@ -250,7 +250,7 @@ func TestGetRoomStateAPI_Handle_ContextPropagation(t *testing.T) {
 		LoadRoom(gomock.Any(), "room123").
 		DoAndReturn(func(ctx context.Context, roomID string) (*entity.Room, error) {
 			capturedCtx = ctx
-			return &entity.Room{ID: roomID, Clients: clientcollection.New()}, nil
+			return entity.NewRoomWithID(roomID, clientcollection.New()), nil
 		})
 
 	handler := api.Handle()

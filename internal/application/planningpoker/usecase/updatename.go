@@ -39,7 +39,7 @@ func (uc UpdateNameUseCase) Execute(ctx context.Context, cmd UpdateNameCommand) 
 		return err
 	}
 
-	if err := uc.hub.BroadcastToRoom(ctx, room.ID, dto.NewRoomStateCommand(room)); err != nil {
+	if err := uc.hub.BroadcastToRoom(ctx, room.ID(), dto.NewRoomStateCommand(room)); err != nil {
 		return err
 	}
 

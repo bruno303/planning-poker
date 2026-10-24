@@ -44,7 +44,7 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 	client2.IsOwner = false
 	client2.IsSpectator = false
 	vote := "5"
-	client2.CurrentVote = &vote
+	client2.CurrentVote = entity.VotePtr(vote)
 	client2.HasVoted = true
 	client2.VotedAt = lo.ToPtr(time.Date(2026, time.September, 3, 12, 1, 0, 0, time.FixedZone("BRT", -3*60*60)))
 
@@ -68,8 +68,8 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 func assertSerializedRoomProperties(t *testing.T, originalRoom, deserializedRoom *entity.Room) {
 	t.Helper()
 
-	if deserializedRoom.ID != originalRoom.ID {
-		t.Errorf("Expected room ID %s, got %s", originalRoom.ID, deserializedRoom.ID)
+	if deserializedRoom.ID() != originalRoom.ID() {
+		t.Errorf("Expected room ID %s, got %s", originalRoom.ID(), deserializedRoom.ID())
 	}
 	if deserializedRoom.DeckType != originalRoom.DeckType {
 		t.Errorf("Expected deck type %q, got %q", originalRoom.DeckType, deserializedRoom.DeckType)
@@ -113,18 +113,18 @@ func assertSerializedStories(t *testing.T, deserializedRoom *entity.Room) {
 
 func assertSerializedClients(t *testing.T, originalRoom, deserializedRoom *entity.Room) {
 	t.Helper()
-	originalClient2, ok := originalRoom.Clients.Filter(func(c *entity.Client) bool {
+	originalClient2, ok := originalRoom.Clients().Filter(func(c *entity.Client) bool {
 		return c.ID == "client-2"
 	}).First()
 	if !ok {
 		t.Fatal("Original client 2 not found")
 	}
 
-	if deserializedRoom.Clients.Count() != originalRoom.Clients.Count() {
-		t.Errorf("Expected %d clients, got %d", originalRoom.Clients.Count(), deserializedRoom.Clients.Count())
+	if deserializedRoom.Clients().Count() != originalRoom.Clients().Count() {
+		t.Errorf("Expected %d clients, got %d", originalRoom.Clients().Count(), deserializedRoom.Clients().Count())
 	}
 
-	deserializedClient1, ok := deserializedRoom.Clients.Filter(func(c *entity.Client) bool {
+	deserializedClient1, ok := deserializedRoom.Clients().Filter(func(c *entity.Client) bool {
 		return c.ID == "client-1"
 	}).First()
 	if !ok {
@@ -137,7 +137,7 @@ func assertSerializedClients(t *testing.T, originalRoom, deserializedRoom *entit
 		t.Error("Expected client 1 to be owner")
 	}
 
-	deserializedClient2, ok := deserializedRoom.Clients.Filter(func(c *entity.Client) bool {
+	deserializedClient2, ok := deserializedRoom.Clients().Filter(func(c *entity.Client) bool {
 		return c.ID == "client-2"
 	}).First()
 	if !ok {
@@ -149,8 +149,8 @@ func assertSerializedClients(t *testing.T, originalRoom, deserializedRoom *entit
 	if !deserializedClient2.HasVoted {
 		t.Error("Expected client 2 to have voted")
 	}
-	if deserializedClient2.CurrentVote == nil || *deserializedClient2.CurrentVote != "5" {
-		t.Errorf("Expected client 2 vote to be 5, got %v", lo.FromPtr(deserializedClient2.CurrentVote))
+	if deserializedClient2.CurrentVote == nil || deserializedClient2.CurrentVote.Label() != "5" {
+		t.Errorf("Expected client 2 vote to be 5, got %v", deserializedClient2.CurrentVote.Label())
 	}
 	if deserializedClient2.VotedAt == nil || !deserializedClient2.VotedAt.Equal(*originalClient2.VotedAt) || deserializedClient2.VotedAt.Location() != time.UTC {
 		t.Errorf("Expected client 2 vote time %v in UTC, got %v", originalClient2.VotedAt, deserializedClient2.VotedAt)
@@ -175,7 +175,7 @@ func TestDeserializeRoomSupportsLegacyRecordsWithoutTimestamps(t *testing.T) {
 	if !room.StartedAt().IsZero() {
 		t.Fatalf("legacy room start time = %v, want zero", room.StartedAt())
 	}
-	client, ok := room.Clients.First()
+	client, ok := room.Clients().First()
 	if !ok {
 		t.Fatal("legacy client was not restored")
 	}

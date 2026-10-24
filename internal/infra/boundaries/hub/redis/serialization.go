@@ -49,29 +49,13 @@ type (
 	}
 )
 
-func (sc SerializedClient) Client(room *entity.Room) *entity.Client {
-	client := &entity.Client{
-		ID:          sc.ID,
-		Name:        sc.Name,
-		CurrentVote: sc.CurrentVote,
-		HasVoted:    sc.HasVoted,
-		VotedAt:     entity.OptionalUTCTimePtr(sc.VotedAt),
-		IsSpectator: sc.IsSpectator,
-		IsOwner:     sc.IsOwner,
-	}
-
-	return client.
-		WithRoom(room).
-		WithLogger(log.NewLogger("planningpoker.client"))
-}
-
 func SerializeRoom(room *entity.Room) ([]byte, error) {
-	clients := make([]SerializedClient, 0, room.Clients.Count())
-	room.Clients.ForEach(func(client *entity.Client) {
+	clients := make([]SerializedClient, 0, room.Clients().Count())
+	room.Clients().ForEach(func(client *entity.Client) {
 		clients = append(clients, SerializedClient{
 			ID:          client.ID,
 			Name:        client.Name,
-			CurrentVote: client.CurrentVote,
+			CurrentVote: entity.OptionalVoteLabel(client.CurrentVote),
 			HasVoted:    client.HasVoted,
 			VotedAt:     entity.OptionalUTCTimePtr(client.VotedAt),
 			IsSpectator: client.IsSpectator,
@@ -80,7 +64,7 @@ func SerializeRoom(room *entity.Room) ([]byte, error) {
 	})
 
 	serialized := SerializedRoom{
-		ID:                 room.ID,
+		ID:                 room.ID(),
 		StartedAt:          entity.OptionalUTCTime(room.StartedAt()),
 		Clients:            clients,
 		DeckType:           room.DeckType,
@@ -149,8 +133,16 @@ func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 	room.RoomVersion = serialized.RoomVersion
 
 	for _, sc := range serialized.Clients {
-		client := sc.Client(room)
-		room.Clients.Add(client)
+		client := (&entity.Client{
+			ID:          sc.ID,
+			Name:        sc.Name,
+			CurrentVote: entity.VotePtrFromLabel(sc.CurrentVote),
+			HasVoted:    sc.HasVoted,
+			VotedAt:     entity.OptionalUTCTimePtr(sc.VotedAt),
+			IsSpectator: sc.IsSpectator,
+			IsOwner:     sc.IsOwner,
+		}).WithLogger(log.NewLogger("planningpoker.client"))
+		room.Clients().Add(client)
 	}
 	return room, nil
 }
