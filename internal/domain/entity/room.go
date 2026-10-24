@@ -4,11 +4,9 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strconv"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/samber/lo"
 )
 
 type (
@@ -16,22 +14,13 @@ type (
 		id        string
 		startedAt time.Time
 		presence  *Presence
+		round     *VotingRound
 
-		DeckType           DeckType
-		CurrentStory       string
-		Reveal             bool
-		Result             *float32
-		MostAppearingVotes []string
-		Consensus          string
-		LowestVote         *string
-		HighestVote        *string
-		VoteRange          *int
-		VoteSpread         *int
-		SpecialVoteCount   int
-		BacklogMode        bool
-		Stories            []Story
-		CurrentStoryIndex  int
-		RoomVersion        uint64
+		DeckType          DeckType
+		BacklogMode       bool
+		Stories           []Story
+		CurrentStoryIndex int
+		RoomVersion       uint64
 	}
 )
 
@@ -46,14 +35,12 @@ func NewRoomWithID(id string, clients ClientCollection) *Room {
 // NewRoomWithIDAndStartedAt creates a room with a persisted start time.
 func NewRoomWithIDAndStartedAt(id string, clients ClientCollection, startedAt time.Time) *Room {
 	return &Room{
-		id:           id,
-		startedAt:    startedAt.UTC(),
-		presence:     NewPresence(id, clients),
-		DeckType:     DeckTypeFibonacci,
-		CurrentStory: "",
-		Reveal:       false,
-		Result:       nil,
-		BacklogMode:  true,
+		id:          id,
+		startedAt:   startedAt.UTC(),
+		presence:    NewPresence(id, clients),
+		round:       NewVotingRound(),
+		DeckType:    DeckTypeFibonacci,
+		BacklogMode: true,
 	}
 }
 
@@ -110,14 +97,14 @@ func (r *Room) ToggleBacklogMode(ctx context.Context, clientID string) error {
 
 	if !r.BacklogMode {
 		r.BacklogMode = true
-		if r.CurrentStory != "" {
-			r.Stories = []Story{{ID: uuid.NewString(), Name: r.CurrentStory}}
+		if currentStory := r.round.CurrentStoryName(); currentStory != "" {
+			r.Stories = []Story{{ID: uuid.NewString(), Name: currentStory}}
 			r.CurrentStoryIndex = 0
 		}
 	} else {
 		r.BacklogMode = false
 		if name := r.getCurrentStoryName(); name != "" {
-			r.CurrentStory = name
+			r.round.SetCurrentStoryName(name)
 		}
 		r.Stories = nil
 		r.CurrentStoryIndex = 0
@@ -300,7 +287,7 @@ func (r *Room) EffectiveCurrentStory() string {
 	if r.BacklogMode && len(r.Stories) > 0 && r.CurrentStoryIndex < len(r.Stories) {
 		return r.Stories[r.CurrentStoryIndex].Name
 	}
-	return r.CurrentStory
+	return r.round.CurrentStoryName()
 }
 
 func (r *Room) getCurrentStoryName() string {
@@ -338,7 +325,7 @@ func (r *Room) ToggleSpectator(ctx context.Context, clientID string, targetClien
 
 	// Votes are only cleared while the round is hidden, mirroring the previous
 	// Client.Vote behaviour.
-	if target, ok := r.presence.Find(targetClientID); ok && !r.Reveal {
+	if target, ok := r.presence.Find(targetClientID); ok && !r.round.Revealed() {
 		r.presence.SetVote(target, nil)
 	}
 
@@ -364,7 +351,7 @@ func (r *Room) SetCurrentStory(ctx context.Context, clientID string, story strin
 	if r.BacklogMode && r.CurrentStoryIndex >= 0 && r.CurrentStoryIndex < len(r.Stories) {
 		r.Stories[r.CurrentStoryIndex].Name = story
 	} else {
-		r.CurrentStory = story
+		r.round.SetCurrentStoryName(story)
 	}
 	return nil
 }
@@ -374,193 +361,141 @@ func (r *Room) ToggleReveal(ctx context.Context, clientID string) error {
 		return err
 	}
 
-	r.reveal(!r.Reveal)
+	r.reveal(!r.round.Revealed())
 	return nil
 }
 
+// reveal orchestrates the round transition: hiding always clears the outcome,
+// while revealing computes it once from the votes currently recorded in the
+// presence and stamps the estimate onto the current backlog story.
 func (r *Room) reveal(reveal bool) {
-	if reveal && r.Reveal {
-		return
-	}
-
-	r.Reveal = reveal
-
 	if !reveal {
-		r.clearConsensus()
+		r.round.Hide()
 		return
 	}
 
 	deck := r.Deck()
-	metrics := r.collectVotes(deck)
-	r.MostAppearingVotes = mostAppearingVotes(metrics.counts, getMostVoteCount(metrics.counts), deck)
-
-	if metrics.count > 0 {
-		r.Result = lo.ToPtr(metrics.sum / metrics.count)
-	} else {
-		r.Result = nil
+	votes := r.currentVotes()
+	if !r.round.Reveal(func() *RoundOutcome {
+		return computeOutcome(deck, votes)
+	}) {
+		return
 	}
 
-	summary := calculateConsensus(deck, metrics.ordered)
-	r.Consensus = summary.Consensus
-	r.LowestVote = summary.LowestVote
-	r.HighestVote = summary.HighestVote
-	r.VoteRange = summary.VoteRange
-	r.VoteSpread = summary.VoteSpread
-	r.SpecialVoteCount = metrics.specialCount
-	if r.BacklogMode && r.CurrentStoryIndex >= 0 && r.CurrentStoryIndex < len(r.Stories) {
-		r.Stories[r.CurrentStoryIndex].Result = r.Result
-		r.Stories[r.CurrentStoryIndex].MostAppearingVotes = r.MostAppearingVotes
-		r.Stories[r.CurrentStoryIndex].Voted = true
-	}
+	r.stampCurrentStory()
 }
 
-type voteMetrics struct {
-	sum          float32
-	count        float32
-	counts       map[string]int
-	ordered      []string
-	specialCount int
-}
-
-func (r *Room) collectVotes(deck Deck) voteMetrics {
-	metrics := voteMetrics{counts: make(map[string]int)}
-
+// currentVotes returns the non-spectator, non-empty votes in client iteration
+// order.
+func (r *Room) currentVotes() []Vote {
+	votes := make([]Vote, 0, r.presence.Count())
 	for _, client := range r.presence.Values() {
-		if client.IsSpectator || client.CurrentVote == nil {
+		if client.IsSpectator || client.CurrentVote == nil || client.CurrentVote.IsEmpty() {
 			continue
 		}
-
-		vote := client.CurrentVote.Label()
-		if vote == "" {
-			continue
-		}
-
-		if _, ok := deck.Position(vote); !ok {
-			metrics.specialCount++
-			continue
-		}
-
-		if value, err := strconv.Atoi(vote); err == nil {
-			metrics.sum += float32(value)
-			metrics.count++
-		}
-		metrics.counts[vote]++
-		metrics.ordered = append(metrics.ordered, vote)
+		votes = append(votes, *client.CurrentVote)
 	}
 
-	return metrics
+	return votes
 }
 
-func mostAppearingVotes(votes map[string]int, mostVoteCount int, deck Deck) []string {
-	mostVotes := make([]string, 0)
-	for vote, count := range votes {
-		if count == mostVoteCount {
-			mostVotes = append(mostVotes, vote)
-		}
+func (r *Room) stampCurrentStory() {
+	if !r.BacklogMode || r.CurrentStoryIndex < 0 || r.CurrentStoryIndex >= len(r.Stories) {
+		return
 	}
-	slices.SortFunc(mostVotes, func(a, b string) int {
-		aPosition, _ := deck.Position(a)
-		bPosition, _ := deck.Position(b)
-		return aPosition - bPosition
-	})
 
-	return mostVotes
+	outcome := r.round.Outcome()
+	if outcome == nil {
+		return
+	}
+
+	story := &r.Stories[r.CurrentStoryIndex]
+	story.Result = outcome.Result
+	story.MostAppearingVotes = outcome.MostAppearingVotes
+	story.Voted = true
 }
 
-func getMostVoteCount(voteMap map[string]int) int {
-	var mostVoteCount int
-	for _, count := range voteMap {
-		if count > mostVoteCount {
-			mostVoteCount = count
-		}
-	}
-
-	return mostVoteCount
+// Revealed reports whether the current round's votes are visible.
+func (r *Room) Revealed() bool {
+	return r.round.Revealed()
 }
 
-const (
-	consensusHigh        = "High"
-	consensusMedium      = "Medium"
-	consensusLow         = "Low"
-	consensusUnavailable = "Unavailable"
-)
-
-type voteSummary struct {
-	Consensus   string
-	LowestVote  *string
-	HighestVote *string
-	VoteRange   *int
-	VoteSpread  *int
+// Outcome returns the current round's outcome, or nil while the round is
+// hidden.
+func (r *Room) Outcome() *RoundOutcome {
+	return r.round.Outcome()
 }
 
-// calculateConsensus evaluates ordered vote labels using deck positions.
-// VoteRange is a numeric distance only for numeric decks; VoteSpread always
-// measures the distance between ordered deck positions.
-func calculateConsensus(deck Deck, votes []string) voteSummary {
-	if len(votes) == 0 {
-		return voteSummary{Consensus: consensusUnavailable}
+// Result returns the mean of the numeric votes, or nil when unavailable.
+func (r *Room) Result() *float32 {
+	if outcome := r.round.Outcome(); outcome != nil {
+		return outcome.Result
 	}
 
-	voteCounts := make(map[string]int, len(votes))
-	for _, vote := range votes {
-		voteCounts[vote]++
-	}
-
-	minPosition, maxPosition := -1, -1
-	var minLabel, maxLabel string
-	for _, vote := range votes {
-		position, ok := deck.Position(vote)
-		if !ok {
-			continue
-		}
-		if minPosition == -1 || position < minPosition {
-			minPosition, minLabel = position, vote
-		}
-		if position > maxPosition {
-			maxPosition, maxLabel = position, vote
-		}
-	}
-
-	summary := voteSummary{Consensus: consensusUnavailable}
-	if minPosition == -1 {
-		return summary
-	}
-
-	spread := maxPosition - minPosition
-	summary.VoteSpread = lo.ToPtr(spread)
-	summary.LowestVote = lo.ToPtr(minLabel)
-	summary.HighestVote = lo.ToPtr(maxLabel)
-	summary.Consensus = consensusLow
-
-	mostVoteCount := getMostVoteCount(voteCounts)
-	strongMajority := mostVoteCount >= (2*len(votes)+2)/3
-	switch {
-	case minLabel == maxLabel:
-		summary.Consensus = consensusHigh
-	case strongMajority && spread <= 1:
-		summary.Consensus = consensusHigh
-	case spread <= 2:
-		summary.Consensus = consensusMedium
-	}
-
-	if minValue, minErr := strconv.Atoi(minLabel); minErr == nil {
-		if maxValue, maxErr := strconv.Atoi(maxLabel); maxErr == nil {
-			summary.VoteRange = lo.ToPtr(maxValue - minValue)
-		}
-	}
-
-	return summary
+	return nil
 }
 
-func (r *Room) clearConsensus() {
-	r.Result = nil
-	r.MostAppearingVotes = nil
-	r.Consensus = ""
-	r.LowestVote = nil
-	r.HighestVote = nil
-	r.VoteRange = nil
-	r.VoteSpread = nil
-	r.SpecialVoteCount = 0
+// MostAppearingVotes returns the most frequent votes ordered by deck position.
+func (r *Room) MostAppearingVotes() []string {
+	if outcome := r.round.Outcome(); outcome != nil {
+		return outcome.MostAppearingVotes
+	}
+
+	return nil
+}
+
+// Consensus returns the consensus level of the current round.
+func (r *Room) Consensus() string {
+	if outcome := r.round.Outcome(); outcome != nil {
+		return outcome.Consensus
+	}
+
+	return ""
+}
+
+// LowestVote returns the lowest vote by deck position.
+func (r *Room) LowestVote() *string {
+	if outcome := r.round.Outcome(); outcome != nil {
+		return outcome.LowestVote
+	}
+
+	return nil
+}
+
+// HighestVote returns the highest vote by deck position.
+func (r *Room) HighestVote() *string {
+	if outcome := r.round.Outcome(); outcome != nil {
+		return outcome.HighestVote
+	}
+
+	return nil
+}
+
+// VoteRange returns the numeric distance between the extreme votes.
+func (r *Room) VoteRange() *int {
+	if outcome := r.round.Outcome(); outcome != nil {
+		return outcome.VoteRange
+	}
+
+	return nil
+}
+
+// VoteSpread returns the deck-position distance between the extreme votes.
+func (r *Room) VoteSpread() *int {
+	if outcome := r.round.Outcome(); outcome != nil {
+		return outcome.VoteSpread
+	}
+
+	return nil
+}
+
+// SpecialVoteCount returns how many special cards were cast.
+func (r *Room) SpecialVoteCount() int {
+	if outcome := r.round.Outcome(); outcome != nil {
+		return outcome.SpecialVoteCount
+	}
+
+	return 0
 }
 
 func (r *Room) IsEmpty() bool {
@@ -584,7 +519,7 @@ func (r *Room) Vote(ctx context.Context, clientID string, vote *Vote) error {
 		}
 	}
 
-	if r.Reveal {
+	if r.round.Revealed() {
 		r.checkReveal()
 		return nil
 	}

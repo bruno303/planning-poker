@@ -163,14 +163,15 @@ func TestRoomSelectStoryResetsActiveVotingAndPreservesEstimates(t *testing.T) {
 	owner.HasVoted = true
 	participant.CurrentVote = entity.VotePtr(vote)
 	participant.HasVoted = true
-	room.Reveal = true
-	room.Result = lo.ToPtr(float32(5))
+	if err := room.ToggleReveal(context.Background(), owner.ID); err != nil {
+		t.Fatalf("ToggleReveal returned error: %v", err)
+	}
 
 	if err := room.SelectStory(context.Background(), owner.ID, "pending"); err != nil {
 		t.Fatalf("SelectStory returned error: %v", err)
 	}
 
-	if room.CurrentStoryIndex != 1 || room.Reveal || room.Result != nil {
+	if room.CurrentStoryIndex != 1 || room.Revealed() || room.Result() != nil {
 		t.Fatalf("unexpected selected story state: %+v", room)
 	}
 	for _, client := range []*entity.Client{owner, participant} {
@@ -196,7 +197,7 @@ func TestRoomAutomaticRevealRecordsCurrentStoryEstimate(t *testing.T) {
 		t.Fatalf("participant Vote returned error: %v", err)
 	}
 
-	if !room.Reveal || !room.Stories[0].Voted {
+	if !room.Revealed() || !room.Stories[0].Voted {
 		t.Fatalf("automatic reveal did not estimate current story: %+v", room.Stories[0])
 	}
 	if room.Stories[0].Result == nil || *room.Stories[0].Result != 6.5 {
@@ -240,15 +241,15 @@ func TestRoomAutomaticRevealEstimateIsStableAfterParticipantChange(t *testing.T)
 				t.Fatalf("participant Vote returned error: %v", err)
 			}
 
-			if room.Result == nil || *room.Result != 6.5 || room.Stories[0].Result == nil || *room.Stories[0].Result != 6.5 {
-				t.Fatalf("automatic reveal result = %v, story result = %v, want 6.5", room.Result, room.Stories[0].Result)
+			if room.Result() == nil || *room.Result() != 6.5 || room.Stories[0].Result == nil || *room.Stories[0].Result != 6.5 {
+				t.Fatalf("automatic reveal result = %v, story result = %v, want 6.5", room.Result(), room.Stories[0].Result)
 			}
 
 			if err := tt.action(context.Background(), room, owner, participant); err != nil {
 				t.Fatalf("participant change returned error: %v", err)
 			}
 
-			if !room.Reveal || room.Result == nil || *room.Result != 6.5 {
+			if !room.Revealed() || room.Result() == nil || *room.Result() != 6.5 {
 				t.Fatalf("room result changed after participant change: %+v", room)
 			}
 			if room.Stories[0].Result == nil || *room.Stories[0].Result != 6.5 || !room.Stories[0].Voted {

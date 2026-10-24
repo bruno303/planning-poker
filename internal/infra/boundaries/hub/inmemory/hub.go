@@ -257,60 +257,7 @@ func (h *InMemoryHub) SaveRoomIfVersion(_ context.Context, room *entity.Room, ex
 }
 
 func cloneRoom(room *entity.Room) *entity.Room {
-	clone := entity.NewRoomWithIDAndStartedAt(room.ID(), clientcollection.New(), room.StartedAt())
-	clone.DeckType = room.DeckType
-	clone.CurrentStory = room.CurrentStory
-	clone.Reveal = room.Reveal
-	clone.Result = cloneFloat32(room.Result)
-	clone.MostAppearingVotes = append([]string(nil), room.MostAppearingVotes...)
-	clone.Consensus = room.Consensus
-	clone.LowestVote = cloneString(room.LowestVote)
-	clone.HighestVote = cloneString(room.HighestVote)
-	clone.VoteRange = cloneInt(room.VoteRange)
-	clone.VoteSpread = cloneInt(room.VoteSpread)
-	clone.SpecialVoteCount = room.SpecialVoteCount
-	clone.BacklogMode = room.BacklogMode
-	clone.Stories = append([]entity.Story(nil), room.Stories...)
-	for i := range clone.Stories {
-		clone.Stories[i].Result = cloneFloat32(room.Stories[i].Result)
-		clone.Stories[i].MostAppearingVotes = append([]string(nil), room.Stories[i].MostAppearingVotes...)
-	}
-	clone.CurrentStoryIndex = room.CurrentStoryIndex
-	clone.RoomVersion = room.RoomVersion
-	for _, client := range room.Clients().Values() {
-		copied := clone.NewClient(client.ID)
-		copied.Name = client.Name
-		copied.CurrentVote = client.CurrentVote
-		copied.HasVoted = client.HasVoted
-		copied.VotedAt = entity.OptionalUTCTimePtr(client.VotedAt)
-		copied.IsSpectator = client.IsSpectator
-		copied.IsOwner = client.IsOwner
-	}
-	return clone
-}
-
-func cloneString(value *string) *string {
-	if value == nil {
-		return nil
-	}
-	cloned := *value
-	return &cloned
-}
-
-func cloneInt(value *int) *int {
-	if value == nil {
-		return nil
-	}
-	cloned := *value
-	return &cloned
-}
-
-func cloneFloat32(value *float32) *float32 {
-	if value == nil {
-		return nil
-	}
-	cloned := *value
-	return &cloned
+	return entity.NewRoomFromSnapshot(room.Snapshot(), clientcollection.New())
 }
 
 func (h *InMemoryHub) BroadcastToRoom(ctx context.Context, roomID string, message any) error {

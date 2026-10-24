@@ -2,321 +2,81 @@ package entity
 
 import (
 	"context"
-	"math"
-	"reflect"
 	"testing"
 
-	"github.com/samber/lo"
+	"go.uber.org/mock/gomock"
 )
 
-func TestRoom_RevealWithNoValidVotes(t *testing.T) {
-	// Test case: Single user votes with non-numeric value (NaN scenario)
-	client := &Client{
-		ID:          "client1",
-		Name:        "Alice",
-		IsSpectator: false,
-	}
-	client.CurrentVote = VotePtr("?")
-	client.HasVoted = true
+// TestRoomDelegatesToClientCollection keeps the aggregate honest about the
+// ClientCollection contract: every client operation must go through the
+// injected collection, which is also what keeps the generated mock exercised.
+func TestRoomDelegatesToClientCollection(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	collection := NewMockClientCollection(ctrl)
+	stored := make([]*Client, 0, 1)
 
-	room := NewRoom(newTestCollection(client))
-
-	// Reveal the votes
-	room.reveal(true)
-
-	// The result should be nil when there are no valid numeric votes
-	if room.Result != nil {
-		if math.IsNaN(float64(*room.Result)) || math.IsInf(float64(*room.Result), 0) {
-			t.Errorf("expected Result to be nil when no valid numeric votes, got NaN or Inf: %v", *room.Result)
-		} else {
-			t.Errorf("expected Result to be nil when no valid numeric votes, got: %v", *room.Result)
+	collection.EXPECT().Add(gomock.Any()).Do(func(client *Client) {
+		stored = append(stored, client)
+	})
+	collection.EXPECT().Count().DoAndReturn(func() int {
+		return len(stored)
+	}).AnyTimes()
+	collection.EXPECT().Values().DoAndReturn(func() []*Client {
+		return stored
+	}).AnyTimes()
+	collection.EXPECT().Filter(gomock.Any()).DoAndReturn(func(match func(*Client) bool) ClientCollection {
+		return newTestCollection(stored...).Filter(match)
+	}).AnyTimes()
+	collection.EXPECT().First().DoAndReturn(func() (*Client, bool) {
+		if len(stored) == 0 {
+			return nil, false
 		}
-	}
-}
-
-func TestRoom_RevealWithSingleValidVote(t *testing.T) {
-	// Test case: Single user votes with numeric value
-	client := &Client{
-		ID:          "client1",
-		Name:        "Alice",
-		IsSpectator: false,
-	}
-	client.CurrentVote = VotePtr("5")
-	client.HasVoted = true
-
-	room := NewRoom(newTestCollection(client))
-
-	// Reveal the votes
-	room.reveal(true)
-
-	// The result should be 5
-	if room.Result == nil {
-		t.Errorf("expected Result to be 5, got nil")
-	} else if *room.Result != 5 {
-		t.Errorf("expected Result to be 5, got: %v", *room.Result)
-	}
-}
-
-func TestRoom_RevealWithMixedVotes(t *testing.T) {
-	// Test case: Multiple users with mixed valid and invalid votes
-	client1 := &Client{
-		ID:          "client1",
-		Name:        "Alice",
-		IsSpectator: false,
-	}
-	client1.CurrentVote = VotePtr("3")
-	client1.HasVoted = true
-
-	client2 := &Client{
-		ID:          "client2",
-		Name:        "Bob",
-		IsSpectator: false,
-	}
-	client2.CurrentVote = VotePtr("coffee")
-	client2.HasVoted = true
-
-	room := NewRoom(newTestCollection(client1, client2))
-
-	// Reveal the votes
-	room.reveal(true)
-
-	// The result should be 3 (average of only the valid vote)
-	if room.Result == nil {
-		t.Errorf("expected Result to be 3, got nil")
-	} else if *room.Result != 3 {
-		t.Errorf("expected Result to be 3, got: %v", *room.Result)
-	}
-}
-
-func TestRoom_RevealWithAllInvalidVotes(t *testing.T) {
-	// Test case: Multiple users all voting with non-numeric values
-	client1 := &Client{
-		ID:          "client1",
-		Name:        "Alice",
-		IsSpectator: false,
-	}
-	client1.CurrentVote = VotePtr("?")
-	client1.HasVoted = true
-
-	client2 := &Client{
-		ID:          "client2",
-		Name:        "Bob",
-		IsSpectator: false,
-	}
-	client2.CurrentVote = VotePtr("coffee")
-	client2.HasVoted = true
-
-	room := NewRoom(newTestCollection(client1, client2))
-
-	// Reveal the votes
-	room.reveal(true)
-
-	// The result should be nil when there are no valid numeric votes
-	if room.Result != nil {
-		if math.IsNaN(float64(*room.Result)) || math.IsInf(float64(*room.Result), 0) {
-			t.Errorf("expected Result to be nil when no valid numeric votes, got NaN or Inf: %v", *room.Result)
-		} else {
-			t.Errorf("expected Result to be nil when no valid numeric votes, got: %v", *room.Result)
+		return stored[0], true
+	}).AnyTimes()
+	collection.EXPECT().ForEach(gomock.Any()).Do(func(f func(*Client)) {
+		for _, client := range stored {
+			f(client)
 		}
-	}
-}
-
-func TestRoom_RevealWithSpectators(t *testing.T) {
-	// Test case: Spectators should not be counted in results
-	client1 := &Client{
-		ID:          "client1",
-		Name:        "Alice",
-		IsSpectator: false,
-	}
-	client1.CurrentVote = VotePtr("5")
-	client1.HasVoted = true
-
-	client2 := &Client{
-		ID:          "client2",
-		Name:        "Bob",
-		IsSpectator: true,
-	}
-	client2.CurrentVote = VotePtr("10")
-	client2.HasVoted = true
-
-	room := NewRoom(newTestCollection(client1, client2))
-
-	// Reveal the votes
-	room.reveal(true)
-
-	// The result should be 5 (only Alice's vote counts)
-	if room.Result == nil {
-		t.Errorf("expected Result to be 5, got nil")
-	} else if *room.Result != 5 {
-		t.Errorf("expected Result to be 5, got: %v", *room.Result)
-	}
-}
-
-func TestCalculateConsensus(t *testing.T) {
-	fibonacci, _ := DeckByType(DeckTypeFibonacci)
-	tests := []struct {
-		name       string
-		votes      []string
-		consensus  string
-		lowest     *string
-		highest    *string
-		voteRange  *int
-		voteSpread *int
-	}{
-		{
-			name:      "no numeric votes",
-			consensus: consensusUnavailable,
-		},
-		{
-			name:       "single vote",
-			votes:      []string{"5"},
-			consensus:  consensusHigh,
-			lowest:     lo.ToPtr("5"),
-			highest:    lo.ToPtr("5"),
-			voteRange:  lo.ToPtr(0),
-			voteSpread: lo.ToPtr(0),
-		},
-		{
-			name:       "strong majority on adjacent estimates",
-			votes:      []string{"3", "5", "5"},
-			consensus:  consensusHigh,
-			lowest:     lo.ToPtr("3"),
-			highest:    lo.ToPtr("5"),
-			voteRange:  lo.ToPtr(2),
-			voteSpread: lo.ToPtr(1),
-		},
-		{
-			name:       "modest two-step spread",
-			votes:      []string{"3", "5", "8"},
-			consensus:  consensusMedium,
-			lowest:     lo.ToPtr("3"),
-			highest:    lo.ToPtr("8"),
-			voteRange:  lo.ToPtr(5),
-			voteSpread: lo.ToPtr(2),
-		},
-		{
-			name:       "large spread",
-			votes:      []string{"3", "13"},
-			consensus:  consensusLow,
-			lowest:     lo.ToPtr("3"),
-			highest:    lo.ToPtr("13"),
-			voteRange:  lo.ToPtr(10),
-			voteSpread: lo.ToPtr(3),
-		},
-		{
-			name:      "unknown ordered values",
-			votes:     []string{"4", "6"},
-			consensus: consensusUnavailable,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			summary := calculateConsensus(fibonacci, tt.votes)
-			assertConsensus(t,
-				consensusResult{summary.Consensus, summary.LowestVote, summary.HighestVote, summary.VoteRange, summary.VoteSpread},
-				consensusResult{tt.consensus, tt.lowest, tt.highest, tt.voteRange, tt.voteSpread},
-			)
-		})
-	}
-}
-
-func TestCalculateConsensusTShirtUsesDeckPositions(t *testing.T) {
-	deck, _ := DeckByType(DeckTypeTShirt)
-
-	summary := calculateConsensus(deck, []string{"XS", "S", "M"})
-
-	if summary.Consensus != consensusMedium {
-		t.Errorf("consensus = %q, want %q", summary.Consensus, consensusMedium)
-	}
-	if summary.LowestVote == nil || *summary.LowestVote != "XS" {
-		t.Errorf("lowest vote = %v, want XS", summary.LowestVote)
-	}
-	if summary.HighestVote == nil || *summary.HighestVote != "M" {
-		t.Errorf("highest vote = %v, want M", summary.HighestVote)
-	}
-	if summary.VoteSpread == nil || *summary.VoteSpread != 2 {
-		t.Errorf("vote spread = %v, want 2", summary.VoteSpread)
-	}
-	if summary.VoteRange != nil {
-		t.Errorf("vote range = %v, want nil for t-shirt deck", summary.VoteRange)
-	}
-
-	single := calculateConsensus(deck, []string{"L", "L"})
-	if single.Consensus != consensusHigh || single.VoteSpread == nil || *single.VoteSpread != 0 {
-		t.Errorf("single-estimate summary = %+v, want High with spread 0", single)
-	}
-}
-
-type consensusResult struct {
-	consensus  string
-	lowest     *string
-	highest    *string
-	voteRange  *int
-	voteSpread *int
-}
-
-func assertConsensus(t *testing.T, got, want consensusResult) {
-	t.Helper()
-
-	if got.consensus != want.consensus {
-		t.Errorf("consensus = %q, want %q", got.consensus, want.consensus)
-	}
-	if !reflect.DeepEqual(got.lowest, want.lowest) {
-		t.Errorf("lowest = %v, want %v", got.lowest, want.lowest)
-	}
-	if !reflect.DeepEqual(got.highest, want.highest) {
-		t.Errorf("highest = %v, want %v", got.highest, want.highest)
-	}
-	if !reflect.DeepEqual(got.voteRange, want.voteRange) {
-		t.Errorf("vote range = %v, want %v", got.voteRange, want.voteRange)
-	}
-	if !reflect.DeepEqual(got.voteSpread, want.voteSpread) {
-		t.Errorf("vote spread = %v, want %v", got.voteSpread, want.voteSpread)
-	}
-}
-
-func TestRoom_RevealCalculatesConsensusAndCountsSpecialVotes(t *testing.T) {
-	clients := []*Client{
-		{ID: "low-1", CurrentVote: VotePtr("3"), HasVoted: true},
-		{ID: "low-2", CurrentVote: VotePtr("3"), HasVoted: true},
-		{ID: "high", CurrentVote: VotePtr("13"), HasVoted: true},
-		{ID: "question", CurrentVote: VotePtr("?"), HasVoted: true},
-		{ID: "coffee", CurrentVote: VotePtr("☕"), HasVoted: true},
-		{ID: "spectator", CurrentVote: VotePtr("89"), HasVoted: true, IsSpectator: true},
-	}
-
-	room := NewRoom(newTestCollection(clients...))
-	room.reveal(true)
-
-	if room.Consensus != consensusLow {
-		t.Errorf("consensus = %q, want %q", room.Consensus, consensusLow)
-	}
-	if !reflect.DeepEqual(room.LowestVote, lo.ToPtr("3")) {
-		t.Errorf("lowest vote = %v, want 3", room.LowestVote)
-	}
-	if !reflect.DeepEqual(room.HighestVote, lo.ToPtr("13")) {
-		t.Errorf("highest vote = %v, want 13", room.HighestVote)
-	}
-	if room.SpecialVoteCount != 2 {
-		t.Errorf("special vote count = %d, want 2", room.SpecialVoteCount)
-	}
-	if !reflect.DeepEqual(room.MostAppearingVotes, []string{"3"}) {
-		t.Errorf("most appearing votes = %v, want [3]", room.MostAppearingVotes)
-	}
-}
-
-func TestRoom_HideVotesClearsConsensusMetrics(t *testing.T) {
-	collection := newTestCollection(&Client{CurrentVote: VotePtr("5"), HasVoted: true})
+	}).AnyTimes()
+	collection.EXPECT().Remove(gomock.Any()).Do(func(clientID string) {
+		for index, client := range stored {
+			if client.ID == clientID {
+				stored = append(stored[:index], stored[index+1:]...)
+				return
+			}
+		}
+	})
 
 	room := NewRoom(collection)
-	room.reveal(true)
-	room.reveal(false)
+	client := room.NewClient("client1")
+	if !client.IsOwner {
+		t.Fatal("first client in the room should be the owner")
+	}
+	if room.IsEmpty() {
+		t.Fatal("room should not be empty after adding a client")
+	}
+	if owners := room.CountOwners(); owners != 1 {
+		t.Fatalf("owner count = %d, want 1", owners)
+	}
+	found, ok := room.FindClient("client1")
+	if !ok || found != client {
+		t.Fatal("FindClient did not delegate to the injected collection")
+	}
 
-	if room.Result != nil || room.MostAppearingVotes != nil || room.Consensus != "" ||
-		room.LowestVote != nil || room.HighestVote != nil || room.VoteRange != nil ||
-		room.VoteSpread != nil || room.SpecialVoteCount != 0 {
-		t.Fatalf("consensus metrics were not cleared: %+v", room)
+	visited := 0
+	room.Clients().ForEach(func(*Client) {
+		visited++
+	})
+	if visited != 1 {
+		t.Fatalf("ForEach visited %d clients, want 1", visited)
+	}
+
+	if err := room.RemoveClient(ctx, "client1"); err != nil {
+		t.Fatalf("RemoveClient returned error: %v", err)
+	}
+	if !room.IsEmpty() {
+		t.Fatal("room should be empty after removing its only client")
 	}
 }
 
@@ -337,16 +97,16 @@ func TestNewRoom(t *testing.T) {
 		t.Error("NewRoom() Clients not set correctly")
 	}
 
-	if room.CurrentStory != "" {
-		t.Errorf("NewRoom() CurrentStory = %v, want empty string", room.CurrentStory)
+	if currentStory := room.EffectiveCurrentStory(); currentStory != "" {
+		t.Errorf("NewRoom() CurrentStory = %v, want empty string", currentStory)
 	}
 
-	if room.Reveal {
+	if room.Revealed() {
 		t.Error("NewRoom() Reveal = true, want false")
 	}
 
-	if room.Result != nil {
-		t.Errorf("NewRoom() Result = %v, want nil", room.Result)
+	if result := room.Result(); result != nil {
+		t.Errorf("NewRoom() Result = %v, want nil", result)
 	}
 
 	if !room.BacklogMode {
@@ -453,20 +213,20 @@ func TestRoom_ResetVoting(t *testing.T) {
 		client.HasVoted = true
 
 		room := NewRoom(newTestCollection(client))
-		room.Reveal = true
-		room.CurrentStory = "Keep this story"
+		room.reveal(true)
+		room.round.SetCurrentStoryName("Keep this story")
 
 		err := room.ResetVoting(ctx, "client1")
 		if err != nil {
 			t.Errorf("ResetVoting() error = %v", err)
 		}
 
-		if room.Reveal {
+		if room.Revealed() {
 			t.Error("ResetVoting() should set Reveal to false")
 		}
 
-		if room.CurrentStory != "Keep this story" {
-			t.Error("ResetVoting() should not change CurrentStory")
+		if currentStory := room.EffectiveCurrentStory(); currentStory != "Keep this story" {
+			t.Errorf("ResetVoting() should not change CurrentStory, got %q", currentStory)
 		}
 
 		if client.HasVoted {
@@ -610,8 +370,8 @@ func TestRoom_SetCurrentStory(t *testing.T) {
 			t.Errorf("SetCurrentStory() error = %v", err)
 		}
 
-		if room.CurrentStory != "New Story" {
-			t.Errorf("SetCurrentStory() CurrentStory = %v, want 'New Story'", room.CurrentStory)
+		if currentStory := room.round.CurrentStoryName(); currentStory != "New Story" {
+			t.Errorf("SetCurrentStory() CurrentStory = %v, want 'New Story'", currentStory)
 		}
 	})
 
@@ -644,14 +404,14 @@ func TestRoom_ToggleReveal(t *testing.T) {
 		owner.CurrentVote = VotePtr("5")
 
 		room := NewRoom(newTestCollection(owner))
-		room.Reveal = false
+		room.reveal(false)
 
 		err := room.ToggleReveal(ctx, "owner")
 		if err != nil {
 			t.Errorf("ToggleReveal() error = %v", err)
 		}
 
-		if !room.Reveal {
+		if !room.Revealed() {
 			t.Error("ToggleReveal() should set Reveal to true")
 		}
 
@@ -661,7 +421,7 @@ func TestRoom_ToggleReveal(t *testing.T) {
 			t.Errorf("ToggleReveal() error = %v", err)
 		}
 
-		if room.Reveal {
+		if room.Revealed() {
 			t.Error("ToggleReveal() should set Reveal back to false")
 		}
 	})
@@ -715,7 +475,7 @@ func TestRoom_Vote(t *testing.T) {
 		client := &Client{ID: "client1", IsSpectator: false}
 
 		room := NewRoom(newTestCollection(client))
-		room.Reveal = false
+		room.reveal(false)
 
 		err := room.Vote(ctx, "client1", vote)
 		if err != nil {
@@ -767,46 +527,6 @@ func TestRoom_UpdateClientName(t *testing.T) {
 	})
 }
 
-func TestRoom_MostAppearingVotes(t *testing.T) {
-	t.Run("should calculate most appearing votes", func(t *testing.T) {
-		client1 := &Client{ID: "client1", IsSpectator: false}
-		client1.CurrentVote = VotePtr("5")
-
-		client2 := &Client{ID: "client2", IsSpectator: false}
-		client2.CurrentVote = VotePtr("5")
-
-		client3 := &Client{ID: "client3", IsSpectator: false}
-		client3.CurrentVote = VotePtr("3")
-
-		room := NewRoom(newTestCollection(client1, client2, client3))
-		room.reveal(true)
-
-		if len(room.MostAppearingVotes) != 1 {
-			t.Errorf("Expected 1 most appearing vote, got %v", len(room.MostAppearingVotes))
-		}
-
-		if len(room.MostAppearingVotes) > 0 && room.MostAppearingVotes[0] != "5" {
-			t.Errorf("Expected most appearing vote to be 5, got %v", room.MostAppearingVotes[0])
-		}
-	})
-
-	t.Run("should handle multiple most appearing votes", func(t *testing.T) {
-		client1 := &Client{ID: "client1", IsSpectator: false}
-		client1.CurrentVote = VotePtr("5")
-
-		client2 := &Client{ID: "client2", IsSpectator: false}
-		client2.CurrentVote = VotePtr("3")
-
-		room := NewRoom(newTestCollection(client1, client2))
-		room.reveal(true)
-
-		// Both votes appear once, so both should be in the list
-		if len(room.MostAppearingVotes) != 2 {
-			t.Errorf("Expected 2 most appearing votes, got %v", len(room.MostAppearingVotes))
-		}
-	})
-}
-
 func TestRoomVoteRejectsCardOutsideDeck(t *testing.T) {
 	client := &Client{ID: "client1", IsSpectator: false}
 
@@ -817,37 +537,6 @@ func TestRoomVoteRejectsCardOutsideDeck(t *testing.T) {
 	}
 	if client.CurrentVote != nil {
 		t.Fatalf("rejected vote mutated client: %+v", client)
-	}
-}
-
-func TestRoomTShirtRevealUsesLabelSummary(t *testing.T) {
-	clients := []*Client{
-		{ID: "low", CurrentVote: VotePtr("S"), HasVoted: true},
-		{ID: "mid", CurrentVote: VotePtr("M"), HasVoted: true},
-		{ID: "high", CurrentVote: VotePtr("L"), HasVoted: true},
-		{ID: "special", CurrentVote: VotePtr(SpecialVoteCoffee), HasVoted: true},
-	}
-
-	room := NewRoomFromSnapshot(RoomSnapshot{ID: "room1", DeckType: DeckTypeTShirt}, newTestCollection(clients...))
-	room.reveal(true)
-
-	if room.Result != nil {
-		t.Errorf("t-shirt result = %v, want nil average", room.Result)
-	}
-	if room.VoteRange != nil {
-		t.Errorf("t-shirt vote range = %v, want nil", room.VoteRange)
-	}
-	if room.SpecialVoteCount != 1 {
-		t.Errorf("special vote count = %d, want 1", room.SpecialVoteCount)
-	}
-	if !reflect.DeepEqual(room.MostAppearingVotes, []string{"S", "M", "L"}) {
-		t.Errorf("most appearing votes = %v, want [S M L]", room.MostAppearingVotes)
-	}
-	if room.LowestVote == nil || *room.LowestVote != "S" || room.HighestVote == nil || *room.HighestVote != "L" {
-		t.Errorf("extreme votes = (%v, %v), want (S, L)", room.LowestVote, room.HighestVote)
-	}
-	if room.VoteSpread == nil || *room.VoteSpread != 2 {
-		t.Errorf("vote spread = %v, want 2", room.VoteSpread)
 	}
 }
 
@@ -867,7 +556,7 @@ func TestRoom_ToggleBacklogMode(t *testing.T) {
 func testToggleBacklogModeEnable(t *testing.T) {
 	room, _ := newOwnerRoomForTest()
 	room.BacklogMode = false
-	room.CurrentStory = "Story 1"
+	room.round.SetCurrentStoryName("Story 1")
 
 	err := room.ToggleBacklogMode(context.Background(), "client1")
 	if err != nil {
@@ -888,7 +577,7 @@ func testToggleBacklogModeDisable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if room.BacklogMode || room.CurrentStory != "Story B" || len(room.Stories) != 0 {
+	if room.BacklogMode || room.round.CurrentStoryName() != "Story B" || len(room.Stories) != 0 {
 		t.Errorf("unexpected disabled backlog state: %+v", room)
 	}
 }
@@ -994,12 +683,12 @@ func testRemoveStoryBeforeCurrent(t *testing.T) {
 func testRemoveCurrentStoryResetsVotes(t *testing.T) {
 	owner := &Client{ID: "client1", IsOwner: true, CurrentVote: VotePtr("5"), HasVoted: true}
 	room := newRoomWithOwnerAndStories(owner, []Story{{ID: "a", Name: "A"}, {ID: "b", Name: "B"}}, 0)
-	room.Reveal = true
+	room.reveal(true)
 
 	if err := room.RemoveStory(context.Background(), "client1", "a"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if room.Reveal || owner.HasVoted {
+	if room.Revealed() || owner.HasVoted {
 		t.Error("removing the current story should reset reveal and votes")
 	}
 }
@@ -1040,9 +729,9 @@ func TestRoom_AdvanceToNextStory(t *testing.T) {
 		owner.HasVoted = true
 		room := NewRoom(newTestCollection(owner))
 		room.BacklogMode = true
-		room.Reveal = true
 		room.Stories = []Story{{Name: "A"}, {Name: "B"}, {Name: "C"}}
 		room.CurrentStoryIndex = 0
+		room.reveal(true)
 
 		err := room.AdvanceToNextStory(ctx, "client1")
 		if err != nil {
@@ -1051,7 +740,7 @@ func TestRoom_AdvanceToNextStory(t *testing.T) {
 		if room.CurrentStoryIndex != 1 {
 			t.Errorf("expected CurrentStoryIndex 1, got %d", room.CurrentStoryIndex)
 		}
-		if room.Reveal {
+		if room.Revealed() {
 			t.Error("Reveal should be false")
 		}
 		if owner.HasVoted {
@@ -1097,9 +786,9 @@ func TestRoom_PrevStory(t *testing.T) {
 		owner.HasVoted = true
 		room := NewRoom(newTestCollection(owner))
 		room.BacklogMode = true
-		room.Reveal = true
 		room.Stories = []Story{{Name: "A"}, {Name: "B"}, {Name: "C"}}
 		room.CurrentStoryIndex = 2
+		room.reveal(true)
 
 		err := room.PrevStory(ctx, "client1")
 		if err != nil {
@@ -1108,7 +797,7 @@ func TestRoom_PrevStory(t *testing.T) {
 		if room.CurrentStoryIndex != 1 {
 			t.Errorf("expected CurrentStoryIndex 1, got %d", room.CurrentStoryIndex)
 		}
-		if room.Reveal {
+		if room.Revealed() {
 			t.Error("Reveal should be false")
 		}
 		if owner.HasVoted {

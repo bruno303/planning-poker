@@ -7,9 +7,12 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 
 	"planning-poker/internal/domain"
+	"planning-poker/internal/domain/entity"
+	"planning-poker/internal/infra/boundaries/hub/clientcollection"
 	redishub "planning-poker/internal/infra/boundaries/hub/redis"
 	"planning-poker/test/integration"
 )
@@ -310,23 +313,25 @@ func TestIntegration_SaveRoom(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, room)
 
-	// Modify room state
-	room.CurrentStory = "Updated Story"
-	room.Reveal = true
-	result := float32(5.5)
-	room.Result = &result
+	// Modify room state through the aggregate
+	updated := entity.NewRoomFromSnapshot(entity.RoomSnapshot{
+		ID:           room.ID(),
+		CurrentStory: "Updated Story",
+		Revealed:     true,
+		Outcome:      &entity.RoundOutcome{Result: lo.ToPtr(float32(5.5))},
+	}, clientcollection.New())
 
 	// Save the room
-	err = hub.SaveRoom(context.Background(), room)
+	err = hub.SaveRoom(context.Background(), updated)
 	assert.NoError(t, err)
 
 	// Retrieve and verify the changes were persisted
 	retrieved, err := hub.LoadRoom(context.Background(), room.ID())
 	assert.NoError(t, err)
-	assert.Equal(t, "Updated Story", retrieved.CurrentStory)
-	assert.True(t, retrieved.Reveal)
-	assert.NotNil(t, retrieved.Result)
-	assert.Equal(t, float32(5.5), *retrieved.Result)
+	assert.Equal(t, "Updated Story", retrieved.Snapshot().CurrentStory)
+	assert.True(t, retrieved.Revealed())
+	assert.NotNil(t, retrieved.Result())
+	assert.Equal(t, float32(5.5), *retrieved.Result())
 }
 
 func TestIntegration_Close(t *testing.T) {

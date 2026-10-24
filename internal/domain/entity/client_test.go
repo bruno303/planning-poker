@@ -164,7 +164,7 @@ func TestClient_Vote(t *testing.T) {
 			client := newClient("test-client")
 
 			room := NewRoom(newTestCollection(client))
-			room.Reveal = tt.reveal
+			room.reveal(tt.reveal)
 
 			if err := room.Vote(ctx, client.ID, tt.vote); err != nil {
 				t.Fatalf("Vote() error = %v", err)
@@ -185,7 +185,7 @@ func TestClient_Vote_UpdateVote(t *testing.T) {
 	client := newClient("test-client")
 	other := newClient("other-client")
 	room := NewRoom(newTestCollection(client, other))
-	room.Reveal = false
+	room.reveal(false)
 
 	// First vote
 	if err := room.Vote(ctx, client.ID, vote1); err != nil {
@@ -306,14 +306,14 @@ func TestClient_VoteBeforeAndAfterReveal(t *testing.T) {
 
 	client := newClient("test-client")
 	room := NewRoom(newTestCollection(client))
-	room.Reveal = false
+	room.reveal(false)
 
 	if err := room.Vote(ctx, client.ID, vote5); err != nil {
 		t.Fatalf("Vote() error = %v", err)
 	}
 	assertVoteResult(t, client, vote5, true)
 
-	room.Reveal = true
+	room.reveal(true)
 	if err := room.Vote(ctx, client.ID, vote8); err != nil {
 		t.Fatalf("Vote() error = %v", err)
 	}

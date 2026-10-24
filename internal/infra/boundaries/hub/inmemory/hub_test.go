@@ -503,6 +503,22 @@ func TestInterfaceCompliance(t *testing.T) {
 	var _ domain.AdminHub = (*InMemoryHub)(nil)
 }
 
+// revealRoomForTest flips the room to the revealed state through the aggregate
+// so the round outcome is produced exactly as production code does.
+func revealRoomForTest(t *testing.T, room *entity.Room) {
+	t.Helper()
+
+	owner, ok := room.Clients().Filter(func(client *entity.Client) bool {
+		return client.IsOwner
+	}).First()
+	if !ok {
+		owner = room.NewClient("reveal-owner")
+	}
+	if err := room.ToggleReveal(context.Background(), owner.ID); err != nil {
+		t.Fatalf("failed to reveal room: %v", err)
+	}
+}
+
 func TestSaveRoom(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
@@ -512,7 +528,7 @@ func TestSaveRoom(t *testing.T) {
 	}
 
 	// Change some state in the room
-	room.Reveal = true
+	revealRoomForTest(t, room)
 	err = hub.SaveRoom(ctx, room)
 	if err != nil {
 		t.Fatalf("expected no error from SaveRoom, got %v", err)
@@ -523,7 +539,7 @@ func TestSaveRoom(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected to find room after SaveRoom, got error: %v", err)
 	}
-	if !got.Reveal {
+	if !got.Revealed() {
 		t.Errorf("expected room.Reveal to be true, got false")
 	}
 	if got.RoomVersion != 1 {
@@ -555,7 +571,7 @@ func TestSaveRoomIfVersion_StaleMutationDoesNotChangeStoredRoom(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	room.Reveal = true
+	revealRoomForTest(t, room)
 	room.RoomVersion = 2
 	expectedVersion = 0
 	if err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion); !errors.Is(err, domain.ErrStaleRoomVersion) {
@@ -565,8 +581,8 @@ func TestSaveRoomIfVersion_StaleMutationDoesNotChangeStoredRoom(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.Reveal || stored.RoomVersion != 1 {
-		t.Fatalf("stale mutation changed stored room: reveal=%v version=%d", stored.Reveal, stored.RoomVersion)
+	if stored.Revealed() || stored.RoomVersion != 1 {
+		t.Fatalf("stale mutation changed stored room: reveal=%v version=%d", stored.Revealed(), stored.RoomVersion)
 	}
 }
 
@@ -585,7 +601,7 @@ func TestSaveRoomIfVersion_StaleMutationPreservesJoinedClient(t *testing.T) {
 
 	joined := room.NewClient("client2")
 	hub.AddClient(context.Background(), room, joined)
-	room.Reveal = true
+	revealRoomForTest(t, room)
 	if err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion); !errors.Is(err, domain.ErrStaleRoomVersion) {
 		t.Fatalf("expected stale error, got %v", err)
 	}
@@ -620,7 +636,7 @@ func TestSaveRoomIfVersion_StaleMutationDoesNotResurrectRemovedClient(t *testing
 	if err := hub.RemoveClient(context.Background(), client2.ID, room.ID()); err != nil {
 		t.Fatal(err)
 	}
-	room.Reveal = true
+	revealRoomForTest(t, room)
 	if err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion); !errors.Is(err, domain.ErrStaleRoomVersion) {
 		t.Fatalf("expected stale error, got %v", err)
 	}

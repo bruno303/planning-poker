@@ -2,6 +2,7 @@ package redis
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 
@@ -14,24 +15,30 @@ import (
 func TestSerializeDeserializeRoom(t *testing.T) {
 	// Create a room with some clients
 	startedAt := time.Date(2026, time.September, 3, 12, 0, 0, 0, time.FixedZone("BRT", -3*60*60))
-	originalRoom := entity.NewRoomWithIDAndStartedAt("test-room-123", clientcollection.New(), startedAt)
-	originalRoom.DeckType = entity.DeckTypeTShirt
-	originalRoom.CurrentStory = "User Story #42"
-	originalRoom.RoomVersion = 7
-	originalRoom.Reveal = false
-	originalRoom.Consensus = "Medium"
-	originalRoom.LowestVote = lo.ToPtr("S")
-	originalRoom.HighestVote = lo.ToPtr("L")
-	originalRoom.VoteRange = lo.ToPtr(5)
-	originalRoom.VoteSpread = lo.ToPtr(2)
-	originalRoom.SpecialVoteCount = 1
-	originalRoom.Stories = []entity.Story{{
-		ID:                 "story-1",
-		Name:               "Backlog story",
-		Result:             lo.ToPtr(float32(8)),
-		MostAppearingVotes: []string{"8"},
-		Voted:              true,
-	}}
+	originalRoom := entity.NewRoomFromSnapshot(entity.RoomSnapshot{
+		ID:           "test-room-123",
+		StartedAt:    startedAt,
+		DeckType:     entity.DeckTypeTShirt,
+		Version:      7,
+		CurrentStory: "User Story #42",
+		Revealed:     true,
+		Outcome: &entity.RoundOutcome{
+			Consensus:        "Medium",
+			LowestVote:       lo.ToPtr("S"),
+			HighestVote:      lo.ToPtr("L"),
+			VoteRange:        lo.ToPtr(5),
+			VoteSpread:       lo.ToPtr(2),
+			SpecialVoteCount: 1,
+		},
+		BacklogMode: true,
+		Stories: []entity.Story{{
+			ID:                 "story-1",
+			Name:               "Backlog story",
+			Result:             lo.ToPtr(float32(8)),
+			MostAppearingVotes: []string{"8"},
+			Voted:              true,
+		}},
+	}, clientcollection.New())
 
 	// Add some clients
 	client1 := originalRoom.NewClient("client-1")
@@ -74,26 +81,20 @@ func assertSerializedRoomProperties(t *testing.T, originalRoom, deserializedRoom
 	if deserializedRoom.DeckType != originalRoom.DeckType {
 		t.Errorf("Expected deck type %q, got %q", originalRoom.DeckType, deserializedRoom.DeckType)
 	}
-	if deserializedRoom.CurrentStory != originalRoom.CurrentStory {
-		t.Errorf("Expected story %s, got %s", originalRoom.CurrentStory, deserializedRoom.CurrentStory)
+	if original, deserialized := originalRoom.Snapshot(), deserializedRoom.Snapshot(); original.CurrentStory != deserialized.CurrentStory {
+		t.Errorf("Expected story %s, got %s", original.CurrentStory, deserialized.CurrentStory)
 	}
 	if !deserializedRoom.StartedAt().Equal(originalRoom.StartedAt()) || deserializedRoom.StartedAt().Location() != time.UTC {
 		t.Errorf("Expected room start time %v in UTC, got %v", originalRoom.StartedAt(), deserializedRoom.StartedAt())
 	}
-	if deserializedRoom.Reveal != originalRoom.Reveal {
-		t.Errorf("Expected reveal %v, got %v", originalRoom.Reveal, deserializedRoom.Reveal)
+	if deserializedRoom.Revealed() != originalRoom.Revealed() {
+		t.Errorf("Expected reveal %v, got %v", originalRoom.Revealed(), deserializedRoom.Revealed())
 	}
-	if deserializedRoom.Consensus != originalRoom.Consensus {
-		t.Errorf("Expected consensus %q, got %q", originalRoom.Consensus, deserializedRoom.Consensus)
+	if !reflect.DeepEqual(deserializedRoom.Outcome(), originalRoom.Outcome()) {
+		t.Errorf("Expected outcome %+v, got %+v", originalRoom.Outcome(), deserializedRoom.Outcome())
 	}
-	if *deserializedRoom.LowestVote != *originalRoom.LowestVote ||
-		*deserializedRoom.HighestVote != *originalRoom.HighestVote ||
-		*deserializedRoom.VoteRange != *originalRoom.VoteRange ||
-		*deserializedRoom.VoteSpread != *originalRoom.VoteSpread {
-		t.Errorf("numeric consensus metrics were not preserved")
-	}
-	if deserializedRoom.SpecialVoteCount != originalRoom.SpecialVoteCount {
-		t.Errorf("Expected special vote count %d, got %d", originalRoom.SpecialVoteCount, deserializedRoom.SpecialVoteCount)
+	if deserializedRoom.SpecialVoteCount() != originalRoom.SpecialVoteCount() {
+		t.Errorf("Expected special vote count %d, got %d", originalRoom.SpecialVoteCount(), deserializedRoom.SpecialVoteCount())
 	}
 	if deserializedRoom.RoomVersion != originalRoom.RoomVersion {
 		t.Errorf("Expected room version %d, got %d", originalRoom.RoomVersion, deserializedRoom.RoomVersion)

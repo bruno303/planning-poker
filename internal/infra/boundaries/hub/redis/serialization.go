@@ -63,21 +63,22 @@ func SerializeRoom(room *entity.Room) ([]byte, error) {
 		})
 	})
 
+	outcome := room.Outcome()
 	serialized := SerializedRoom{
 		ID:                 room.ID(),
 		StartedAt:          entity.OptionalUTCTime(room.StartedAt()),
 		Clients:            clients,
 		DeckType:           room.DeckType,
-		CurrentStory:       room.CurrentStory,
-		Reveal:             room.Reveal,
-		Result:             room.Result,
-		MostAppearingVotes: room.MostAppearingVotes,
-		Consensus:          room.Consensus,
-		LowestVote:         room.LowestVote,
-		HighestVote:        room.HighestVote,
-		VoteRange:          room.VoteRange,
-		VoteSpread:         room.VoteSpread,
-		SpecialVoteCount:   room.SpecialVoteCount,
+		CurrentStory:       room.Snapshot().CurrentStory,
+		Reveal:             room.Revealed(),
+		Result:             outcomeResult(outcome),
+		MostAppearingVotes: outcomeMostAppearingVotes(outcome),
+		Consensus:          outcomeConsensus(outcome),
+		LowestVote:         outcomeLowestVote(outcome),
+		HighestVote:        outcomeHighestVote(outcome),
+		VoteRange:          outcomeVoteRange(outcome),
+		VoteSpread:         outcomeVoteSpread(outcome),
+		SpecialVoteCount:   outcomeSpecialVoteCount(outcome),
 		BacklogMode:        room.BacklogMode,
 		Stories:            serializeStories(room.Stories),
 		CurrentStoryIndex:  room.CurrentStoryIndex,
@@ -85,6 +86,62 @@ func SerializeRoom(room *entity.Room) ([]byte, error) {
 	}
 
 	return json.Marshal(serialized)
+}
+
+func outcomeResult(outcome *entity.RoundOutcome) *float32 {
+	if outcome == nil {
+		return nil
+	}
+	return outcome.Result
+}
+
+func outcomeMostAppearingVotes(outcome *entity.RoundOutcome) []string {
+	if outcome == nil {
+		return nil
+	}
+	return outcome.MostAppearingVotes
+}
+
+func outcomeConsensus(outcome *entity.RoundOutcome) string {
+	if outcome == nil {
+		return ""
+	}
+	return outcome.Consensus
+}
+
+func outcomeLowestVote(outcome *entity.RoundOutcome) *string {
+	if outcome == nil {
+		return nil
+	}
+	return outcome.LowestVote
+}
+
+func outcomeHighestVote(outcome *entity.RoundOutcome) *string {
+	if outcome == nil {
+		return nil
+	}
+	return outcome.HighestVote
+}
+
+func outcomeVoteRange(outcome *entity.RoundOutcome) *int {
+	if outcome == nil {
+		return nil
+	}
+	return outcome.VoteRange
+}
+
+func outcomeVoteSpread(outcome *entity.RoundOutcome) *int {
+	if outcome == nil {
+		return nil
+	}
+	return outcome.VoteSpread
+}
+
+func outcomeSpecialVoteCount(outcome *entity.RoundOutcome) int {
+	if outcome == nil {
+		return 0
+	}
+	return outcome.SpecialVoteCount
 }
 
 func serializeStories(stories []entity.Story) []SerializedStory {
@@ -111,26 +168,18 @@ func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 		return nil, err
 	}
 
-	room := entity.NewRoomWithIDAndStartedAt(
-		serialized.ID,
-		clientCollection,
-		entity.UTCTimeOrZero(serialized.StartedAt),
-	)
-	room.DeckType = serialized.DeckType
-	room.CurrentStory = serialized.CurrentStory
-	room.Reveal = serialized.Reveal
-	room.Result = serialized.Result
-	room.MostAppearingVotes = serialized.MostAppearingVotes
-	room.Consensus = serialized.Consensus
-	room.LowestVote = serialized.LowestVote
-	room.HighestVote = serialized.HighestVote
-	room.VoteRange = serialized.VoteRange
-	room.VoteSpread = serialized.VoteSpread
-	room.SpecialVoteCount = serialized.SpecialVoteCount
-	room.BacklogMode = serialized.BacklogMode
-	room.Stories = stories
-	room.CurrentStoryIndex = serialized.CurrentStoryIndex
-	room.RoomVersion = serialized.RoomVersion
+	room := entity.NewRoomFromSnapshot(entity.RoomSnapshot{
+		ID:                serialized.ID,
+		StartedAt:         entity.UTCTimeOrZero(serialized.StartedAt),
+		DeckType:          serialized.DeckType,
+		Version:           serialized.RoomVersion,
+		CurrentStory:      serialized.CurrentStory,
+		Revealed:          serialized.Reveal,
+		Outcome:           outcomeFromSerialized(serialized),
+		BacklogMode:       serialized.BacklogMode,
+		Stories:           stories,
+		CurrentStoryIndex: serialized.CurrentStoryIndex,
+	}, clientCollection)
 
 	for _, sc := range serialized.Clients {
 		client := (&entity.Client{
@@ -145,6 +194,25 @@ func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 		room.Clients().Add(client)
 	}
 	return room, nil
+}
+
+// outcomeFromSerialized rebuilds the round outcome from the persisted fields.
+// Hidden rounds have no outcome, so their metrics stay zero.
+func outcomeFromSerialized(serialized SerializedRoom) *entity.RoundOutcome {
+	if !serialized.Reveal {
+		return nil
+	}
+
+	return &entity.RoundOutcome{
+		Result:             serialized.Result,
+		MostAppearingVotes: serialized.MostAppearingVotes,
+		Consensus:          serialized.Consensus,
+		LowestVote:         serialized.LowestVote,
+		HighestVote:        serialized.HighestVote,
+		VoteRange:          serialized.VoteRange,
+		VoteSpread:         serialized.VoteSpread,
+		SpecialVoteCount:   serialized.SpecialVoteCount,
+	}
 }
 
 func deserializeStories(stories []SerializedStory) ([]entity.Story, error) {

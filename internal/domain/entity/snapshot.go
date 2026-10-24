@@ -6,24 +6,17 @@ type (
 	// RoomSnapshot is an immutable-value view of a room used to clone and
 	// rebuild aggregates without exposing their internals.
 	RoomSnapshot struct {
-		ID                 string
-		StartedAt          time.Time
-		DeckType           DeckType
-		Version            uint64
-		Clients            []ClientSnapshot
-		CurrentStory       string
-		Revealed           bool
-		Result             *float32
-		MostAppearingVotes []string
-		Consensus          string
-		LowestVote         *string
-		HighestVote        *string
-		VoteRange          *int
-		VoteSpread         *int
-		SpecialVoteCount   int
-		BacklogMode        bool
-		Stories            []Story
-		CurrentStoryIndex  int
+		ID                string
+		StartedAt         time.Time
+		DeckType          DeckType
+		Version           uint64
+		Clients           []ClientSnapshot
+		CurrentStory      string
+		Revealed          bool
+		Outcome           *RoundOutcome
+		BacklogMode       bool
+		Stories           []Story
+		CurrentStoryIndex int
 	}
 	ClientSnapshot struct {
 		ID          string
@@ -52,49 +45,41 @@ func (r *Room) Snapshot() RoomSnapshot {
 	}
 
 	return RoomSnapshot{
-		ID:                 r.id,
-		StartedAt:          r.startedAt,
-		DeckType:           r.DeckType,
-		Version:            r.RoomVersion,
-		Clients:            clients,
-		CurrentStory:       r.CurrentStory,
-		Revealed:           r.Reveal,
-		Result:             cloneFloat32(r.Result),
-		MostAppearingVotes: append([]string(nil), r.MostAppearingVotes...),
-		Consensus:          r.Consensus,
-		LowestVote:         cloneString(r.LowestVote),
-		HighestVote:        cloneString(r.HighestVote),
-		VoteRange:          cloneInt(r.VoteRange),
-		VoteSpread:         cloneInt(r.VoteSpread),
-		SpecialVoteCount:   r.SpecialVoteCount,
-		BacklogMode:        r.BacklogMode,
-		Stories:            cloneStories(r.Stories),
-		CurrentStoryIndex:  r.CurrentStoryIndex,
+		ID:                r.id,
+		StartedAt:         r.startedAt,
+		DeckType:          r.DeckType,
+		Version:           r.RoomVersion,
+		Clients:           clients,
+		CurrentStory:      r.round.CurrentStoryName(),
+		Revealed:          r.round.Revealed(),
+		Outcome:           r.round.Outcome().clone(),
+		BacklogMode:       r.BacklogMode,
+		Stories:           cloneStories(r.Stories),
+		CurrentStoryIndex: r.CurrentStoryIndex,
 	}
 }
 
 // NewRoomFromSnapshot rebuilds a room from a snapshot. Clients are re-added
 // through the presence and their persisted flags then overwrite the defaults.
 func NewRoomFromSnapshot(s RoomSnapshot, clients ClientCollection) *Room {
+	round := NewVotingRound()
+	round.SetCurrentStoryName(s.CurrentStory)
+	// Restoring through Reveal keeps a hidden snapshot from carrying an
+	// outcome, mirroring Hide.
+	if s.Revealed {
+		round.Reveal(func() *RoundOutcome { return s.Outcome.clone() })
+	}
+
 	room := &Room{
-		id:                 s.ID,
-		startedAt:          s.StartedAt.UTC(),
-		presence:           NewPresence(s.ID, clients),
-		DeckType:           s.DeckType,
-		CurrentStory:       s.CurrentStory,
-		Reveal:             s.Revealed,
-		Result:             cloneFloat32(s.Result),
-		MostAppearingVotes: append([]string(nil), s.MostAppearingVotes...),
-		Consensus:          s.Consensus,
-		LowestVote:         cloneString(s.LowestVote),
-		HighestVote:        cloneString(s.HighestVote),
-		VoteRange:          cloneInt(s.VoteRange),
-		VoteSpread:         cloneInt(s.VoteSpread),
-		SpecialVoteCount:   s.SpecialVoteCount,
-		BacklogMode:        s.BacklogMode,
-		Stories:            cloneStories(s.Stories),
-		CurrentStoryIndex:  s.CurrentStoryIndex,
-		RoomVersion:        s.Version,
+		id:                s.ID,
+		startedAt:         s.StartedAt.UTC(),
+		presence:          NewPresence(s.ID, clients),
+		round:             round,
+		DeckType:          s.DeckType,
+		BacklogMode:       s.BacklogMode,
+		Stories:           cloneStories(s.Stories),
+		CurrentStoryIndex: s.CurrentStoryIndex,
+		RoomVersion:       s.Version,
 	}
 
 	for _, snapshot := range s.Clients {

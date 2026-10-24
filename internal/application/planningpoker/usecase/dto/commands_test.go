@@ -25,19 +25,24 @@ func TestNewRoomStateCommand(t *testing.T) {
 		clientCollection.Add(client)
 	}
 
-	room := entity.NewRoomWithIDAndStartedAt("room1", clientCollection, startedAt)
-	room.CurrentStory = "Story 1"
-	room.Reveal = true
-	room.Result = lo.ToPtr(float32(5))
-	room.MostAppearingVotes = []string{"1", "2"}
-	room.Consensus = "Medium"
-	room.LowestVote = lo.ToPtr("3")
-	room.HighestVote = lo.ToPtr("8")
-	room.VoteRange = lo.ToPtr(5)
-	room.VoteSpread = lo.ToPtr(2)
-	room.SpecialVoteCount = 1
-	room.BacklogMode = true
-	room.RoomVersion = 4
+	room := entity.NewRoomFromSnapshot(entity.RoomSnapshot{
+		ID:           "room1",
+		StartedAt:    startedAt,
+		CurrentStory: "Story 1",
+		Revealed:     true,
+		Outcome: &entity.RoundOutcome{
+			Result:             lo.ToPtr(float32(5)),
+			MostAppearingVotes: []string{"1", "2"},
+			Consensus:          "Medium",
+			LowestVote:         lo.ToPtr("3"),
+			HighestVote:        lo.ToPtr("8"),
+			VoteRange:          lo.ToPtr(5),
+			VoteSpread:         lo.ToPtr(2),
+			SpecialVoteCount:   1,
+		},
+		BacklogMode: true,
+		Version:     4,
+	}, clientCollection)
 	got := NewRoomStateCommand(room)
 	want := RoomState{
 		Type:         "room-state",
