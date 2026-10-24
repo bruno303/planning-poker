@@ -33,10 +33,11 @@ func TestRoomStoryCreationAssignsStableIDs(t *testing.T) {
 	if err := room.AddStory(context.Background(), owner.ID, "Second"); err != nil {
 		t.Fatalf("second AddStory returned error: %v", err)
 	}
-	if room.Stories[0].ID == "" || room.Stories[1].ID == "" || room.Stories[0].ID == room.Stories[1].ID {
-		t.Fatalf("stories do not have distinct stable IDs: %+v", room.Stories)
+	stories := room.Stories()
+	if stories[0].ID == "" || stories[1].ID == "" || stories[0].ID == stories[1].ID {
+		t.Fatalf("stories do not have distinct stable IDs: %+v", stories)
 	}
-	if err := room.RemoveStory(context.Background(), owner.ID, room.Stories[1].ID); err != nil {
+	if err := room.RemoveStory(context.Background(), owner.ID, stories[1].ID); err != nil {
 		t.Fatalf("RemoveStory returned error: %v", err)
 	}
 }
@@ -95,15 +96,16 @@ func TestRoomReorderStory(t *testing.T) {
 func assertReorderedStory(t *testing.T, room *entity.Room, testCase reorderStoryTestCase) {
 	t.Helper()
 
-	gotOrder := make([]string, len(room.Stories))
-	for i, story := range room.Stories {
+	stories := room.Stories()
+	gotOrder := make([]string, len(stories))
+	for i, story := range stories {
 		gotOrder[i] = story.ID
 	}
 	if !reflect.DeepEqual(gotOrder, testCase.wantOrder) {
 		t.Fatalf("story order = %v, want %v", gotOrder, testCase.wantOrder)
 	}
-	if room.Stories[room.CurrentStoryIndex].ID != testCase.wantCurrentID {
-		t.Fatalf("current story = %q, want %q", room.Stories[room.CurrentStoryIndex].ID, testCase.wantCurrentID)
+	if stories[room.CurrentStoryIndex()].ID != testCase.wantCurrentID {
+		t.Fatalf("current story = %q, want %q", stories[room.CurrentStoryIndex()].ID, testCase.wantCurrentID)
 	}
 	assertEstimatedStory(t, room)
 }
@@ -111,11 +113,12 @@ func assertReorderedStory(t *testing.T, room *entity.Room, testCase reorderStory
 func assertEstimatedStory(t *testing.T, room *entity.Room) {
 	t.Helper()
 
-	for i := range room.Stories {
-		if room.Stories[i].ID != "b" {
+	stories := room.Stories()
+	for i := range stories {
+		if stories[i].ID != "b" {
 			continue
 		}
-		story := room.Stories[i]
+		story := stories[i]
 		if story.Result == nil || *story.Result != 5 || !reflect.DeepEqual(story.MostAppearingVotes, []string{"5"}) || !story.Voted {
 			t.Fatal("estimated result was not preserved during reorder")
 		}
@@ -139,12 +142,12 @@ func TestRoomReorderStoryRejectsInvalidCommandsWithoutMutation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			room, _, _ := newBacklogRoom([]entity.Story{{ID: "a", Name: "A"}, {ID: "b", Name: "B"}}, 0)
-			before := append([]entity.Story(nil), room.Stories...)
+			before := append([]entity.Story(nil), room.Stories()...)
 
 			if err := room.ReorderStory(context.Background(), tt.clientID, tt.storyID, tt.targetIndex); err == nil {
 				t.Fatal("expected ReorderStory to fail")
 			}
-			if !reflect.DeepEqual(room.Stories, before) || room.CurrentStoryIndex != 0 {
+			if !reflect.DeepEqual(room.Stories(), before) || room.CurrentStoryIndex() != 0 {
 				t.Fatalf("invalid reorder mutated room: %+v", room)
 			}
 		})
@@ -171,7 +174,7 @@ func TestRoomSelectStoryResetsActiveVotingAndPreservesEstimates(t *testing.T) {
 		t.Fatalf("SelectStory returned error: %v", err)
 	}
 
-	if room.CurrentStoryIndex != 1 || room.Revealed() || room.Result() != nil {
+	if room.CurrentStoryIndex() != 1 || room.Revealed() || room.Result() != nil {
 		t.Fatalf("unexpected selected story state: %+v", room)
 	}
 	for _, client := range []*entity.Client{owner, participant} {
@@ -179,7 +182,8 @@ func TestRoomSelectStoryResetsActiveVotingAndPreservesEstimates(t *testing.T) {
 			t.Fatalf("client vote was not reset: %+v", client)
 		}
 	}
-	if room.Stories[2].Result == nil || *room.Stories[2].Result != estimatedResult || !room.Stories[2].Voted {
+	estimated := room.Stories()[2]
+	if estimated.Result == nil || *estimated.Result != estimatedResult || !estimated.Voted {
 		t.Fatal("estimated story result was changed")
 	}
 }
@@ -197,18 +201,20 @@ func TestRoomAutomaticRevealRecordsCurrentStoryEstimate(t *testing.T) {
 		t.Fatalf("participant Vote returned error: %v", err)
 	}
 
-	if !room.Revealed() || !room.Stories[0].Voted {
-		t.Fatalf("automatic reveal did not estimate current story: %+v", room.Stories[0])
+	stories := room.Stories()
+	if !room.Revealed() || !stories[0].Voted {
+		t.Fatalf("automatic reveal did not estimate current story: %+v", stories[0])
 	}
-	if room.Stories[0].Result == nil || *room.Stories[0].Result != 6.5 {
-		t.Fatalf("current story result = %v, want 6.5", room.Stories[0].Result)
+	if stories[0].Result == nil || *stories[0].Result != 6.5 {
+		t.Fatalf("current story result = %v, want 6.5", stories[0].Result)
 	}
 
 	if err := room.ReorderStory(context.Background(), owner.ID, "current", 1); err != nil {
 		t.Fatalf("ReorderStory returned error: %v", err)
 	}
-	if !room.Stories[1].Voted || room.Stories[1].Result == nil || *room.Stories[1].Result != 6.5 {
-		t.Fatalf("estimated current story changed after reorder: %+v", room.Stories[1])
+	stories = room.Stories()
+	if !stories[1].Voted || stories[1].Result == nil || *stories[1].Result != 6.5 {
+		t.Fatalf("estimated current story changed after reorder: %+v", stories[1])
 	}
 }
 
@@ -241,8 +247,9 @@ func TestRoomAutomaticRevealEstimateIsStableAfterParticipantChange(t *testing.T)
 				t.Fatalf("participant Vote returned error: %v", err)
 			}
 
-			if room.Result() == nil || *room.Result() != 6.5 || room.Stories[0].Result == nil || *room.Stories[0].Result != 6.5 {
-				t.Fatalf("automatic reveal result = %v, story result = %v, want 6.5", room.Result(), room.Stories[0].Result)
+			stories := room.Stories()
+			if room.Result() == nil || *room.Result() != 6.5 || stories[0].Result == nil || *stories[0].Result != 6.5 {
+				t.Fatalf("automatic reveal result = %v, story result = %v, want 6.5", room.Result(), stories[0].Result)
 			}
 
 			if err := tt.action(context.Background(), room, owner, participant); err != nil {
@@ -252,8 +259,9 @@ func TestRoomAutomaticRevealEstimateIsStableAfterParticipantChange(t *testing.T)
 			if !room.Revealed() || room.Result() == nil || *room.Result() != 6.5 {
 				t.Fatalf("room result changed after participant change: %+v", room)
 			}
-			if room.Stories[0].Result == nil || *room.Stories[0].Result != 6.5 || !room.Stories[0].Voted {
-				t.Fatalf("story estimate changed after participant change: %+v", room.Stories[0])
+			stories = room.Stories()
+			if stories[0].Result == nil || *stories[0].Result != 6.5 || !stories[0].Voted {
+				t.Fatalf("story estimate changed after participant change: %+v", stories[0])
 			}
 		})
 	}
@@ -278,12 +286,12 @@ func TestRoomSelectStoryRejectsCurrentEstimatedAndNonOwner(t *testing.T) {
 				{ID: "pending", Name: "Pending"},
 				{ID: "estimated", Name: "Estimated", Voted: true},
 			}, 0)
-			before := append([]entity.Story(nil), room.Stories...)
+			before := append([]entity.Story(nil), room.Stories()...)
 
 			if err := room.SelectStory(context.Background(), tt.clientID, tt.storyID); err == nil {
 				t.Fatal("expected SelectStory to fail")
 			}
-			if !reflect.DeepEqual(room.Stories, before) || room.CurrentStoryIndex != 0 {
+			if !reflect.DeepEqual(room.Stories(), before) || room.CurrentStoryIndex() != 0 {
 				t.Fatalf("invalid selection mutated room: %+v", room)
 			}
 		})

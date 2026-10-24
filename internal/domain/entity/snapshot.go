@@ -53,9 +53,9 @@ func (r *Room) Snapshot() RoomSnapshot {
 		CurrentStory:      r.round.CurrentStoryName(),
 		Revealed:          r.round.Revealed(),
 		Outcome:           r.round.Outcome().clone(),
-		BacklogMode:       r.BacklogMode,
-		Stories:           cloneStories(r.Stories),
-		CurrentStoryIndex: r.CurrentStoryIndex,
+		BacklogMode:       r.backlog.Mode(),
+		Stories:           cloneStories(r.backlog.Stories()),
+		CurrentStoryIndex: r.backlog.CurrentIndex(),
 	}
 }
 
@@ -70,16 +70,17 @@ func NewRoomFromSnapshot(s RoomSnapshot, clients ClientCollection) *Room {
 		round.Reveal(func() *RoundOutcome { return s.Outcome.clone() })
 	}
 
+	backlog := NewBacklog(s.ID)
+	backlog.restore(s.BacklogMode, cloneStories(s.Stories), s.CurrentStoryIndex)
+
 	room := &Room{
-		id:                s.ID,
-		startedAt:         s.StartedAt.UTC(),
-		presence:          NewPresence(s.ID, clients),
-		round:             round,
-		DeckType:          s.DeckType,
-		BacklogMode:       s.BacklogMode,
-		Stories:           cloneStories(s.Stories),
-		CurrentStoryIndex: s.CurrentStoryIndex,
-		RoomVersion:       s.Version,
+		id:          s.ID,
+		startedAt:   s.StartedAt.UTC(),
+		presence:    NewPresence(s.ID, clients),
+		round:       round,
+		backlog:     backlog,
+		DeckType:    s.DeckType,
+		RoomVersion: s.Version,
 	}
 
 	for _, snapshot := range s.Clients {

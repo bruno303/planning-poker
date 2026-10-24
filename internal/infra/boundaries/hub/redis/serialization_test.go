@@ -104,11 +104,12 @@ func assertSerializedRoomProperties(t *testing.T, originalRoom, deserializedRoom
 func assertSerializedStories(t *testing.T, deserializedRoom *entity.Room) {
 	t.Helper()
 
-	if len(deserializedRoom.Stories) != 1 || deserializedRoom.Stories[0].ID != "story-1" {
-		t.Fatalf("story ID was not preserved: %+v", deserializedRoom.Stories)
+	stories := deserializedRoom.Stories()
+	if len(stories) != 1 || stories[0].ID != "story-1" {
+		t.Fatalf("story ID was not preserved: %+v", stories)
 	}
-	if deserializedRoom.Stories[0].Result == nil || *deserializedRoom.Stories[0].Result != 8 || !deserializedRoom.Stories[0].Voted {
-		t.Fatalf("story estimate was not preserved: %+v", deserializedRoom.Stories[0])
+	if stories[0].Result == nil || *stories[0].Result != 8 || !stories[0].Voted {
+		t.Fatalf("story estimate was not preserved: %+v", stories[0])
 	}
 }
 

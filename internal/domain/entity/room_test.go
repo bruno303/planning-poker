@@ -109,7 +109,7 @@ func TestNewRoom(t *testing.T) {
 		t.Errorf("NewRoom() Result = %v, want nil", result)
 	}
 
-	if !room.BacklogMode {
+	if !room.BacklogMode() {
 		t.Error("NewRoom() BacklogMode = false, want true")
 	}
 }
@@ -129,7 +129,7 @@ func TestNewRoomWithID(t *testing.T) {
 		t.Fatal("NewRoomWithID() Clients not set correctly")
 	}
 
-	if !room.BacklogMode {
+	if !room.BacklogMode() {
 		t.Error("NewRoomWithID() BacklogMode = false, want true")
 	}
 
@@ -555,29 +555,28 @@ func TestRoom_ToggleBacklogMode(t *testing.T) {
 
 func testToggleBacklogModeEnable(t *testing.T) {
 	room, _ := newOwnerRoomForTest()
-	room.BacklogMode = false
+	room.backlog.restore(false, nil, 0)
 	room.round.SetCurrentStoryName("Story 1")
 
 	err := room.ToggleBacklogMode(context.Background(), "client1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !room.BacklogMode || len(room.Stories) != 1 || room.Stories[0].Name != "Story 1" || room.CurrentStoryIndex != 0 {
+	stories := room.Stories()
+	if !room.BacklogMode() || len(stories) != 1 || stories[0].Name != "Story 1" || room.CurrentStoryIndex() != 0 {
 		t.Errorf("unexpected enabled backlog state: %+v", room)
 	}
 }
 
 func testToggleBacklogModeDisable(t *testing.T) {
 	room, _ := newOwnerRoomForTest()
-	room.BacklogMode = true
-	room.Stories = []Story{{Name: "Story A"}, {Name: "Story B"}}
-	room.CurrentStoryIndex = 1
+	room.backlog.restore(true, []Story{{Name: "Story A"}, {Name: "Story B"}}, 1)
 
 	err := room.ToggleBacklogMode(context.Background(), "client1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if room.BacklogMode || room.round.CurrentStoryName() != "Story B" || len(room.Stories) != 0 {
+	if room.BacklogMode() || room.round.CurrentStoryName() != "Story B" || len(room.Stories()) != 0 {
 		t.Errorf("unexpected disabled backlog state: %+v", room)
 	}
 }
@@ -612,7 +611,8 @@ func testAddStoryEnablesBacklog(t *testing.T) {
 	if err := room.AddStory(context.Background(), "client1", "Story 1"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !room.BacklogMode || len(room.Stories) != 1 || room.Stories[0].Name != "Story 1" || room.CurrentStoryIndex != 0 {
+	stories := room.Stories()
+	if !room.BacklogMode() || len(stories) != 1 || stories[0].Name != "Story 1" || room.CurrentStoryIndex() != 0 {
 		t.Errorf("unexpected story state: %+v", room)
 	}
 }
@@ -620,14 +620,12 @@ func testAddStoryEnablesBacklog(t *testing.T) {
 func testAddStoryKeepsCurrentIndex(t *testing.T) {
 	owner := &Client{ID: "client1", IsOwner: true, IsSpectator: false}
 	room := NewRoom(newTestCollection(owner))
-	room.BacklogMode = true
-	room.Stories = []Story{{Name: "Story 1"}}
-	room.CurrentStoryIndex = 0
+	room.backlog.restore(true, []Story{{Name: "Story 1"}}, 0)
 
 	if err := room.AddStory(context.Background(), "client1", "Story 2"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(room.Stories) != 2 || room.CurrentStoryIndex != 0 {
+	if len(room.Stories()) != 2 || room.CurrentStoryIndex() != 0 {
 		t.Errorf("unexpected story state: %+v", room)
 	}
 }
@@ -652,9 +650,7 @@ func TestRoom_RemoveStory(t *testing.T) {
 
 func newRoomWithOwnerAndStories(owner *Client, stories []Story, currentIndex int) *Room {
 	room := NewRoom(newTestCollection(owner))
-	room.BacklogMode = true
-	room.Stories = stories
-	room.CurrentStoryIndex = currentIndex
+	room.backlog.restore(true, stories, currentIndex)
 	return room
 }
 
@@ -664,8 +660,8 @@ func testRemoveStoryAtIndex(t *testing.T) {
 	if err := room.RemoveStory(context.Background(), "client1", "c"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(room.Stories) != 2 {
-		t.Errorf("expected 2 stories, got %d", len(room.Stories))
+	if len(room.Stories()) != 2 {
+		t.Errorf("expected 2 stories, got %d", len(room.Stories()))
 	}
 }
 
@@ -675,8 +671,8 @@ func testRemoveStoryBeforeCurrent(t *testing.T) {
 	if err := room.RemoveStory(context.Background(), "client1", "a"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if room.CurrentStoryIndex != 0 {
-		t.Errorf("expected CurrentStoryIndex 0, got %d", room.CurrentStoryIndex)
+	if room.CurrentStoryIndex() != 0 {
+		t.Errorf("expected CurrentStoryIndex 0, got %d", room.CurrentStoryIndex())
 	}
 }
 
@@ -699,8 +695,8 @@ func testRemoveLastStory(t *testing.T) {
 	if err := room.RemoveStory(context.Background(), "client1", "only"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(room.Stories) != 0 {
-		t.Errorf("expected 0 stories, got %d", len(room.Stories))
+	if len(room.Stories()) != 0 {
+		t.Errorf("expected 0 stories, got %d", len(room.Stories()))
 	}
 }
 
@@ -728,17 +724,15 @@ func TestRoom_AdvanceToNextStory(t *testing.T) {
 		owner.CurrentVote = VotePtr("5")
 		owner.HasVoted = true
 		room := NewRoom(newTestCollection(owner))
-		room.BacklogMode = true
-		room.Stories = []Story{{Name: "A"}, {Name: "B"}, {Name: "C"}}
-		room.CurrentStoryIndex = 0
+		room.backlog.restore(true, []Story{{Name: "A"}, {Name: "B"}, {Name: "C"}}, 0)
 		room.reveal(true)
 
 		err := room.AdvanceToNextStory(ctx, "client1")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if room.CurrentStoryIndex != 1 {
-			t.Errorf("expected CurrentStoryIndex 1, got %d", room.CurrentStoryIndex)
+		if room.CurrentStoryIndex() != 1 {
+			t.Errorf("expected CurrentStoryIndex 1, got %d", room.CurrentStoryIndex())
 		}
 		if room.Revealed() {
 			t.Error("Reveal should be false")
@@ -751,24 +745,21 @@ func TestRoom_AdvanceToNextStory(t *testing.T) {
 	t.Run("should no-op when at last story", func(t *testing.T) {
 		owner := &Client{ID: "client1", IsOwner: true, IsSpectator: false}
 		room := NewRoom(newTestCollection(owner))
-		room.BacklogMode = true
-		room.Stories = []Story{{Name: "A"}, {Name: "B"}}
-		room.CurrentStoryIndex = 1
+		room.backlog.restore(true, []Story{{Name: "A"}, {Name: "B"}}, 1)
 
 		err := room.AdvanceToNextStory(ctx, "client1")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if room.CurrentStoryIndex != 1 {
-			t.Errorf("expected CurrentStoryIndex 1, got %d", room.CurrentStoryIndex)
+		if room.CurrentStoryIndex() != 1 {
+			t.Errorf("expected CurrentStoryIndex 1, got %d", room.CurrentStoryIndex())
 		}
 	})
 
 	t.Run("should fail when not owner", func(t *testing.T) {
 		nonOwner := &Client{ID: "client2", IsOwner: false, IsSpectator: false}
 		room := NewRoom(newTestCollection(nonOwner))
-		room.BacklogMode = true
-		room.Stories = []Story{{Name: "A"}, {Name: "B"}}
+		room.backlog.restore(true, []Story{{Name: "A"}, {Name: "B"}}, 0)
 
 		err := room.AdvanceToNextStory(ctx, "client2")
 		if err == nil {
@@ -785,17 +776,15 @@ func TestRoom_PrevStory(t *testing.T) {
 		owner.CurrentVote = VotePtr("5")
 		owner.HasVoted = true
 		room := NewRoom(newTestCollection(owner))
-		room.BacklogMode = true
-		room.Stories = []Story{{Name: "A"}, {Name: "B"}, {Name: "C"}}
-		room.CurrentStoryIndex = 2
+		room.backlog.restore(true, []Story{{Name: "A"}, {Name: "B"}, {Name: "C"}}, 2)
 		room.reveal(true)
 
 		err := room.PrevStory(ctx, "client1")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if room.CurrentStoryIndex != 1 {
-			t.Errorf("expected CurrentStoryIndex 1, got %d", room.CurrentStoryIndex)
+		if room.CurrentStoryIndex() != 1 {
+			t.Errorf("expected CurrentStoryIndex 1, got %d", room.CurrentStoryIndex())
 		}
 		if room.Revealed() {
 			t.Error("Reveal should be false")
@@ -808,24 +797,21 @@ func TestRoom_PrevStory(t *testing.T) {
 	t.Run("should no-op when at first story", func(t *testing.T) {
 		owner := &Client{ID: "client1", IsOwner: true, IsSpectator: false}
 		room := NewRoom(newTestCollection(owner))
-		room.BacklogMode = true
-		room.Stories = []Story{{Name: "A"}, {Name: "B"}}
-		room.CurrentStoryIndex = 0
+		room.backlog.restore(true, []Story{{Name: "A"}, {Name: "B"}}, 0)
 
 		err := room.PrevStory(ctx, "client1")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if room.CurrentStoryIndex != 0 {
-			t.Errorf("expected CurrentStoryIndex 0, got %d", room.CurrentStoryIndex)
+		if room.CurrentStoryIndex() != 0 {
+			t.Errorf("expected CurrentStoryIndex 0, got %d", room.CurrentStoryIndex())
 		}
 	})
 
 	t.Run("should fail when not owner", func(t *testing.T) {
 		nonOwner := &Client{ID: "client2", IsOwner: false, IsSpectator: false}
 		room := NewRoom(newTestCollection(nonOwner))
-		room.BacklogMode = true
-		room.Stories = []Story{{Name: "A"}, {Name: "B"}}
+		room.backlog.restore(true, []Story{{Name: "A"}, {Name: "B"}}, 0)
 
 		err := room.PrevStory(ctx, "client2")
 		if err == nil {

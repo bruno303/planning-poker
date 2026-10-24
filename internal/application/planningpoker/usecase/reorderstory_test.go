@@ -33,7 +33,7 @@ func TestReorderStoryUseCaseExecute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute returned error: %v", err)
 	}
-	if room.Stories[0].ID != "pending" {
+	if room.Stories()[0].ID != "pending" {
 		t.Fatalf("unexpected reordered room: %+v", room)
 	}
 }

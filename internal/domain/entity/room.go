@@ -3,7 +3,6 @@ package entity
 import (
 	"context"
 	"fmt"
-	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,12 +14,10 @@ type (
 		startedAt time.Time
 		presence  *Presence
 		round     *VotingRound
+		backlog   *Backlog
 
-		DeckType          DeckType
-		BacklogMode       bool
-		Stories           []Story
-		CurrentStoryIndex int
-		RoomVersion       uint64
+		DeckType    DeckType
+		RoomVersion uint64
 	}
 )
 
@@ -35,12 +32,12 @@ func NewRoomWithID(id string, clients ClientCollection) *Room {
 // NewRoomWithIDAndStartedAt creates a room with a persisted start time.
 func NewRoomWithIDAndStartedAt(id string, clients ClientCollection, startedAt time.Time) *Room {
 	return &Room{
-		id:          id,
-		startedAt:   startedAt.UTC(),
-		presence:    NewPresence(id, clients),
-		round:       NewVotingRound(),
-		DeckType:    DeckTypeFibonacci,
-		BacklogMode: true,
+		id:        id,
+		startedAt: startedAt.UTC(),
+		presence:  NewPresence(id, clients),
+		round:     NewVotingRound(),
+		backlog:   NewBacklog(id),
+		DeckType:  DeckTypeFibonacci,
 	}
 }
 
@@ -90,24 +87,32 @@ func (r *Room) RemoveClient(ctx context.Context, clientID string) error {
 	return nil
 }
 
+// BacklogMode reports whether the room's story backlog is enabled.
+func (r *Room) BacklogMode() bool {
+	return r.backlog.Mode()
+}
+
+// Stories returns a shallow copy of the room's backlog stories.
+func (r *Room) Stories() []Story {
+	return r.backlog.Stories()
+}
+
+// CurrentStoryIndex returns the index of the room's current story.
+func (r *Room) CurrentStoryIndex() int {
+	return r.backlog.CurrentIndex()
+}
+
 func (r *Room) ToggleBacklogMode(ctx context.Context, clientID string) error {
 	if _, err := r.presence.RequireOwner(clientID, "toggle backlog mode"); err != nil {
 		return err
 	}
 
-	if !r.BacklogMode {
-		r.BacklogMode = true
-		if currentStory := r.round.CurrentStoryName(); currentStory != "" {
-			r.Stories = []Story{{ID: uuid.NewString(), Name: currentStory}}
-			r.CurrentStoryIndex = 0
-		}
-	} else {
-		r.BacklogMode = false
-		if name := r.getCurrentStoryName(); name != "" {
+	if r.backlog.Mode() {
+		if name := r.backlog.Disable(); name != "" {
 			r.round.SetCurrentStoryName(name)
 		}
-		r.Stories = nil
-		r.CurrentStoryIndex = 0
+	} else {
+		r.backlog.Enable(r.round.CurrentStoryName())
 	}
 	return nil
 }
@@ -117,14 +122,7 @@ func (r *Room) AddStory(ctx context.Context, clientID string, name string) error
 		return err
 	}
 
-	if !r.BacklogMode {
-		r.BacklogMode = true
-	}
-
-	r.Stories = append(r.Stories, Story{ID: uuid.NewString(), Name: name})
-	if len(r.Stories) == 1 {
-		r.CurrentStoryIndex = 0
-	}
+	r.backlog.Add(name)
 	return nil
 }
 
@@ -132,31 +130,15 @@ func (r *Room) RemoveStory(ctx context.Context, clientID string, storyID string)
 	if _, err := r.presence.RequireOwner(clientID, "remove a story"); err != nil {
 		return err
 	}
-	if storyID == "" {
-		return fmt.Errorf("story ID cannot be empty")
-	}
-	index := r.storyIndexByID(storyID)
-	if index == -1 {
-		return fmt.Errorf("story %s not found in room %s", storyID, r.id)
-	}
 
-	if index == r.CurrentStoryIndex {
-		if len(r.Stories) == 1 {
-			r.CurrentStoryIndex = 0
-			r.Stories = nil
-			r.reveal(false)
-			r.presence.ClearVotes()
-			return nil
-		} else if index == len(r.Stories)-1 {
-			r.CurrentStoryIndex--
-		}
+	resetRound, err := r.backlog.Remove(storyID)
+	if err != nil {
+		return err
+	}
+	if resetRound {
 		r.reveal(false)
 		r.presence.ClearVotes()
-	} else if index < r.CurrentStoryIndex {
-		r.CurrentStoryIndex--
 	}
-
-	r.Stories = append(r.Stories[:index], r.Stories[index+1:]...)
 	return nil
 }
 
@@ -165,22 +147,11 @@ func (r *Room) SelectStory(ctx context.Context, clientID string, storyID string)
 	if _, err := r.presence.RequireOwner(clientID, "select a story"); err != nil {
 		return err
 	}
-	if storyID == "" {
-		return fmt.Errorf("story ID cannot be empty")
+
+	if err := r.backlog.Select(storyID); err != nil {
+		return err
 	}
 
-	index := r.storyIndexByID(storyID)
-	if index == -1 {
-		return fmt.Errorf("story %s not found in room %s", storyID, r.id)
-	}
-	if index == r.CurrentStoryIndex {
-		return fmt.Errorf("story %s is already the current story", storyID)
-	}
-	if r.Stories[index].Voted {
-		return fmt.Errorf("estimated story %s cannot be selected", storyID)
-	}
-
-	r.CurrentStoryIndex = index
 	r.reveal(false)
 	r.presence.ClearVotes()
 	return nil
@@ -189,72 +160,11 @@ func (r *Room) SelectStory(ctx context.Context, clientID string, storyID string)
 // ReorderStory moves a story to targetIndex. The current story remains
 // identified by its stable ID.
 func (r *Room) ReorderStory(ctx context.Context, clientID string, storyID string, targetIndex int) error {
-	storyIndex, err := r.validateReorderStory(clientID, storyID, targetIndex)
-	if err != nil {
+	if _, err := r.presence.RequireOwner(clientID, "reorder stories"); err != nil {
 		return err
 	}
-	if storyIndex == targetIndex {
-		return nil
-	}
 
-	currentStoryID := r.currentStoryID()
-	story := r.Stories[storyIndex]
-	r.Stories = append(r.Stories[:storyIndex], r.Stories[storyIndex+1:]...)
-	r.Stories = slices.Insert(r.Stories, targetIndex, story)
-	r.updateCurrentStoryIndex(storyIndex, targetIndex, currentStoryID)
-	return nil
-}
-
-func (r *Room) validateReorderStory(clientID string, storyID string, targetIndex int) (int, error) {
-	if _, err := r.presence.RequireOwner(clientID, "reorder stories"); err != nil {
-		return 0, err
-	}
-	if storyID == "" {
-		return 0, fmt.Errorf("story ID cannot be empty")
-	}
-	if targetIndex < 0 || targetIndex >= len(r.Stories) {
-		return 0, fmt.Errorf("target story index %d out of range", targetIndex)
-	}
-
-	storyIndex := r.storyIndexByID(storyID)
-	if storyIndex == -1 {
-		return 0, fmt.Errorf("story %s not found in room %s", storyID, r.id)
-	}
-
-	return storyIndex, nil
-}
-
-func (r *Room) currentStoryID() string {
-	if r.CurrentStoryIndex < 0 || r.CurrentStoryIndex >= len(r.Stories) {
-		return ""
-	}
-	return r.Stories[r.CurrentStoryIndex].ID
-}
-
-func (r *Room) updateCurrentStoryIndex(storyIndex, targetIndex int, currentStoryID string) {
-	if currentStoryID != "" {
-		r.CurrentStoryIndex = r.storyIndexByID(currentStoryID)
-		return
-	}
-	if r.CurrentStoryIndex == storyIndex {
-		r.CurrentStoryIndex = targetIndex
-		return
-	}
-	if storyIndex < r.CurrentStoryIndex {
-		r.CurrentStoryIndex--
-	}
-	if targetIndex <= r.CurrentStoryIndex {
-		r.CurrentStoryIndex++
-	}
-}
-
-func (r *Room) storyIndexByID(storyID string) int {
-	for index, story := range r.Stories {
-		if story.ID == storyID {
-			return index
-		}
-	}
-	return -1
+	return r.backlog.Reorder(storyID, targetIndex)
 }
 
 func (r *Room) AdvanceToNextStory(ctx context.Context, clientID string) error {
@@ -262,8 +172,7 @@ func (r *Room) AdvanceToNextStory(ctx context.Context, clientID string) error {
 		return err
 	}
 
-	if r.CurrentStoryIndex < len(r.Stories)-1 {
-		r.CurrentStoryIndex++
+	if r.backlog.Advance() {
 		r.reveal(false)
 		r.presence.ClearVotes()
 	}
@@ -275,8 +184,7 @@ func (r *Room) PrevStory(ctx context.Context, clientID string) error {
 		return err
 	}
 
-	if r.CurrentStoryIndex > 0 {
-		r.CurrentStoryIndex--
+	if r.backlog.Back() {
 		r.reveal(false)
 		r.presence.ClearVotes()
 	}
@@ -284,17 +192,7 @@ func (r *Room) PrevStory(ctx context.Context, clientID string) error {
 }
 
 func (r *Room) EffectiveCurrentStory() string {
-	if r.BacklogMode && len(r.Stories) > 0 && r.CurrentStoryIndex < len(r.Stories) {
-		return r.Stories[r.CurrentStoryIndex].Name
-	}
-	return r.round.CurrentStoryName()
-}
-
-func (r *Room) getCurrentStoryName() string {
-	if len(r.Stories) > 0 && r.CurrentStoryIndex < len(r.Stories) {
-		return r.Stories[r.CurrentStoryIndex].Name
-	}
-	return ""
+	return r.backlog.EffectiveName(r.round.CurrentStoryName())
 }
 
 func (r *Room) ResetVoting(ctx context.Context, clientID string) error {
@@ -348,8 +246,8 @@ func (r *Room) SetCurrentStory(ctx context.Context, clientID string, story strin
 		return err
 	}
 
-	if r.BacklogMode && r.CurrentStoryIndex >= 0 && r.CurrentStoryIndex < len(r.Stories) {
-		r.Stories[r.CurrentStoryIndex].Name = story
+	if _, ok := r.backlog.Current(); ok && r.backlog.Mode() {
+		r.backlog.SetCurrentName(story)
 	} else {
 		r.round.SetCurrentStoryName(story)
 	}
@@ -382,7 +280,9 @@ func (r *Room) reveal(reveal bool) {
 		return
 	}
 
-	r.stampCurrentStory()
+	if r.backlog.Mode() {
+		r.backlog.ApplyOutcome(r.round.Outcome())
+	}
 }
 
 // currentVotes returns the non-spectator, non-empty votes in client iteration
@@ -397,22 +297,6 @@ func (r *Room) currentVotes() []Vote {
 	}
 
 	return votes
-}
-
-func (r *Room) stampCurrentStory() {
-	if !r.BacklogMode || r.CurrentStoryIndex < 0 || r.CurrentStoryIndex >= len(r.Stories) {
-		return
-	}
-
-	outcome := r.round.Outcome()
-	if outcome == nil {
-		return
-	}
-
-	story := &r.Stories[r.CurrentStoryIndex]
-	story.Result = outcome.Result
-	story.MostAppearingVotes = outcome.MostAppearingVotes
-	story.Voted = true
 }
 
 // Revealed reports whether the current round's votes are visible.

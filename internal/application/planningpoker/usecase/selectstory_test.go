@@ -32,8 +32,8 @@ func TestSelectStoryUseCaseExecute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute returned error: %v", err)
 	}
-	if room.CurrentStoryIndex != 1 {
-		t.Fatalf("current story index = %d, want 1", room.CurrentStoryIndex)
+	if room.CurrentStoryIndex() != 1 {
+		t.Fatalf("current story index = %d, want 1", room.CurrentStoryIndex())
 	}
 }
 

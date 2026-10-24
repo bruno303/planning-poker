@@ -79,9 +79,9 @@ func SerializeRoom(room *entity.Room) ([]byte, error) {
 		VoteRange:          outcomeVoteRange(outcome),
 		VoteSpread:         outcomeVoteSpread(outcome),
 		SpecialVoteCount:   outcomeSpecialVoteCount(outcome),
-		BacklogMode:        room.BacklogMode,
-		Stories:            serializeStories(room.Stories),
-		CurrentStoryIndex:  room.CurrentStoryIndex,
+		BacklogMode:        room.BacklogMode(),
+		Stories:            serializeStories(room.Stories()),
+		CurrentStoryIndex:  room.CurrentStoryIndex(),
 		RoomVersion:        room.RoomVersion,
 	}
 

@@ -65,9 +65,9 @@ func TestClientVoteTracksLatestNonEmptySelectionAndClearsOnReset(t *testing.T) {
 
 func TestRoomRoundResetsClearParticipantVoteTimestamps(t *testing.T) {
 	tests := []struct {
-		name   string
-		setup  func(*entity.Room)
-		action func(context.Context, *entity.Room, string) error
+		name         string
+		currentIndex int
+		action       func(context.Context, *entity.Room, string) error
 	}{
 		{
 			name: "select story",
@@ -82,8 +82,8 @@ func TestRoomRoundResetsClearParticipantVoteTimestamps(t *testing.T) {
 			},
 		},
 		{
-			name:  "previous story",
-			setup: func(room *entity.Room) { room.CurrentStoryIndex = 1 },
+			name:         "previous story",
+			currentIndex: 1,
 			action: func(ctx context.Context, room *entity.Room, ownerID string) error {
 				return room.PrevStory(ctx, ownerID)
 			},
@@ -98,19 +98,15 @@ func TestRoomRoundResetsClearParticipantVoteTimestamps(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			room := entity.NewRoom(clientcollection.New())
+			room := storyRoomWithIndex(tt.currentIndex)
 			owner := room.NewClient("owner")
 			participant := room.NewClient("participant")
-			room.Stories = []entity.Story{{ID: "current", Name: "Current"}, {ID: "pending", Name: "Pending"}}
 			vote := "5"
 			votedAt := time.Date(2026, time.September, 3, 12, 0, 0, 0, time.UTC)
 			for _, client := range []*entity.Client{owner, participant} {
 				client.CurrentVote = entity.VotePtr(vote)
 				client.HasVoted = true
 				client.VotedAt = &votedAt
-			}
-			if tt.setup != nil {
-				tt.setup(room)
 			}
 
 			if err := tt.action(context.Background(), room, owner.ID); err != nil {
@@ -125,11 +121,21 @@ func TestRoomRoundResetsClearParticipantVoteTimestamps(t *testing.T) {
 	}
 }
 
+func storyRoomWithIndex(currentIndex int) *entity.Room {
+	return entity.NewRoomFromSnapshot(entity.RoomSnapshot{
+		BacklogMode:       true,
+		Stories:           []entity.Story{{ID: "current", Name: "Current"}, {ID: "pending", Name: "Pending"}},
+		CurrentStoryIndex: currentIndex,
+	}, clientcollection.New())
+}
+
 func TestRoomRemovingOnlyActiveStoryClearsVoteTimestamps(t *testing.T) {
-	room := entity.NewRoom(clientcollection.New())
+	room := entity.NewRoomFromSnapshot(entity.RoomSnapshot{
+		BacklogMode: true,
+		Stories:     []entity.Story{{ID: "only", Name: "Only story"}},
+	}, clientcollection.New())
 	owner := room.NewClient("owner")
 	participant := room.NewClient("participant")
-	room.Stories = []entity.Story{{ID: "only", Name: "Only story"}}
 	vote := "5"
 	votedAt := time.Now().UTC()
 	for _, client := range []*entity.Client{owner, participant} {
@@ -149,9 +155,11 @@ func TestRoomRemovingOnlyActiveStoryClearsVoteTimestamps(t *testing.T) {
 }
 
 func TestRoomStoryTitleEditPreservesVoteTimestamp(t *testing.T) {
-	room := entity.NewRoom(clientcollection.New())
+	room := entity.NewRoomFromSnapshot(entity.RoomSnapshot{
+		BacklogMode: true,
+		Stories:     []entity.Story{{ID: "current", Name: "Original"}},
+	}, clientcollection.New())
 	owner := room.NewClient("owner")
-	room.Stories = []entity.Story{{ID: "current", Name: "Original"}}
 	vote := "5"
 	votedAt := time.Date(2026, time.September, 3, 12, 0, 0, 0, time.UTC)
 	owner.CurrentVote = entity.VotePtr(vote)

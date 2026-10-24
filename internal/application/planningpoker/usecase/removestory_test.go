@@ -36,11 +36,14 @@ func TestRemoveStoryUseCase_Execute_Success(t *testing.T) {
 
 	roomID := "room123"
 	clientID := "client123"
-	room := entity.NewRoomWithID(roomID, clientcollection.New())
+	room := entity.NewRoomFromSnapshot(entity.RoomSnapshot{
+		ID:          roomID,
+		BacklogMode: true,
+		Stories:     []entity.Story{{ID: "story-1", Name: "Story 1"}},
+	}, clientcollection.New())
 
 	client := room.NewClient(clientID)
 	client.IsOwner = true
-	room.Stories = []entity.Story{{ID: "story-1", Name: "Story 1"}}
 
 	mockLockManager.EXPECT().
 		ExecuteWithLock(gomock.Any(), roomID, gomock.Any()).
@@ -76,11 +79,14 @@ func TestRemoveStoryUseCase_Execute_SaveRoomError(t *testing.T) {
 
 	roomID := "room123"
 	senderID := "client123"
-	room := entity.NewRoomWithID(roomID, clientcollection.New())
+	room := entity.NewRoomFromSnapshot(entity.RoomSnapshot{
+		ID:          roomID,
+		BacklogMode: true,
+		Stories:     []entity.Story{{ID: "story-1", Name: "Story 1"}},
+	}, clientcollection.New())
 
 	client := room.NewClient(senderID)
 	client.IsOwner = true
-	room.Stories = []entity.Story{{ID: "story-1", Name: "Story 1"}}
 	expectedError := errors.New("failed to save room")
 
 	mockLockManager.EXPECT().
@@ -154,11 +160,14 @@ func TestRemoveStoryUseCase_Execute_BroadcastError(t *testing.T) {
 
 	roomID := "room123"
 	clientID := "client123"
-	room := entity.NewRoomWithID(roomID, clientcollection.New())
+	room := entity.NewRoomFromSnapshot(entity.RoomSnapshot{
+		ID:          roomID,
+		BacklogMode: true,
+		Stories:     []entity.Story{{ID: "story-1", Name: "Story 1"}},
+	}, clientcollection.New())
 
 	client := room.NewClient(clientID)
 	client.IsOwner = true
-	room.Stories = []entity.Story{{ID: "story-1", Name: "Story 1"}}
 	expectedError := errors.New("broadcast failed")
 
 	mockLockManager.EXPECT().

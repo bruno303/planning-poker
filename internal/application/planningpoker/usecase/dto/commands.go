@@ -75,9 +75,9 @@ func NewRoomStateCommand(room *entity.Room) RoomState {
 		VoteRange:          room.VoteRange(),
 		VoteSpread:         room.VoteSpread(),
 		SpecialVoteCount:   room.SpecialVoteCount(),
-		BacklogMode:        room.BacklogMode,
-		Stories:            mapStories(room.Stories),
-		CurrentStoryIndex:  room.CurrentStoryIndex,
+		BacklogMode:        room.BacklogMode(),
+		Stories:            mapStories(room.Stories()),
+		CurrentStoryIndex:  room.CurrentStoryIndex(),
 		RoomVersion:        room.RoomVersion,
 	}
 }
