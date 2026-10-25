@@ -8,6 +8,9 @@ import (
 	"github.com/google/uuid"
 )
 
+// eventBufferLimit caps the number of domain events retained on a room.
+const eventBufferLimit = 256
+
 type (
 	Room struct {
 		id        string
@@ -15,6 +18,7 @@ type (
 		presence  *Presence
 		round     *VotingRound
 		backlog   *Backlog
+		events    []Event
 
 		DeckType DeckType
 		version  RoomVersion
@@ -71,6 +75,39 @@ func (r *Room) SetVersion(v RoomVersion) {
 	r.version = v
 }
 
+// PullEvents returns the buffered domain events in recording order and resets
+// the buffer. Callers own the returned slice.
+func (r *Room) PullEvents() []Event {
+	events := r.events
+	r.events = nil
+	return events
+}
+
+// recordEvent appends a domain event, dropping the oldest buffered events so
+// the buffer never exceeds eventBufferLimit.
+func (r *Room) recordEvent(event Event) {
+	r.events = append(r.events, event)
+	if len(r.events) > eventBufferLimit {
+		r.events = r.events[len(r.events)-eventBufferLimit:]
+	}
+}
+
+// recordStorySelected records a StorySelected event for the room's current
+// story. Callers must only invoke it after the current story index moved.
+func (r *Room) recordStorySelected() {
+	story, ok := r.backlog.Current()
+	if !ok {
+		return
+	}
+
+	r.recordEvent(StorySelected{
+		RoomID:    r.id,
+		StoryID:   story.ID,
+		StoryName: story.Name,
+		At:        time.Now().UTC(),
+	})
+}
+
 // Clients returns the room's client collection.
 func (r *Room) Clients() ClientCollection {
 	return r.presence.Clients()
@@ -99,114 +136,6 @@ func (r *Room) RemoveClient(ctx context.Context, clientID string) error {
 	return nil
 }
 
-// BacklogMode reports whether the room's story backlog is enabled.
-func (r *Room) BacklogMode() bool {
-	return r.backlog.Mode()
-}
-
-// Stories returns a shallow copy of the room's backlog stories.
-func (r *Room) Stories() []Story {
-	return r.backlog.Stories()
-}
-
-// CurrentStoryIndex returns the index of the room's current story.
-func (r *Room) CurrentStoryIndex() int {
-	return r.backlog.CurrentIndex()
-}
-
-func (r *Room) ToggleBacklogMode(ctx context.Context, clientID string) error {
-	if _, err := r.presence.RequireOwner(clientID, "toggle backlog mode"); err != nil {
-		return err
-	}
-
-	if r.backlog.Mode() {
-		if name := r.backlog.Disable(); name != "" {
-			r.round.SetCurrentStoryName(name)
-		}
-	} else {
-		r.backlog.Enable(r.round.CurrentStoryName())
-	}
-	return nil
-}
-
-func (r *Room) AddStory(ctx context.Context, clientID string, name string) error {
-	if _, err := r.presence.RequireOwner(clientID, "add a story"); err != nil {
-		return err
-	}
-
-	r.backlog.Add(name)
-	return nil
-}
-
-func (r *Room) RemoveStory(ctx context.Context, clientID string, storyID string) error {
-	if _, err := r.presence.RequireOwner(clientID, "remove a story"); err != nil {
-		return err
-	}
-
-	resetRound, err := r.backlog.Remove(storyID)
-	if err != nil {
-		return err
-	}
-	if resetRound {
-		r.reveal(false)
-		r.presence.ClearVotes()
-	}
-	return nil
-}
-
-// SelectStory selects a pending story and starts a fresh voting round.
-func (r *Room) SelectStory(ctx context.Context, clientID string, storyID string) error {
-	if _, err := r.presence.RequireOwner(clientID, "select a story"); err != nil {
-		return err
-	}
-
-	if err := r.backlog.Select(storyID); err != nil {
-		return err
-	}
-
-	r.reveal(false)
-	r.presence.ClearVotes()
-	return nil
-}
-
-// ReorderStory moves a story to targetIndex. The current story remains
-// identified by its stable ID.
-func (r *Room) ReorderStory(ctx context.Context, clientID string, storyID string, targetIndex int) error {
-	if _, err := r.presence.RequireOwner(clientID, "reorder stories"); err != nil {
-		return err
-	}
-
-	return r.backlog.Reorder(storyID, targetIndex)
-}
-
-func (r *Room) AdvanceToNextStory(ctx context.Context, clientID string) error {
-	if _, err := r.presence.RequireOwner(clientID, "advance to the next story"); err != nil {
-		return err
-	}
-
-	if r.backlog.Advance() {
-		r.reveal(false)
-		r.presence.ClearVotes()
-	}
-	return nil
-}
-
-func (r *Room) PrevStory(ctx context.Context, clientID string) error {
-	if _, err := r.presence.RequireOwner(clientID, "go to the previous story"); err != nil {
-		return err
-	}
-
-	if r.backlog.Back() {
-		r.reveal(false)
-		r.presence.ClearVotes()
-	}
-	return nil
-}
-
-func (r *Room) EffectiveCurrentStory() string {
-	return r.backlog.EffectiveName(r.round.CurrentStoryName())
-}
-
 func (r *Room) ResetVoting(ctx context.Context, clientID string) error {
 	if _, err := r.presence.RequireOwner(clientID, "reset voting"); err != nil {
 		return err
@@ -224,10 +153,6 @@ func (r *Room) checkReveal() {
 	}
 }
 
-func (r *Room) CountOwners() int {
-	return r.presence.OwnerCount()
-}
-
 func (r *Room) ToggleSpectator(ctx context.Context, clientID string, targetClientID string) error {
 	if err := r.presence.ToggleSpectator(ctx, clientID, targetClientID); err != nil {
 		return err
@@ -240,29 +165,6 @@ func (r *Room) ToggleSpectator(ctx context.Context, clientID string, targetClien
 	}
 
 	r.checkReveal()
-	return nil
-}
-
-func (r *Room) ToggleOwner(ctx context.Context, clientID string, targetClientID string) error {
-	return r.presence.ToggleOwner(ctx, clientID, targetClientID)
-}
-
-// AdminToggleOwner toggles a client's owner status without checking
-// that the caller is an owner
-func (r *Room) AdminToggleOwner(ctx context.Context, targetClientID string) error {
-	return r.presence.AdminToggleOwner(ctx, targetClientID)
-}
-
-func (r *Room) SetCurrentStory(ctx context.Context, clientID string, story string) error {
-	if _, err := r.presence.RequireOwner(clientID, "set the current story"); err != nil {
-		return err
-	}
-
-	if _, ok := r.backlog.Current(); ok && r.backlog.Mode() {
-		r.backlog.SetCurrentName(story)
-	} else {
-		r.round.SetCurrentStoryName(story)
-	}
 	return nil
 }
 
@@ -292,8 +194,25 @@ func (r *Room) reveal(reveal bool) {
 		return
 	}
 
-	if r.backlog.Mode() {
-		r.backlog.ApplyOutcome(r.round.Outcome())
+	outcome := r.round.Outcome()
+	r.recordEvent(VotesRevealed{
+		RoomID:  r.id,
+		Outcome: outcome.clone(),
+		At:      time.Now().UTC(),
+	})
+
+	if !r.backlog.Mode() {
+		return
+	}
+
+	r.backlog.ApplyOutcome(outcome)
+	if story, ok := r.backlog.Current(); ok {
+		r.recordEvent(StoryEstimated{
+			RoomID:  r.id,
+			StoryID: story.ID,
+			Result:  cloneFloat32(story.Result),
+			At:      time.Now().UTC(),
+		})
 	}
 }
 
@@ -309,97 +228,6 @@ func (r *Room) currentVotes() []Vote {
 	}
 
 	return votes
-}
-
-// Revealed reports whether the current round's votes are visible.
-func (r *Room) Revealed() bool {
-	return r.round.Revealed()
-}
-
-// Outcome returns the current round's outcome, or nil while the round is
-// hidden.
-func (r *Room) Outcome() *RoundOutcome {
-	return r.round.Outcome()
-}
-
-// Result returns the mean of the numeric votes, or nil when unavailable.
-func (r *Room) Result() *float32 {
-	if outcome := r.round.Outcome(); outcome != nil {
-		return outcome.Result
-	}
-
-	return nil
-}
-
-// MostAppearingVotes returns the most frequent votes ordered by deck position.
-func (r *Room) MostAppearingVotes() []string {
-	if outcome := r.round.Outcome(); outcome != nil {
-		return outcome.MostAppearingVotes
-	}
-
-	return nil
-}
-
-// Consensus returns the consensus level of the current round.
-func (r *Room) Consensus() string {
-	if outcome := r.round.Outcome(); outcome != nil {
-		return outcome.Consensus
-	}
-
-	return ""
-}
-
-// LowestVote returns the lowest vote by deck position.
-func (r *Room) LowestVote() *string {
-	if outcome := r.round.Outcome(); outcome != nil {
-		return outcome.LowestVote
-	}
-
-	return nil
-}
-
-// HighestVote returns the highest vote by deck position.
-func (r *Room) HighestVote() *string {
-	if outcome := r.round.Outcome(); outcome != nil {
-		return outcome.HighestVote
-	}
-
-	return nil
-}
-
-// VoteRange returns the numeric distance between the extreme votes.
-func (r *Room) VoteRange() *int {
-	if outcome := r.round.Outcome(); outcome != nil {
-		return outcome.VoteRange
-	}
-
-	return nil
-}
-
-// VoteSpread returns the deck-position distance between the extreme votes.
-func (r *Room) VoteSpread() *int {
-	if outcome := r.round.Outcome(); outcome != nil {
-		return outcome.VoteSpread
-	}
-
-	return nil
-}
-
-// SpecialVoteCount returns how many special cards were cast.
-func (r *Room) SpecialVoteCount() int {
-	if outcome := r.round.Outcome(); outcome != nil {
-		return outcome.SpecialVoteCount
-	}
-
-	return 0
-}
-
-func (r *Room) IsEmpty() bool {
-	return r.presence.IsEmpty()
-}
-
-func (r *Room) FindClient(clientID string) (*Client, bool) {
-	return r.presence.Find(clientID)
 }
 
 func (r *Room) Vote(ctx context.Context, clientID string, vote *Vote) error {
@@ -421,18 +249,13 @@ func (r *Room) Vote(ctx context.Context, clientID string, vote *Vote) error {
 	}
 
 	r.presence.SetVote(client, vote)
+	r.recordEvent(VoteCast{
+		RoomID:   r.id,
+		ClientID: clientID,
+		Vote:     vote,
+		At:       time.Now().UTC(),
+	})
 	r.checkReveal()
-
-	return nil
-}
-
-func (r *Room) UpdateClientName(ctx context.Context, clientID string, name string) error {
-	client, err := r.presence.Require(clientID)
-	if err != nil {
-		return err
-	}
-
-	client.UpdateName(ctx, name)
 
 	return nil
 }

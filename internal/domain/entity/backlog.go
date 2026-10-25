@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"context"
 	"fmt"
 	"slices"
 
@@ -258,4 +259,129 @@ func (b *Backlog) restore(mode bool, stories []Story, currentIndex int) {
 	b.mode = mode
 	b.stories = stories
 	b.currentIndex = currentIndex
+}
+
+// BacklogMode reports whether the room's story backlog is enabled.
+func (r *Room) BacklogMode() bool {
+	return r.backlog.Mode()
+}
+
+// Stories returns a shallow copy of the room's backlog stories.
+func (r *Room) Stories() []Story {
+	return r.backlog.Stories()
+}
+
+// CurrentStoryIndex returns the index of the room's current story.
+func (r *Room) CurrentStoryIndex() int {
+	return r.backlog.CurrentIndex()
+}
+
+func (r *Room) ToggleBacklogMode(ctx context.Context, clientID string) error {
+	if _, err := r.presence.RequireOwner(clientID, "toggle backlog mode"); err != nil {
+		return err
+	}
+
+	if r.backlog.Mode() {
+		if name := r.backlog.Disable(); name != "" {
+			r.round.SetCurrentStoryName(name)
+		}
+	} else {
+		r.backlog.Enable(r.round.CurrentStoryName())
+	}
+	return nil
+}
+
+func (r *Room) AddStory(ctx context.Context, clientID string, name string) error {
+	if _, err := r.presence.RequireOwner(clientID, "add a story"); err != nil {
+		return err
+	}
+
+	r.backlog.Add(name)
+	return nil
+}
+
+func (r *Room) RemoveStory(ctx context.Context, clientID string, storyID string) error {
+	if _, err := r.presence.RequireOwner(clientID, "remove a story"); err != nil {
+		return err
+	}
+
+	resetRound, err := r.backlog.Remove(storyID)
+	if err != nil {
+		return err
+	}
+	if resetRound {
+		r.reveal(false)
+		r.presence.ClearVotes()
+	}
+	return nil
+}
+
+// SelectStory selects a pending story and starts a fresh voting round. Select
+// rejects the current story, so a successful call always moves the index.
+func (r *Room) SelectStory(ctx context.Context, clientID string, storyID string) error {
+	if _, err := r.presence.RequireOwner(clientID, "select a story"); err != nil {
+		return err
+	}
+
+	if err := r.backlog.Select(storyID); err != nil {
+		return err
+	}
+
+	r.reveal(false)
+	r.presence.ClearVotes()
+	r.recordStorySelected()
+	return nil
+}
+
+// ReorderStory moves a story to targetIndex. The current story remains
+// identified by its stable ID.
+func (r *Room) ReorderStory(ctx context.Context, clientID string, storyID string, targetIndex int) error {
+	if _, err := r.presence.RequireOwner(clientID, "reorder stories"); err != nil {
+		return err
+	}
+
+	return r.backlog.Reorder(storyID, targetIndex)
+}
+
+func (r *Room) AdvanceToNextStory(ctx context.Context, clientID string) error {
+	if _, err := r.presence.RequireOwner(clientID, "advance to the next story"); err != nil {
+		return err
+	}
+
+	if r.backlog.Advance() {
+		r.reveal(false)
+		r.presence.ClearVotes()
+		r.recordStorySelected()
+	}
+	return nil
+}
+
+func (r *Room) PrevStory(ctx context.Context, clientID string) error {
+	if _, err := r.presence.RequireOwner(clientID, "go to the previous story"); err != nil {
+		return err
+	}
+
+	if r.backlog.Back() {
+		r.reveal(false)
+		r.presence.ClearVotes()
+		r.recordStorySelected()
+	}
+	return nil
+}
+
+func (r *Room) EffectiveCurrentStory() string {
+	return r.backlog.EffectiveName(r.round.CurrentStoryName())
+}
+
+func (r *Room) SetCurrentStory(ctx context.Context, clientID string, story string) error {
+	if _, err := r.presence.RequireOwner(clientID, "set the current story"); err != nil {
+		return err
+	}
+
+	if _, ok := r.backlog.Current(); ok && r.backlog.Mode() {
+		r.backlog.SetCurrentName(story)
+	} else {
+		r.round.SetCurrentStoryName(story)
+	}
+	return nil
 }

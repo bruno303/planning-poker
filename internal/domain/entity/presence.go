@@ -211,3 +211,36 @@ func (p *Presence) AllActiveVoted() bool {
 		return client.HasVoted
 	})
 }
+
+func (r *Room) CountOwners() int {
+	return r.presence.OwnerCount()
+}
+
+func (r *Room) ToggleOwner(ctx context.Context, clientID string, targetClientID string) error {
+	return r.presence.ToggleOwner(ctx, clientID, targetClientID)
+}
+
+// AdminToggleOwner toggles a client's owner status without checking
+// that the caller is an owner
+func (r *Room) AdminToggleOwner(ctx context.Context, targetClientID string) error {
+	return r.presence.AdminToggleOwner(ctx, targetClientID)
+}
+
+func (r *Room) IsEmpty() bool {
+	return r.presence.IsEmpty()
+}
+
+func (r *Room) FindClient(clientID string) (*Client, bool) {
+	return r.presence.Find(clientID)
+}
+
+func (r *Room) UpdateClientName(ctx context.Context, clientID string, name string) error {
+	client, err := r.presence.Require(clientID)
+	if err != nil {
+		return err
+	}
+
+	client.UpdateName(ctx, name)
+
+	return nil
+}

@@ -20,6 +20,89 @@ type RoundOutcome struct {
 	SpecialVoteCount   int
 }
 
+// Revealed reports whether the current round's votes are visible.
+func (r *Room) Revealed() bool {
+	return r.round.Revealed()
+}
+
+// Outcome returns the current round's outcome, or nil while the round is
+// hidden.
+func (r *Room) Outcome() *RoundOutcome {
+	return r.round.Outcome()
+}
+
+// Result returns the mean of the numeric votes, or nil when unavailable.
+func (r *Room) Result() *float32 {
+	if outcome := r.round.Outcome(); outcome != nil {
+		return outcome.Result
+	}
+
+	return nil
+}
+
+// MostAppearingVotes returns the most frequent votes ordered by deck position.
+func (r *Room) MostAppearingVotes() []string {
+	if outcome := r.round.Outcome(); outcome != nil {
+		return outcome.MostAppearingVotes
+	}
+
+	return nil
+}
+
+// Consensus returns the consensus level of the current round.
+func (r *Room) Consensus() string {
+	if outcome := r.round.Outcome(); outcome != nil {
+		return outcome.Consensus
+	}
+
+	return ""
+}
+
+// LowestVote returns the lowest vote by deck position.
+func (r *Room) LowestVote() *string {
+	if outcome := r.round.Outcome(); outcome != nil {
+		return outcome.LowestVote
+	}
+
+	return nil
+}
+
+// HighestVote returns the highest vote by deck position.
+func (r *Room) HighestVote() *string {
+	if outcome := r.round.Outcome(); outcome != nil {
+		return outcome.HighestVote
+	}
+
+	return nil
+}
+
+// VoteRange returns the numeric distance between the extreme votes.
+func (r *Room) VoteRange() *int {
+	if outcome := r.round.Outcome(); outcome != nil {
+		return outcome.VoteRange
+	}
+
+	return nil
+}
+
+// VoteSpread returns the deck-position distance between the extreme votes.
+func (r *Room) VoteSpread() *int {
+	if outcome := r.round.Outcome(); outcome != nil {
+		return outcome.VoteSpread
+	}
+
+	return nil
+}
+
+// SpecialVoteCount returns how many special cards were cast.
+func (r *Room) SpecialVoteCount() int {
+	if outcome := r.round.Outcome(); outcome != nil {
+		return outcome.SpecialVoteCount
+	}
+
+	return 0
+}
+
 // clone returns a deep copy of the outcome. A nil outcome stays nil.
 func (o *RoundOutcome) clone() *RoundOutcome {
 	if o == nil {

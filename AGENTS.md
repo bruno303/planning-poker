@@ -20,6 +20,7 @@ Repository guide for coding agents working in `planning-poker`.
 - API entrypoint: `cmd/api/main.go`
 - Dependency wiring: `internal/setup/container.go`
 - Domain contracts and entities: `internal/domain`, `internal/domain/entity`
+- Room domain components: `internal/domain/entity/{presence,votinground,backlog,event}.go` plus `room.go` composition.
 - Use cases: `internal/application/planningpoker/usecase`
 - Infra adapters: `internal/infra`
 - Frontend app: `frontend/planning-poker-front/src`
