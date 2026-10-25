@@ -4,7 +4,7 @@ Repository guide for coding agents working in `planning-poker`.
 
 ## Scope
 
-- Backend: Go 1.25.x API in `cmd/api`, `internal`, and `test/integration`.
+- Backend: Go 1.27.x API in `cmd/api`, `internal`, and `test/integration`.
 - Frontend: Next.js 15 app in `frontend/planning-poker-front` with strict TypeScript.
 - Architecture is clean-ish and layered: domain -> application -> infra.
 - Keep changes repository-specific, small, and consistent with existing patterns.
