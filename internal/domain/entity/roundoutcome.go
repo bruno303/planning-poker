@@ -111,7 +111,7 @@ func (o *RoundOutcome) clone() *RoundOutcome {
 
 	return &RoundOutcome{
 		Result:             cloneFloat32(o.Result),
-		MostAppearingVotes: append([]string(nil), o.MostAppearingVotes...),
+		MostAppearingVotes: slices.Clone(o.MostAppearingVotes),
 		Consensus:          o.Consensus,
 		LowestVote:         cloneString(o.LowestVote),
 		HighestVote:        cloneString(o.HighestVote),

@@ -517,6 +517,23 @@ func TestRoundOutcomeClone(t *testing.T) {
 	}
 }
 
+func TestRoundOutcomeClonePreservesEmptyMostAppearingVotes(t *testing.T) {
+	original := &RoundOutcome{MostAppearingVotes: []string{}}
+
+	cloned := original.clone()
+	if cloned.MostAppearingVotes == nil {
+		t.Fatal("clone turned a non-nil empty MostAppearingVotes into nil")
+	}
+	if len(cloned.MostAppearingVotes) != 0 {
+		t.Fatalf("cloned MostAppearingVotes = %v, want empty", cloned.MostAppearingVotes)
+	}
+
+	var nilOutcome RoundOutcome
+	if votes := nilOutcome.clone().MostAppearingVotes; votes != nil {
+		t.Fatalf("clone turned a nil MostAppearingVotes into %#v", votes)
+	}
+}
+
 func TestRoundOutcomeNilClone(t *testing.T) {
 	var outcome *RoundOutcome
 

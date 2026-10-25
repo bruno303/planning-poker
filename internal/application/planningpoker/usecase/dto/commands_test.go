@@ -1,14 +1,15 @@
 package dto
 
 import (
+	"context"
+	"reflect"
+	"testing"
 	"time"
+
+	"github.com/samber/lo"
 
 	"planning-poker/internal/domain/entity"
 	"planning-poker/internal/infra/boundaries/hub/clientcollection"
-	"reflect"
-	"testing"
-
-	"github.com/samber/lo"
 )
 
 func TestNewRoomStateCommand(t *testing.T) {
@@ -69,6 +70,34 @@ func TestNewRoomStateCommand(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("NewRoomStateCommand() = %+v, want %+v", got, want)
+	}
+}
+
+// TestNewRoomStateCommandPreservesEmptyMostAppearingVotes keeps the websocket
+// payload serializing mostAppearingVotes as [] for a revealed round without
+// countable votes, at room and story level.
+func TestNewRoomStateCommandPreservesEmptyMostAppearingVotes(t *testing.T) {
+	room := entity.NewRoomFromSnapshot(entity.RoomSnapshot{
+		ID:           "room1",
+		Clients:      []entity.ClientSnapshot{{ID: "owner", Name: "Alice", IsOwner: true}},
+		CurrentStory: "Story 1",
+		BacklogMode:  true,
+		Stories:      []entity.Story{{ID: "story-1", Name: "Story 1"}},
+	}, clientcollection.New())
+
+	if err := room.ToggleReveal(context.Background(), "owner"); err != nil {
+		t.Fatalf("ToggleReveal returned error: %v", err)
+	}
+
+	got := NewRoomStateCommand(room)
+	if got.MostAppearingVotes == nil || len(got.MostAppearingVotes) != 0 {
+		t.Fatalf("room mostAppearingVotes = %#v, want a non-nil empty slice", got.MostAppearingVotes)
+	}
+	if len(got.Stories) != 1 {
+		t.Fatalf("stories = %d, want 1", len(got.Stories))
+	}
+	if got.Stories[0].MostAppearingVotes == nil || len(got.Stories[0].MostAppearingVotes) != 0 {
+		t.Fatalf("story mostAppearingVotes = %#v, want a non-nil empty slice", got.Stories[0].MostAppearingVotes)
 	}
 }
 

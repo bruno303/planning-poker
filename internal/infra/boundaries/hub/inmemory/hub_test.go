@@ -65,8 +65,8 @@ func TestNewRoomWithDeck(t *testing.T) {
 	if room == nil {
 		t.Fatal("expected room to be non-nil")
 	}
-	if room.DeckType != entity.DeckTypeTShirt {
-		t.Fatalf("expected deck type %q, got %q", entity.DeckTypeTShirt, room.DeckType)
+	if room.DeckType() != entity.DeckTypeTShirt {
+		t.Fatalf("expected deck type %q, got %q", entity.DeckTypeTShirt, room.DeckType())
 	}
 	if hub.Rooms[room.ID()] != room {
 		t.Fatal("expected hub to store deck room under its ID")

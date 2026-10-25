@@ -20,7 +20,7 @@ type (
 		backlog   *Backlog
 		events    []Event
 
-		DeckType DeckType
+		deckType DeckType
 		version  RoomVersion
 	}
 )
@@ -41,7 +41,7 @@ func NewRoomWithIDAndStartedAt(id string, clients ClientCollection, startedAt ti
 		presence:  NewPresence(id, clients),
 		round:     NewVotingRound(),
 		backlog:   NewBacklog(id),
-		DeckType:  DeckTypeFibonacci,
+		deckType:  DeckTypeFibonacci,
 	}
 }
 
@@ -54,7 +54,7 @@ func NewRoomWithDeck(clients ClientCollection, deckType DeckType) *Room {
 // voting deck.
 func NewRoomWithIDAndDeck(id string, clients ClientCollection, deckType DeckType) *Room {
 	room := NewRoomWithIDAndStartedAt(id, clients, time.Now().UTC())
-	room.DeckType = deckType
+	room.deckType = deckType
 	return room
 }
 
@@ -113,11 +113,16 @@ func (r *Room) Clients() ClientCollection {
 	return r.presence.Clients()
 }
 
+// DeckType returns the room's configured deck type.
+func (r *Room) DeckType() DeckType {
+	return r.deckType
+}
+
 // Deck returns the room's immutable deck descriptor. Unknown or empty deck
 // types resolve to Fibonacci so repository tests and zero-value rooms stay
 // usable.
 func (r *Room) Deck() Deck {
-	return deckForType(r.DeckType)
+	return deckForType(r.deckType)
 }
 
 // StartedAt returns the room start time as a value copy.

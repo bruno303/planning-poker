@@ -69,7 +69,7 @@ func SerializeRoom(room *entity.Room) ([]byte, error) {
 		ID:                 room.ID(),
 		StartedAt:          entity.OptionalUTCTime(room.StartedAt()),
 		Clients:            clients,
-		DeckType:           room.DeckType,
+		DeckType:           room.DeckType(),
 		CurrentStory:       room.Snapshot().CurrentStory,
 		Reveal:             room.Revealed(),
 		Result:             outcomeResult(outcome),

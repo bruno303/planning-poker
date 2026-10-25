@@ -2,6 +2,7 @@ package redis
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"reflect"
 	"testing"
@@ -79,8 +80,8 @@ func assertSerializedRoomProperties(t *testing.T, originalRoom, deserializedRoom
 	if deserializedRoom.ID() != originalRoom.ID() {
 		t.Errorf("Expected room ID %s, got %s", originalRoom.ID(), deserializedRoom.ID())
 	}
-	if deserializedRoom.DeckType != originalRoom.DeckType {
-		t.Errorf("Expected deck type %q, got %q", originalRoom.DeckType, deserializedRoom.DeckType)
+	if deserializedRoom.DeckType() != originalRoom.DeckType() {
+		t.Errorf("Expected deck type %q, got %q", originalRoom.DeckType(), deserializedRoom.DeckType())
 	}
 	if original, deserialized := originalRoom.Snapshot(), deserializedRoom.Snapshot(); original.CurrentStory != deserialized.CurrentStory {
 		t.Errorf("Expected story %s, got %s", original.CurrentStory, deserialized.CurrentStory)
@@ -229,6 +230,88 @@ func TestSerializeRoom_WireCompatibilityGolden(t *testing.T) {
 	}
 	if version.String() != "42" {
 		t.Fatalf("roomVersion = %s, want 42", version)
+	}
+}
+
+// TestSerializeRoom_PreservesEmptyMostAppearingVotes is the regression for
+// revealed rounds without countable votes: both the room and its stamped story
+// must keep serializing mostAppearingVotes as [] (never null) across a
+// persistence round trip.
+func TestSerializeRoom_PreservesEmptyMostAppearingVotes(t *testing.T) {
+	room := entity.NewRoomFromSnapshot(entity.RoomSnapshot{
+		ID:           "room-empty-votes",
+		Clients:      []entity.ClientSnapshot{{ID: "client-owner", Name: "Alice", IsOwner: true}},
+		CurrentStory: "Checkout",
+		BacklogMode:  true,
+		Stories:      []entity.Story{{ID: "story-1", Name: "Checkout"}},
+	}, clientcollection.New())
+
+	if err := room.ToggleReveal(context.Background(), "client-owner"); err != nil {
+		t.Fatalf("ToggleReveal returned error: %v", err)
+	}
+	assertEmptyMostAppearingVotes(t, room, "after reveal")
+
+	data, err := SerializeRoom(room)
+	if err != nil {
+		t.Fatalf("SerializeRoom returned error: %v", err)
+	}
+	assertWireMostAppearingVotesEmpty(t, data, "serialized room")
+
+	deserialized, err := DeserializeRoom(data, clientcollection.New())
+	if err != nil {
+		t.Fatalf("DeserializeRoom returned error: %v", err)
+	}
+	assertEmptyMostAppearingVotes(t, deserialized, "after deserialization")
+
+	roundTripped, err := SerializeRoom(deserialized)
+	if err != nil {
+		t.Fatalf("SerializeRoom returned error after deserialization: %v", err)
+	}
+	assertWireMostAppearingVotesEmpty(t, roundTripped, "round-tripped room")
+}
+
+func assertEmptyMostAppearingVotes(t *testing.T, room *entity.Room, context string) {
+	t.Helper()
+
+	if room.Outcome() == nil {
+		t.Fatalf("%s: outcome is nil, want a revealed outcome", context)
+	}
+	if votes := room.MostAppearingVotes(); votes == nil || len(votes) != 0 {
+		t.Fatalf("%s: room mostAppearingVotes = %#v, want a non-nil empty slice", context, votes)
+	}
+
+	stories := room.Stories()
+	if len(stories) != 1 {
+		t.Fatalf("%s: stories = %d, want 1", context, len(stories))
+	}
+	if !stories[0].Voted {
+		t.Fatalf("%s: story was not stamped as voted", context)
+	}
+	if stories[0].MostAppearingVotes == nil || len(stories[0].MostAppearingVotes) != 0 {
+		t.Fatalf("%s: story mostAppearingVotes = %#v, want a non-nil empty slice", context, stories[0].MostAppearingVotes)
+	}
+}
+
+func assertWireMostAppearingVotesEmpty(t *testing.T, data []byte, context string) {
+	t.Helper()
+
+	var wire struct {
+		MostAppearingVotes json.RawMessage `json:"mostAppearingVotes"`
+		Stories            []struct {
+			MostAppearingVotes json.RawMessage `json:"mostAppearingVotes"`
+		} `json:"stories"`
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		t.Fatalf("%s: invalid JSON: %v", context, err)
+	}
+	if string(wire.MostAppearingVotes) != "[]" {
+		t.Fatalf("%s: room mostAppearingVotes = %s, want []", context, wire.MostAppearingVotes)
+	}
+	if len(wire.Stories) != 1 {
+		t.Fatalf("%s: serialized stories = %d, want 1", context, len(wire.Stories))
+	}
+	if string(wire.Stories[0].MostAppearingVotes) != "[]" {
+		t.Fatalf("%s: story mostAppearingVotes = %s, want []", context, wire.Stories[0].MostAppearingVotes)
 	}
 }
 

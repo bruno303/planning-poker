@@ -1,6 +1,9 @@
 package entity
 
-import "time"
+import (
+	"slices"
+	"time"
+)
 
 type (
 	// RoomSnapshot is an immutable-value view of a room used to clone and
@@ -47,7 +50,7 @@ func (r *Room) Snapshot() RoomSnapshot {
 	return RoomSnapshot{
 		ID:                r.id,
 		StartedAt:         r.startedAt,
-		DeckType:          r.DeckType,
+		DeckType:          r.deckType,
 		Version:           r.version,
 		Clients:           clients,
 		CurrentStory:      r.round.CurrentStoryName(),
@@ -79,7 +82,7 @@ func NewRoomFromSnapshot(s RoomSnapshot, clients ClientCollection) *Room {
 		presence:  NewPresence(s.ID, clients),
 		round:     round,
 		backlog:   backlog,
-		DeckType:  s.DeckType,
+		deckType:  s.DeckType,
 		version:   s.Version,
 	}
 
@@ -141,7 +144,7 @@ func cloneStories(stories []Story) []Story {
 	for i, story := range stories {
 		cloned[i] = story
 		cloned[i].Result = cloneFloat32(story.Result)
-		cloned[i].MostAppearingVotes = append([]string(nil), story.MostAppearingVotes...)
+		cloned[i].MostAppearingVotes = slices.Clone(story.MostAppearingVotes)
 	}
 
 	return cloned

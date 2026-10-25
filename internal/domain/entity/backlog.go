@@ -242,7 +242,7 @@ func (b *Backlog) ApplyOutcome(outcome *RoundOutcome) {
 	}
 
 	story.Result = outcome.Result
-	story.MostAppearingVotes = append([]string(nil), outcome.MostAppearingVotes...)
+	story.MostAppearingVotes = slices.Clone(outcome.MostAppearingVotes)
 	story.Voted = true
 	b.stories[b.currentIndex] = story
 }

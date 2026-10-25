@@ -178,7 +178,7 @@ func TestRedisHub_NewRoomWithDeck(t *testing.T) {
 	room, err := hub.NewRoomWithDeck(context.Background(), entity.DeckTypeTShirt)
 	assert.NoError(t, err)
 	assert.NotNil(t, room)
-	assert.Equal(t, entity.DeckTypeTShirt, room.DeckType)
+	assert.Equal(t, entity.DeckTypeTShirt, room.DeckType())
 }
 
 func TestRedisHub_AddClient_RemoveRoom(t *testing.T) {
