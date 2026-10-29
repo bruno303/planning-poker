@@ -177,11 +177,11 @@ func newRevealedBacklogRoom(t *testing.T) *entity.Room {
 	}
 
 	specialVote := entity.SpecialVoteUnknown
-	if err := room.Vote(ctx, owner.ID, &specialVote); err != nil {
+	if err := room.Vote(ctx, owner.ID, entity.VotePtr(specialVote)); err != nil {
 		t.Fatalf("owner vote: %v", err)
 	}
 	five := "5"
-	if err := room.Vote(ctx, voter.ID, &five); err != nil {
+	if err := room.Vote(ctx, voter.ID, entity.VotePtr(five)); err != nil {
 		t.Fatalf("voter vote: %v", err)
 	}
 	if !room.Reveal {
@@ -232,7 +232,7 @@ func newWireRoom(t *testing.T) *entity.Room {
 	t.Helper()
 
 	room := entity.NewRoomWithIDAndStartedAt("room-wire", clientcollection.New(), wireStartedAt)
-	room.RoomVersion = 42
+	room.RoomVersion = entity.RoomVersion(42)
 	return room
 }
 

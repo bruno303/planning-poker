@@ -421,7 +421,7 @@ func (h *RedisHub) saveRoom(ctx context.Context, room *entity.Room) error {
 	if !ok {
 		return fmt.Errorf("unexpected save version")
 	}
-	room.RoomVersion = uint64(nextVersion)
+	room.RoomVersion = entity.RoomVersion(nextVersion)
 
 	return nil
 }
@@ -462,7 +462,7 @@ func (h *RedisHub) saveRoomConditionally(ctx context.Context, room *entity.Room,
 	}
 	nextVersion := *expectedVersion + 1
 	persistedRoom := *room
-	persistedRoom.RoomVersion = nextVersion
+	persistedRoom.RoomVersion = entity.RoomVersion(nextVersion)
 	data, err := SerializeRoom(&persistedRoom)
 	if err != nil {
 		return fmt.Errorf("failed to serialize room: %w", err)
@@ -482,7 +482,7 @@ func (h *RedisHub) saveRoomConditionally(ctx context.Context, room *entity.Room,
 	if status != 1 {
 		return domain.ErrStaleRoomVersion
 	}
-	room.RoomVersion = nextVersion
+	room.RoomVersion = entity.RoomVersion(nextVersion)
 	return nil
 }
 

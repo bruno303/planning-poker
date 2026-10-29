@@ -78,7 +78,7 @@ func NewRoomStateCommand(room *entity.Room) RoomState {
 		BacklogMode:        room.BacklogMode,
 		Stories:            mapStories(room.Stories),
 		CurrentStoryIndex:  room.CurrentStoryIndex,
-		RoomVersion:        room.RoomVersion,
+		RoomVersion:        room.RoomVersion.Uint64(),
 	}
 }
 
@@ -118,7 +118,7 @@ func MapToParticipants(clients []*entity.Client) []Participant {
 			return Participant{
 				ID:          client.ID,
 				Name:        client.Name,
-				Vote:        client.CurrentVote,
+				Vote:        client.CurrentVote.Ptr(),
 				HasVoted:    client.HasVoted,
 				VotedAt:     entity.OptionalUTCTimePtr(client.VotedAt),
 				IsSpectator: client.IsSpectator,

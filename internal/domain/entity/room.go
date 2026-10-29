@@ -44,7 +44,7 @@ type (
 		BacklogMode        bool
 		Stories            []Story
 		CurrentStoryIndex  int
-		RoomVersion        uint64
+		RoomVersion        RoomVersion
 	}
 )
 
@@ -557,7 +557,7 @@ func (r *Room) collectVotes(deck Deck) voteMetrics {
 			continue
 		}
 
-		vote := *client.CurrentVote
+		vote := client.CurrentVote.String()
 		if vote == "" {
 			continue
 		}
@@ -700,16 +700,16 @@ func (r *Room) FindClient(clientID string) (*Client, bool) {
 	}).First()
 }
 
-func (r *Room) Vote(ctx context.Context, clientID string, vote *string) error {
+func (r *Room) Vote(ctx context.Context, clientID string, vote *Vote) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
 	}
 
-	if vote != nil && *vote != "" {
+	if vote != nil && !vote.IsEmpty() {
 		deck := r.Deck()
-		if !deck.HasCard(*vote) {
-			return fmt.Errorf("vote %q is not part of deck %s", *vote, deck.ID)
+		if !deck.HasCard(vote.String()) {
+			return fmt.Errorf("vote %q is not part of deck %s", vote.String(), deck.ID)
 		}
 	}
 

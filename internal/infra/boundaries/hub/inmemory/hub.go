@@ -221,9 +221,9 @@ func (h *InMemoryHub) refreshSavedRoom(room *entity.Room) {
 func (h *InMemoryHub) SaveRoom(_ context.Context, room *entity.Room) error {
 	h.roomMu.Lock()
 	defer h.roomMu.Unlock()
-	next := room.RoomVersion + 1
+	next := room.RoomVersion.Next()
 	if saved, ok := h.saved[room.ID]; ok {
-		next = saved.RoomVersion + 1
+		next = saved.RoomVersion.Next()
 	}
 	saved := cloneRoom(room)
 	saved.RoomVersion = next
@@ -240,11 +240,11 @@ func (h *InMemoryHub) SaveRoomIfVersion(_ context.Context, room *entity.Room, ex
 		return domain.ErrStaleRoomVersion
 	}
 
-	persistedVersion := uint64(0)
+	persistedVersion := entity.RoomVersion(0)
 	if saved, ok := h.saved[room.ID]; ok {
 		persistedVersion = saved.RoomVersion
 	}
-	if expectedVersion == nil || persistedVersion != *expectedVersion {
+	if expectedVersion == nil || persistedVersion.Uint64() != *expectedVersion {
 		if saved, ok := h.saved[room.ID]; ok && h.Rooms[room.ID] == room {
 			h.Rooms[room.ID] = cloneRoom(saved)
 		}
@@ -284,7 +284,9 @@ func cloneRoom(room *entity.Room) *entity.Room {
 		for _, client := range room.Clients.Values() {
 			copied := clone.NewClient(client.ID)
 			copied.Name = client.Name
-			copied.CurrentVote = cloneString(client.CurrentVote)
+			if client.CurrentVote != nil {
+				copied.CurrentVote = entity.VotePtr(client.CurrentVote.String())
+			}
 			copied.HasVoted = client.HasVoted
 			copied.VotedAt = entity.OptionalUTCTimePtr(client.VotedAt)
 			copied.IsSpectator = client.IsSpectator

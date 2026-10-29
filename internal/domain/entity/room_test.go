@@ -20,7 +20,7 @@ func TestRoom_RevealWithNoValidVotes(t *testing.T) {
 		Name:        "Alice",
 		IsSpectator: false,
 	}
-	client.CurrentVote = lo.ToPtr("?")
+	client.CurrentVote = VotePtr("?")
 	client.HasVoted = true
 
 	mockCC := NewMockClientCollection(ctrl)
@@ -51,7 +51,7 @@ func TestRoom_RevealWithSingleValidVote(t *testing.T) {
 		Name:        "Alice",
 		IsSpectator: false,
 	}
-	client.CurrentVote = lo.ToPtr("5")
+	client.CurrentVote = VotePtr("5")
 	client.HasVoted = true
 
 	mockCC := NewMockClientCollection(ctrl)
@@ -80,7 +80,7 @@ func TestRoom_RevealWithMixedVotes(t *testing.T) {
 		Name:        "Alice",
 		IsSpectator: false,
 	}
-	client1.CurrentVote = lo.ToPtr("3")
+	client1.CurrentVote = VotePtr("3")
 	client1.HasVoted = true
 
 	client2 := &Client{
@@ -88,7 +88,7 @@ func TestRoom_RevealWithMixedVotes(t *testing.T) {
 		Name:        "Bob",
 		IsSpectator: false,
 	}
-	client2.CurrentVote = lo.ToPtr("coffee")
+	client2.CurrentVote = VotePtr("coffee")
 	client2.HasVoted = true
 
 	mockCC := NewMockClientCollection(ctrl)
@@ -117,7 +117,7 @@ func TestRoom_RevealWithAllInvalidVotes(t *testing.T) {
 		Name:        "Alice",
 		IsSpectator: false,
 	}
-	client1.CurrentVote = lo.ToPtr("?")
+	client1.CurrentVote = VotePtr("?")
 	client1.HasVoted = true
 
 	client2 := &Client{
@@ -125,7 +125,7 @@ func TestRoom_RevealWithAllInvalidVotes(t *testing.T) {
 		Name:        "Bob",
 		IsSpectator: false,
 	}
-	client2.CurrentVote = lo.ToPtr("coffee")
+	client2.CurrentVote = VotePtr("coffee")
 	client2.HasVoted = true
 
 	mockCC := NewMockClientCollection(ctrl)
@@ -156,7 +156,7 @@ func TestRoom_RevealWithSpectators(t *testing.T) {
 		Name:        "Alice",
 		IsSpectator: false,
 	}
-	client1.CurrentVote = lo.ToPtr("5")
+	client1.CurrentVote = VotePtr("5")
 	client1.HasVoted = true
 
 	client2 := &Client{
@@ -164,7 +164,7 @@ func TestRoom_RevealWithSpectators(t *testing.T) {
 		Name:        "Bob",
 		IsSpectator: true,
 	}
-	client2.CurrentVote = lo.ToPtr("10")
+	client2.CurrentVote = VotePtr("10")
 	client2.HasVoted = true
 
 	mockCC := NewMockClientCollection(ctrl)
@@ -312,12 +312,12 @@ func TestRoom_RevealCalculatesConsensusAndCountsSpecialVotes(t *testing.T) {
 	defer ctrl.Finish()
 
 	clients := []*Client{
-		{ID: "low-1", CurrentVote: lo.ToPtr("3"), HasVoted: true},
-		{ID: "low-2", CurrentVote: lo.ToPtr("3"), HasVoted: true},
-		{ID: "high", CurrentVote: lo.ToPtr("13"), HasVoted: true},
-		{ID: "question", CurrentVote: lo.ToPtr("?"), HasVoted: true},
-		{ID: "coffee", CurrentVote: lo.ToPtr("☕"), HasVoted: true},
-		{ID: "spectator", CurrentVote: lo.ToPtr("89"), HasVoted: true, IsSpectator: true},
+		{ID: "low-1", CurrentVote: VotePtr("3"), HasVoted: true},
+		{ID: "low-2", CurrentVote: VotePtr("3"), HasVoted: true},
+		{ID: "high", CurrentVote: VotePtr("13"), HasVoted: true},
+		{ID: "question", CurrentVote: VotePtr("?"), HasVoted: true},
+		{ID: "coffee", CurrentVote: VotePtr("☕"), HasVoted: true},
+		{ID: "spectator", CurrentVote: VotePtr("89"), HasVoted: true, IsSpectator: true},
 	}
 	mockCC := NewMockClientCollection(ctrl)
 	mockCC.EXPECT().Values().Return(clients).AnyTimes()
@@ -347,7 +347,7 @@ func TestRoom_HideVotesClearsConsensusMetrics(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockCC := NewMockClientCollection(ctrl)
-	mockCC.EXPECT().Values().Return([]*Client{{CurrentVote: lo.ToPtr("5"), HasVoted: true}}).AnyTimes()
+	mockCC.EXPECT().Values().Return([]*Client{{CurrentVote: VotePtr("5"), HasVoted: true}}).AnyTimes()
 
 	room := NewRoom(mockCC)
 	room.reveal(true)
@@ -532,7 +532,7 @@ func TestRoom_ResetVoting(t *testing.T) {
 		defer ctrl.Finish()
 
 		client := &Client{ID: "client1", IsOwner: true, IsSpectator: false}
-		client.CurrentVote = lo.ToPtr("5")
+		client.CurrentVote = VotePtr("5")
 		client.HasVoted = true
 
 		mockCC := NewMockClientCollection(ctrl)
@@ -837,7 +837,7 @@ func TestRoom_ToggleReveal(t *testing.T) {
 		defer ctrl.Finish()
 
 		owner := &Client{ID: "owner", IsOwner: true, IsSpectator: false}
-		owner.CurrentVote = lo.ToPtr("5")
+		owner.CurrentVote = VotePtr("5")
 
 		mockCC := NewMockClientCollection(ctrl)
 		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
@@ -941,12 +941,12 @@ func TestRoom_Vote(t *testing.T) {
 		room.Reveal = false
 		client.room = room
 
-		err := room.Vote(ctx, "client1", &vote)
+		err := room.Vote(ctx, "client1", VotePtr(vote))
 		if err != nil {
 			t.Errorf("Vote() error = %v", err)
 		}
 
-		if client.CurrentVote == nil || *client.CurrentVote != vote {
+		if client.CurrentVote == nil || client.CurrentVote.String() != vote {
 			t.Errorf("Vote() client vote = %v, want %v", client.CurrentVote, vote)
 		}
 	})
@@ -962,7 +962,7 @@ func TestRoom_Vote(t *testing.T) {
 
 		room := NewRoom(mockCC)
 
-		err := room.Vote(ctx, "nonexistent", &vote)
+		err := room.Vote(ctx, "nonexistent", VotePtr(vote))
 		if err == nil {
 			t.Error("Vote() expected error for nonexistent client")
 		}
@@ -1017,13 +1017,13 @@ func TestRoom_MostAppearingVotes(t *testing.T) {
 
 	t.Run("should calculate most appearing votes", func(t *testing.T) {
 		client1 := &Client{ID: "client1", IsSpectator: false}
-		client1.CurrentVote = lo.ToPtr("5")
+		client1.CurrentVote = VotePtr("5")
 
 		client2 := &Client{ID: "client2", IsSpectator: false}
-		client2.CurrentVote = lo.ToPtr("5")
+		client2.CurrentVote = VotePtr("5")
 
 		client3 := &Client{ID: "client3", IsSpectator: false}
-		client3.CurrentVote = lo.ToPtr("3")
+		client3.CurrentVote = VotePtr("3")
 
 		mockCC := NewMockClientCollection(ctrl)
 		mockCC.EXPECT().Values().Return([]*Client{client1, client2, client3}).AnyTimes()
@@ -1042,10 +1042,10 @@ func TestRoom_MostAppearingVotes(t *testing.T) {
 
 	t.Run("should handle multiple most appearing votes", func(t *testing.T) {
 		client1 := &Client{ID: "client1", IsSpectator: false}
-		client1.CurrentVote = lo.ToPtr("5")
+		client1.CurrentVote = VotePtr("5")
 
 		client2 := &Client{ID: "client2", IsSpectator: false}
-		client2.CurrentVote = lo.ToPtr("3")
+		client2.CurrentVote = VotePtr("3")
 
 		mockCC := NewMockClientCollection(ctrl)
 		mockCC.EXPECT().Values().Return([]*Client{client1, client2}).AnyTimes()
@@ -1072,7 +1072,7 @@ func TestRoomVoteRejectsCardOutsideDeck(t *testing.T) {
 	room := &Room{ID: "room1", Clients: mockCC, DeckType: DeckTypeTShirt}
 	client.room = room
 
-	if err := room.Vote(context.Background(), "client1", lo.ToPtr("5")); err == nil {
+	if err := room.Vote(context.Background(), "client1", VotePtr("5")); err == nil {
 		t.Fatal("expected voting outside the t-shirt deck to fail")
 	}
 	if client.CurrentVote != nil {
@@ -1085,10 +1085,10 @@ func TestRoomTShirtRevealUsesLabelSummary(t *testing.T) {
 	defer ctrl.Finish()
 
 	clients := []*Client{
-		{ID: "low", CurrentVote: lo.ToPtr("S"), HasVoted: true},
-		{ID: "mid", CurrentVote: lo.ToPtr("M"), HasVoted: true},
-		{ID: "high", CurrentVote: lo.ToPtr("L"), HasVoted: true},
-		{ID: "special", CurrentVote: lo.ToPtr(SpecialVoteCoffee), HasVoted: true},
+		{ID: "low", CurrentVote: VotePtr("S"), HasVoted: true},
+		{ID: "mid", CurrentVote: VotePtr("M"), HasVoted: true},
+		{ID: "high", CurrentVote: VotePtr("L"), HasVoted: true},
+		{ID: "special", CurrentVote: VotePtr(SpecialVoteCoffee), HasVoted: true},
 	}
 	mockCC := NewMockClientCollection(ctrl)
 	mockCC.EXPECT().Values().Return(clients).AnyTimes()
@@ -1303,7 +1303,7 @@ func testRemoveStoryBeforeCurrent(t *testing.T) {
 func testRemoveCurrentStoryResetsVotes(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	owner := &Client{ID: "client1", IsOwner: true, CurrentVote: lo.ToPtr("5"), HasVoted: true}
+	owner := &Client{ID: "client1", IsOwner: true, CurrentVote: VotePtr("5"), HasVoted: true}
 	room := newRoomWithOwnerAndStories(ctrl, owner, []Story{{ID: "a", Name: "A"}, {ID: "b", Name: "B"}}, 0)
 	room.Reveal = true
 
@@ -1355,7 +1355,7 @@ func TestRoom_AdvanceToNextStory(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		owner := &Client{ID: "client1", IsOwner: true, IsSpectator: false}
-		owner.CurrentVote = lo.ToPtr("5")
+		owner.CurrentVote = VotePtr("5")
 		owner.HasVoted = true
 		mockCC := NewMockClientCollection(ctrl)
 		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
@@ -1432,7 +1432,7 @@ func TestRoom_PrevStory(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		owner := &Client{ID: "client1", IsOwner: true, IsSpectator: false}
-		owner.CurrentVote = lo.ToPtr("5")
+		owner.CurrentVote = VotePtr("5")
 		owner.HasVoted = true
 		mockCC := NewMockClientCollection(ctrl)
 		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)

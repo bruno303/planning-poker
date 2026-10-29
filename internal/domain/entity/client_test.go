@@ -39,7 +39,7 @@ func assertNewClient(t *testing.T, client *Client, wantID string) {
 	}
 }
 
-func assertVoteResult(t *testing.T, client *Client, wantVote *string, wantHasVoted bool) {
+func assertVoteResult(t *testing.T, client *Client, wantVote *Vote, wantHasVoted bool) {
 	t.Helper()
 
 	if wantVote == nil {
@@ -91,43 +91,43 @@ func TestClient_Vote(t *testing.T) {
 	tests := []struct {
 		name         string
 		reveal       bool
-		vote         *string
-		wantVote     *string
+		vote         *Vote
+		wantVote     *Vote
 		wantHasVoted bool
 	}{
 		{
 			name:         "should accept vote when not revealed - vote 1",
 			reveal:       false,
-			vote:         &vote1,
-			wantVote:     &vote1,
+			vote:         VotePtr(vote1),
+			wantVote:     VotePtr(vote1),
 			wantHasVoted: true,
 		},
 		{
 			name:         "should accept vote when not revealed - vote 2",
 			reveal:       false,
-			vote:         &vote2,
-			wantVote:     &vote2,
+			vote:         VotePtr(vote2),
+			wantVote:     VotePtr(vote2),
 			wantHasVoted: true,
 		},
 		{
 			name:         "should accept vote when not revealed - vote 3",
 			reveal:       false,
-			vote:         &vote3,
-			wantVote:     &vote3,
+			vote:         VotePtr(vote3),
+			wantVote:     VotePtr(vote3),
 			wantHasVoted: true,
 		},
 		{
 			name:         "should accept vote when not revealed - vote 5",
 			reveal:       false,
-			vote:         &vote5,
-			wantVote:     &vote5,
+			vote:         VotePtr(vote5),
+			wantVote:     VotePtr(vote5),
 			wantHasVoted: true,
 		},
 		{
 			name:         "should accept vote when not revealed - vote 8",
 			reveal:       false,
-			vote:         &vote8,
-			wantVote:     &vote8,
+			vote:         VotePtr(vote8),
+			wantVote:     VotePtr(vote8),
 			wantHasVoted: true,
 		},
 		{
@@ -140,14 +140,14 @@ func TestClient_Vote(t *testing.T) {
 		{
 			name:         "should accept empty vote when not revealed",
 			reveal:       false,
-			vote:         &emptyVote,
-			wantVote:     &emptyVote,
+			vote:         VotePtr(emptyVote),
+			wantVote:     VotePtr(emptyVote),
 			wantHasVoted: false,
 		},
 		{
 			name:         "should ignore vote when revealed",
 			reveal:       true,
-			vote:         &vote5,
+			vote:         VotePtr(vote5),
 			wantVote:     nil,
 			wantHasVoted: false,
 		},
@@ -197,8 +197,8 @@ func TestClient_Vote_UpdateVote(t *testing.T) {
 	client.room = room
 
 	// First vote
-	client.Vote(ctx, &vote1)
-	if client.CurrentVote == nil || *client.CurrentVote != vote1 {
+	client.Vote(ctx, VotePtr(vote1))
+	if client.CurrentVote == nil || client.CurrentVote.String() != vote1 {
 		t.Errorf("First Vote() CurrentVote = %v, want %v", client.CurrentVote, vote1)
 	}
 	if !client.HasVoted {
@@ -206,8 +206,8 @@ func TestClient_Vote_UpdateVote(t *testing.T) {
 	}
 
 	// Change vote
-	client.Vote(ctx, &vote5)
-	if client.CurrentVote == nil || *client.CurrentVote != vote5 {
+	client.Vote(ctx, VotePtr(vote5))
+	if client.CurrentVote == nil || client.CurrentVote.String() != vote5 {
 		t.Errorf("Second Vote() CurrentVote = %v, want %v", client.CurrentVote, vote5)
 	}
 	if !client.HasVoted {
@@ -215,8 +215,8 @@ func TestClient_Vote_UpdateVote(t *testing.T) {
 	}
 
 	// Change vote again
-	client.Vote(ctx, &vote8)
-	if client.CurrentVote == nil || *client.CurrentVote != vote8 {
+	client.Vote(ctx, VotePtr(vote8))
+	if client.CurrentVote == nil || client.CurrentVote.String() != vote8 {
 		t.Errorf("Third Vote() CurrentVote = %v, want %v", client.CurrentVote, vote8)
 	}
 	if !client.HasVoted {
@@ -347,12 +347,12 @@ func TestClient_VoteBeforeAndAfterReveal(t *testing.T) {
 	room.Reveal = false
 	client.room = room
 
-	client.Vote(ctx, &vote5)
-	assertVoteResult(t, client, &vote5, true)
+	client.Vote(ctx, VotePtr(vote5))
+	assertVoteResult(t, client, VotePtr(vote5), true)
 
 	room.Reveal = true
-	client.Vote(ctx, &vote8)
-	assertVoteResult(t, client, &vote5, true)
+	client.Vote(ctx, VotePtr(vote8))
+	assertVoteResult(t, client, VotePtr(vote5), true)
 }
 
 func TestClient_SpectatorAndOwnerFlags(t *testing.T) {

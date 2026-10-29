@@ -14,7 +14,7 @@ type (
 
 		room *Room
 
-		CurrentVote *string
+		CurrentVote *Vote
 		HasVoted    bool
 		VotedAt     *time.Time
 		IsSpectator bool
@@ -41,14 +41,14 @@ func (c *Client) WithRoom(room *Room) *Client {
 	return c
 }
 
-func (c *Client) Vote(ctx context.Context, vote *string) {
+func (c *Client) Vote(ctx context.Context, vote *Vote) {
 	if c.room.Reveal {
 		c.logger.Debug(ctx, "Vote ignored for client %s because votes are already revealed", c.ID)
 		return
 	}
 
 	c.CurrentVote = vote
-	if vote != nil && *vote != "" {
+	if vote != nil && !vote.IsEmpty() {
 		c.HasVoted = true
 		now := time.Now().UTC()
 		c.VotedAt = &now

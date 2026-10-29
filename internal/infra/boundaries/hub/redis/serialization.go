@@ -50,10 +50,15 @@ type (
 )
 
 func (sc SerializedClient) Client(room *entity.Room) *entity.Client {
+	var currentVote *entity.Vote
+	if sc.CurrentVote != nil {
+		currentVote = entity.VotePtr(*sc.CurrentVote)
+	}
+
 	client := &entity.Client{
 		ID:          sc.ID,
 		Name:        sc.Name,
-		CurrentVote: sc.CurrentVote,
+		CurrentVote: currentVote,
 		HasVoted:    sc.HasVoted,
 		VotedAt:     entity.OptionalUTCTimePtr(sc.VotedAt),
 		IsSpectator: sc.IsSpectator,
@@ -71,7 +76,7 @@ func SerializeRoom(room *entity.Room) ([]byte, error) {
 		clients = append(clients, SerializedClient{
 			ID:          client.ID,
 			Name:        client.Name,
-			CurrentVote: client.CurrentVote,
+			CurrentVote: client.CurrentVote.Ptr(),
 			HasVoted:    client.HasVoted,
 			VotedAt:     entity.OptionalUTCTimePtr(client.VotedAt),
 			IsSpectator: client.IsSpectator,
@@ -97,7 +102,7 @@ func SerializeRoom(room *entity.Room) ([]byte, error) {
 		BacklogMode:        room.BacklogMode,
 		Stories:            serializeStories(room.Stories),
 		CurrentStoryIndex:  room.CurrentStoryIndex,
-		RoomVersion:        room.RoomVersion,
+		RoomVersion:        room.RoomVersion.Uint64(),
 	}
 
 	return json.Marshal(serialized)
@@ -146,7 +151,7 @@ func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 	room.BacklogMode = serialized.BacklogMode
 	room.Stories = stories
 	room.CurrentStoryIndex = serialized.CurrentStoryIndex
-	room.RoomVersion = serialized.RoomVersion
+	room.RoomVersion = entity.RoomVersion(serialized.RoomVersion)
 
 	for _, sc := range serialized.Clients {
 		client := sc.Client(room)

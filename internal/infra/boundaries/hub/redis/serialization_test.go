@@ -44,7 +44,7 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 	client2.IsOwner = false
 	client2.IsSpectator = false
 	vote := "5"
-	client2.CurrentVote = &vote
+	client2.CurrentVote = entity.VotePtr(vote)
 	client2.HasVoted = true
 	client2.VotedAt = lo.ToPtr(time.Date(2026, time.September, 3, 12, 1, 0, 0, time.FixedZone("BRT", -3*60*60)))
 
