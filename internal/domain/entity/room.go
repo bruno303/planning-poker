@@ -28,6 +28,8 @@ type (
 		Stories            []Story
 		CurrentStoryIndex  int
 		RoomVersion        RoomVersion
+
+		events []Event
 	}
 )
 
@@ -76,4 +78,22 @@ func (r *Room) Deck() Deck {
 // StartedAt returns the room start time as a value copy.
 func (r *Room) StartedAt() time.Time {
 	return r.startedAt
+}
+
+// PullEvents drains and returns the domain events buffered since the last
+// pull. The returned slice is a copy owned by the caller.
+func (r *Room) PullEvents() []Event {
+	if len(r.events) == 0 {
+		return nil
+	}
+
+	events := make([]Event, len(r.events))
+	copy(events, r.events)
+	r.events = nil
+
+	return events
+}
+
+func (r *Room) recordEvent(event Event) {
+	r.events = append(r.events, event)
 }

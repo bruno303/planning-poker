@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -123,6 +124,13 @@ func (r *Room) SelectStory(ctx context.Context, clientID ClientID, storyID Story
 	r.Clients.ForEach(func(c *Client) {
 		r.applyVote(c, nil)
 	})
+
+	r.recordEvent(StorySelected{
+		RoomID:     r.ID,
+		StoryID:    storyID,
+		OccurredAt: time.Now().UTC(),
+	})
+
 	return nil
 }
 

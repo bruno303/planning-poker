@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"time"
 
 	"github.com/samber/lo"
 )
@@ -22,7 +23,16 @@ func (r *Room) Vote(ctx context.Context, clientID ClientID, vote *Vote) error {
 		}
 	}
 
-	r.applyVote(client, vote)
+	applied := r.applyVote(client, vote)
+	if applied && vote != nil && !vote.IsEmpty() {
+		r.recordEvent(VoteCast{
+			RoomID:     r.ID,
+			ClientID:   clientID,
+			Vote:       *vote,
+			OccurredAt: time.Now().UTC(),
+		})
+	}
+
 	r.checkReveal()
 
 	return nil
@@ -96,10 +106,29 @@ func (r *Room) reveal(reveal bool) {
 	r.VoteRange = summary.VoteRange
 	r.VoteSpread = summary.VoteSpread
 	r.SpecialVoteCount = metrics.specialCount
+
+	var estimatedStoryID StoryID
 	if r.BacklogMode && r.CurrentStoryIndex >= 0 && r.CurrentStoryIndex < len(r.Stories) {
 		r.Stories[r.CurrentStoryIndex].Result = r.Result
 		r.Stories[r.CurrentStoryIndex].MostAppearingVotes = r.MostAppearingVotes
 		r.Stories[r.CurrentStoryIndex].Voted = true
+		estimatedStoryID = r.Stories[r.CurrentStoryIndex].ID
+	}
+
+	r.recordEvent(VotesRevealed{
+		RoomID:     r.ID,
+		Result:     cloneResult(r.Result),
+		Consensus:  r.Consensus,
+		OccurredAt: time.Now().UTC(),
+	})
+
+	if estimatedStoryID != "" {
+		r.recordEvent(StoryEstimated{
+			RoomID:     r.ID,
+			StoryID:    estimatedStoryID,
+			Result:     cloneResult(r.Result),
+			OccurredAt: time.Now().UTC(),
+		})
 	}
 }
 
