@@ -450,9 +450,6 @@ func TestRoom_NewClient(t *testing.T) {
 	if !client1.IsOwner {
 		t.Error("First client should be owner")
 	}
-	if client1.room != room {
-		t.Error("Client room not set correctly")
-	}
 
 	// Second client should not be owner
 	client2 := room.NewClient("client2")
@@ -474,7 +471,6 @@ func TestRoom_RemoveClient(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		client1 := &Client{ID: cid("client1"), IsOwner: true, IsSpectator: false}
 		client2 := &Client{ID: cid("client2"), IsOwner: false, IsSpectator: false}
 
 		mockCC := NewMockClientCollection(ctrl)
@@ -486,8 +482,6 @@ func TestRoom_RemoveClient(t *testing.T) {
 		mockCC.EXPECT().Values().Return([]*Client{client2}).AnyTimes()
 
 		room := NewRoom(mockCC)
-		client1.room = room
-		client2.room = room
 
 		err := room.RemoveClient(ctx, cid("client1"))
 		if err != nil {
@@ -504,7 +498,6 @@ func TestRoom_RemoveClient(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		client1 := &Client{ID: cid("client1"), IsOwner: true, IsSpectator: false}
 		client2 := &Client{ID: cid("client2"), IsOwner: true, IsSpectator: false}
 
 		mockCC := NewMockClientCollection(ctrl)
@@ -514,8 +507,6 @@ func TestRoom_RemoveClient(t *testing.T) {
 		mockCC.EXPECT().Values().Return([]*Client{client2}).AnyTimes()
 
 		room := NewRoom(mockCC)
-		client1.room = room
-		client2.room = room
 
 		err := room.RemoveClient(ctx, cid("client1"))
 		if err != nil {
@@ -546,7 +537,6 @@ func TestRoom_ResetVoting(t *testing.T) {
 		room := NewRoom(mockCC)
 		room.Reveal = true
 		room.CurrentStory = "Keep this story"
-		client.room = room
 
 		err := room.ResetVoting(ctx, "client1")
 		if err != nil {
@@ -577,7 +567,6 @@ func TestRoom_ResetVoting(t *testing.T) {
 		mockCC.EXPECT().First().Return(client, true)
 
 		room := NewRoom(mockCC)
-		client.room = room
 
 		err := room.ResetVoting(ctx, "client1")
 		if err == nil {
@@ -620,8 +609,6 @@ func TestRoom_ToggleSpectator(t *testing.T) {
 		mockCC.EXPECT().Values().Return([]*Client{owner, target}).AnyTimes()
 
 		room := NewRoom(mockCC)
-		owner.room = room
-		target.room = room
 
 		err := room.ToggleSpectator(ctx, cid("owner"), cid("target"))
 		if err != nil {
@@ -939,7 +926,6 @@ func TestRoom_Vote(t *testing.T) {
 
 		room := NewRoom(mockCC)
 		room.Reveal = false
-		client.room = room
 
 		err := room.Vote(ctx, cid("client1"), VotePtr(vote))
 		if err != nil {
@@ -1070,13 +1056,43 @@ func TestRoomVoteRejectsCardOutsideDeck(t *testing.T) {
 	mockCC.EXPECT().First().Return(client, true)
 
 	room := &Room{ID: "room1", Clients: mockCC, DeckType: DeckTypeTShirt}
-	client.room = room
 
 	if err := room.Vote(context.Background(), cid("client1"), VotePtr("5")); err == nil {
 		t.Fatal("expected voting outside the t-shirt deck to fail")
 	}
 	if client.CurrentVote != nil {
 		t.Fatalf("rejected vote mutated client: %+v", client)
+	}
+}
+
+func TestRoom_VoteIgnoredWhileRevealed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	client := &Client{ID: cid("client1"), IsSpectator: false}
+	mockCC := NewMockClientCollection(ctrl)
+	mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC).Times(2) // FindClient + checkReveal
+	mockCC.EXPECT().First().Return(client, true)
+	mockCC.EXPECT().Values().Return([]*Client{client}).AnyTimes()
+
+	room := NewRoom(mockCC)
+	room.Reveal = true
+
+	if err := room.Vote(context.Background(), cid("client1"), VotePtr("5")); err != nil {
+		t.Fatalf("Vote() error = %v", err)
+	}
+
+	if client.CurrentVote != nil {
+		t.Fatalf("vote while revealed mutated client vote: %v", client.CurrentVote)
+	}
+	if client.HasVoted {
+		t.Fatal("vote while revealed marked client as voted")
+	}
+	if client.VotedAt != nil {
+		t.Fatalf("vote while revealed set VotedAt: %v", client.VotedAt)
+	}
+	if !room.Reveal {
+		t.Fatal("Vote() while revealed changed the reveal state")
 	}
 }
 
@@ -1124,7 +1140,6 @@ func newOwnerRoomForTest(ctrl *gomock.Controller) (*Room, *Client) {
 	mockCC.EXPECT().ForEach(gomock.Any()).AnyTimes()
 	mockCC.EXPECT().Values().Return([]*Client{}).AnyTimes()
 	room := NewRoom(mockCC)
-	client.room = room
 	return room, client
 }
 
@@ -1267,7 +1282,6 @@ func newRoomWithOwnerAndStories(ctrl *gomock.Controller, owner *Client, stories 
 	mockCC.EXPECT().ForEach(gomock.Any()).Do(func(f func(*Client)) { f(owner) }).AnyTimes()
 	mockCC.EXPECT().Values().Return([]*Client{}).AnyTimes()
 	room := NewRoom(mockCC)
-	owner.room = room
 	room.BacklogMode = true
 	room.Stories = stories
 	room.CurrentStoryIndex = currentIndex
@@ -1363,7 +1377,6 @@ func TestRoom_AdvanceToNextStory(t *testing.T) {
 		mockCC.EXPECT().ForEach(gomock.Any()).Do(func(f func(*Client)) { f(owner) })
 		mockCC.EXPECT().Values().Return([]*Client{}).AnyTimes()
 		room := NewRoom(mockCC)
-		owner.room = room
 		room.BacklogMode = true
 		room.Reveal = true
 		room.Stories = []Story{{Name: "A"}, {Name: "B"}, {Name: "C"}}
@@ -1392,7 +1405,6 @@ func TestRoom_AdvanceToNextStory(t *testing.T) {
 		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
 		mockCC.EXPECT().First().Return(owner, true)
 		room := NewRoom(mockCC)
-		owner.room = room
 		room.BacklogMode = true
 		room.Stories = []Story{{Name: "A"}, {Name: "B"}}
 		room.CurrentStoryIndex = 1
@@ -1414,7 +1426,6 @@ func TestRoom_AdvanceToNextStory(t *testing.T) {
 		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
 		mockCC.EXPECT().First().Return(nonOwner, true)
 		room := NewRoom(mockCC)
-		nonOwner.room = room
 		room.BacklogMode = true
 		room.Stories = []Story{{Name: "A"}, {Name: "B"}}
 
@@ -1440,7 +1451,6 @@ func TestRoom_PrevStory(t *testing.T) {
 		mockCC.EXPECT().ForEach(gomock.Any()).Do(func(f func(*Client)) { f(owner) })
 		mockCC.EXPECT().Values().Return([]*Client{}).AnyTimes()
 		room := NewRoom(mockCC)
-		owner.room = room
 		room.BacklogMode = true
 		room.Reveal = true
 		room.Stories = []Story{{Name: "A"}, {Name: "B"}, {Name: "C"}}
@@ -1469,7 +1479,6 @@ func TestRoom_PrevStory(t *testing.T) {
 		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
 		mockCC.EXPECT().First().Return(owner, true)
 		room := NewRoom(mockCC)
-		owner.room = room
 		room.BacklogMode = true
 		room.Stories = []Story{{Name: "A"}, {Name: "B"}}
 		room.CurrentStoryIndex = 0
@@ -1491,7 +1500,6 @@ func TestRoom_PrevStory(t *testing.T) {
 		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
 		mockCC.EXPECT().First().Return(nonOwner, true)
 		room := NewRoom(mockCC)
-		nonOwner.room = room
 		room.BacklogMode = true
 		room.Stories = []Story{{Name: "A"}, {Name: "B"}}
 

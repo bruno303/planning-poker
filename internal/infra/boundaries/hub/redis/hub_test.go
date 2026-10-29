@@ -189,7 +189,6 @@ func TestRedisHub_AddClient_RemoveRoom(t *testing.T) {
 	room := entity.NewRoom(clientcollection.New())
 	room.ID = "room2"
 	client := room.NewClient(entity.ClientID("client1"))
-	client.WithRoom(room)
 	room.Clients.Add(client)
 
 	mockRedis.EXPECT().Set(gomock.Any(), "planning-poker:client:client1", room.ID, time.Duration(24*time.Hour)).Return(redis.NewStatusCmd(context.Background()))
@@ -203,7 +202,7 @@ func TestRedisHub_AddClient_RemoveRoom(t *testing.T) {
 		roomClientCounts: make(map[string]int),
 	}
 
-	hub.AddClient(client)
+	hub.AddClient(context.Background(), room, client)
 
 	mockRedis.EXPECT().Del(gomock.Any(), "planning-poker:room:room2").Return(redis.NewIntCmd(context.Background()))
 	hub.RemoveRoom(room.ID)
@@ -251,7 +250,6 @@ func TestRedisHub_FindClientByID(t *testing.T) {
 	room := entity.NewRoom(clientcollection.New())
 	room.ID = "room3"
 	client := room.NewClient(entity.ClientID("client2"))
-	client.WithRoom(room)
 	room.Clients.Add(client)
 
 	// Serialize room for mock return
@@ -285,9 +283,7 @@ func TestRedisHub_RemoveClient(t *testing.T) {
 	room := entity.NewRoom(clientcollection.New())
 	room.ID = "room4"
 	client := room.NewClient(entity.ClientID("client3"))
-	client.WithRoom(room)
-	anotherClient := room.NewClient(entity.ClientID("client4"))
-	anotherClient.WithRoom(room)
+	room.NewClient(entity.ClientID("client4"))
 	room.Clients.Add(client)
 
 	// Serialize room for mock return
@@ -352,10 +348,8 @@ func TestRedisHub_RemoveClient_ClientDeleteFailsAndRoomSavesSuccessfully_Returns
 
 	room := entity.NewRoom(clientcollection.New())
 	room.ID = "room4"
-	client := room.NewClient(entity.ClientID("client3"))
-	client.WithRoom(room)
-	anotherClient := room.NewClient(entity.ClientID("client4"))
-	anotherClient.WithRoom(room)
+	room.NewClient(entity.ClientID("client3"))
+	room.NewClient(entity.ClientID("client4"))
 
 	deleteErr := errors.New("delete failed")
 	intCmd := redis.NewIntCmd(context.Background())
@@ -394,10 +388,8 @@ func TestRedisHub_RemoveClient_SaveRoomFails_PropagatesError(t *testing.T) {
 
 	room := entity.NewRoom(clientcollection.New())
 	room.ID = "room4"
-	client := room.NewClient(entity.ClientID("client3"))
-	client.WithRoom(room)
-	anotherClient := room.NewClient(entity.ClientID("client4"))
-	anotherClient.WithRoom(room)
+	room.NewClient(entity.ClientID("client3"))
+	room.NewClient(entity.ClientID("client4"))
 
 	intCmd := redis.NewIntCmd(context.Background())
 	intCmd.SetVal(1)

@@ -49,7 +49,7 @@ type (
 	}
 )
 
-func (sc SerializedClient) Client(room *entity.Room) *entity.Client {
+func (sc SerializedClient) Client() *entity.Client {
 	var currentVote *entity.Vote
 	if sc.CurrentVote != nil {
 		currentVote = entity.VotePtr(*sc.CurrentVote)
@@ -66,7 +66,6 @@ func (sc SerializedClient) Client(room *entity.Room) *entity.Client {
 	}
 
 	return client.
-		WithRoom(room).
 		WithLogger(log.NewLogger("planningpoker.client"))
 }
 
@@ -154,7 +153,7 @@ func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 	room.RoomVersion = entity.RoomVersion(serialized.RoomVersion)
 
 	for _, sc := range serialized.Clients {
-		client := sc.Client(room)
+		client := sc.Client()
 		room.Clients.Add(client)
 	}
 	return room, nil

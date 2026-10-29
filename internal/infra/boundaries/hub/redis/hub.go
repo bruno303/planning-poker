@@ -192,17 +192,15 @@ func (h *RedisHub) FindClientByID(clientID string) (*entity.Client, bool) {
 	return client, ok
 }
 
-func (h *RedisHub) AddClient(c *entity.Client) {
-	ctx := context.Background()
+func (h *RedisHub) AddClient(ctx context.Context, room *entity.Room, c *entity.Client) {
 	key := clientKeyPrefix + c.ID.String()
 
-	if err := h.client.Set(ctx, key, c.Room().ID, twentyFourHours).Err(); err != nil {
+	if err := h.client.Set(ctx, key, room.ID, twentyFourHours).Err(); err != nil {
 		h.logger.Error(ctx, fmt.Sprintf("Failed to save client %s to Redis", c.ID), err)
 		return
 	}
 
 	// Save the updated room state to Redis after adding the client
-	room := c.Room()
 	if err := h.saveRoom(ctx, room); err != nil {
 		h.logger.Error(ctx, fmt.Sprintf("Failed to save room %s after adding client %s", room.ID, c.ID), err)
 	}

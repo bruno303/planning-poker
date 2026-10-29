@@ -98,7 +98,6 @@ func (r *Room) StartedAt() time.Time {
 func (r *Room) NewClient(id ClientID) *Client {
 	client := newClient(id)
 	r.Clients.Add(client)
-	client.room = r
 
 	if r.Clients.Count() == 1 {
 		client.IsOwner = true
@@ -189,7 +188,7 @@ func (r *Room) RemoveStory(ctx context.Context, clientID ClientID, storyID Story
 			r.Stories = nil
 			r.reveal(false)
 			r.Clients.ForEach(func(c *Client) {
-				c.Vote(ctx, nil)
+				r.applyVote(c, nil)
 			})
 			return nil
 		} else if index == len(r.Stories)-1 {
@@ -197,7 +196,7 @@ func (r *Room) RemoveStory(ctx context.Context, clientID ClientID, storyID Story
 		}
 		r.reveal(false)
 		r.Clients.ForEach(func(c *Client) {
-			c.Vote(ctx, nil)
+			r.applyVote(c, nil)
 		})
 	} else if index < r.CurrentStoryIndex {
 		r.CurrentStoryIndex--
@@ -234,7 +233,7 @@ func (r *Room) SelectStory(ctx context.Context, clientID ClientID, storyID Story
 	r.CurrentStoryIndex = index
 	r.reveal(false)
 	r.Clients.ForEach(func(c *Client) {
-		c.Vote(ctx, nil)
+		r.applyVote(c, nil)
 	})
 	return nil
 }
@@ -327,7 +326,7 @@ func (r *Room) AdvanceToNextStory(ctx context.Context, clientID ClientID) error 
 		r.CurrentStoryIndex++
 		r.reveal(false)
 		r.Clients.ForEach(func(c *Client) {
-			c.Vote(ctx, nil)
+			r.applyVote(c, nil)
 		})
 	}
 	return nil
@@ -346,7 +345,7 @@ func (r *Room) PrevStory(ctx context.Context, clientID ClientID) error {
 		r.CurrentStoryIndex--
 		r.reveal(false)
 		r.Clients.ForEach(func(c *Client) {
-			c.Vote(ctx, nil)
+			r.applyVote(c, nil)
 		})
 	}
 	return nil
@@ -378,7 +377,7 @@ func (r *Room) ResetVoting(ctx context.Context, clientID string) error {
 	r.reveal(false)
 
 	r.Clients.ForEach(func(c *Client) {
-		c.Vote(ctx, nil)
+		r.applyVote(c, nil)
 	})
 	return nil
 }
@@ -412,7 +411,7 @@ func (r *Room) ToggleSpectator(ctx context.Context, clientID ClientID, targetCli
 
 	if targetClient, ok := r.FindClient(targetClientID); ok {
 		targetClient.IsSpectator = !targetClient.IsSpectator
-		targetClient.Vote(ctx, nil)
+		r.applyVote(targetClient, nil)
 		r.checkReveal()
 	} else {
 		return fmt.Errorf("target client %s not found in room %s", targetClientID, r.ID)
@@ -700,6 +699,15 @@ func (r *Room) FindClient(clientID ClientID) (*Client, bool) {
 	}).First()
 }
 
+func (r *Room) applyVote(client *Client, vote *Vote) bool {
+	if r.Reveal {
+		return false
+	}
+
+	client.applyVote(vote)
+	return true
+}
+
 func (r *Room) Vote(ctx context.Context, clientID ClientID, vote *Vote) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
@@ -713,7 +721,7 @@ func (r *Room) Vote(ctx context.Context, clientID ClientID, vote *Vote) error {
 		}
 	}
 
-	client.Vote(ctx, vote)
+	r.applyVote(client, vote)
 	r.checkReveal()
 
 	return nil

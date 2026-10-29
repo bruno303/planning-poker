@@ -8,7 +8,7 @@ import (
 type (
 	Hub interface {
 		FindClientByID(clientID string) (*entity.Client, bool)
-		AddClient(c *entity.Client)
+		AddClient(ctx context.Context, room *entity.Room, client *entity.Client)
 		RemoveClient(ctx context.Context, clientID string, roomID string) error
 
 		NewRoom(ctx context.Context) (*entity.Room, error)

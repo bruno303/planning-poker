@@ -151,10 +151,9 @@ func TestRedisHub_AddClient_WhenClientMappingFailsDoesNotSaveRoom(t *testing.T) 
 
 	room := &entity.Room{ID: "room-1", Clients: clientcollection.New()}
 	client := room.NewClient(entity.ClientID("client-1"))
-	client.WithRoom(room)
 	hub := newErrorTestHub(mockRedis)
 
-	hub.AddClient(client)
+	hub.AddClient(context.Background(), room, client)
 }
 
 func TestRedisHub_AddBus_WithEmptyRoomIDDoesNotSubscribe(t *testing.T) {

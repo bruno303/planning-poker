@@ -141,10 +141,9 @@ func (h *InMemoryHub) FindClientByID(clientID string) (*entity.Client, bool) {
 	return client, ok
 }
 
-func (h *InMemoryHub) AddClient(c *entity.Client) {
+func (h *InMemoryHub) AddClient(_ context.Context, room *entity.Room, c *entity.Client) {
 	h.roomMu.Lock()
 	h.Clients[c.ID.String()] = c
-	room := c.Room()
 	if room != nil {
 		h.removedClients[room.ID+"\x00"+c.ID.String()] = make(chan struct{})
 	}

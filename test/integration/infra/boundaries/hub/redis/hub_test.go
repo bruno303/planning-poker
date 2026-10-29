@@ -42,8 +42,7 @@ func TestIntegration_RoomLifecycle(t *testing.T) {
 	// Add client and verify mapping
 	client1 := room.NewClient(entity.ClientID("client1"))
 	room.Clients.Add(client1)
-	client1.WithRoom(room)
-	hub.AddClient(client1)
+	hub.AddClient(context.Background(), room, client1)
 	found, ok := hub.FindClientByID("client1")
 	assert.True(t, ok)
 	assert.Equal(t, client1.ID, found.ID)
@@ -72,8 +71,7 @@ func TestIntegration_RemoveClient_WhenRoomIsAlreadyMissing_CleansUpAndSucceeds(t
 
 	client1 := room.NewClient(entity.ClientID("client-missing-room-1"))
 	room.Clients.Add(client1)
-	client1.WithRoom(room)
-	hub.AddClient(client1)
+	hub.AddClient(context.Background(), room, client1)
 	hub.AddBus(context.Background(), client1.ID.String(), &mockBus{roomID: room.ID})
 
 	hub.RemoveRoom(room.ID)
@@ -123,8 +121,7 @@ func TestIntegration_GetBus(t *testing.T) {
 
 	client1 := room.NewClient(entity.ClientID("client-getbus-1"))
 	room.Clients.Add(client1)
-	client1.WithRoom(room)
-	hub.AddClient(client1)
+	hub.AddClient(context.Background(), room, client1)
 
 	bus := &mockBus{roomID: room.ID}
 	hub.AddBus(context.Background(), client1.ID.String(), bus)
@@ -150,8 +147,7 @@ func TestIntegration_PubSubInvalidMessage(t *testing.T) {
 
 	client1 := room.NewClient(entity.ClientID("client-pubsub-1"))
 	room.Clients.Add(client1)
-	client1.WithRoom(room)
-	hub.AddClient(client1)
+	hub.AddClient(context.Background(), room, client1)
 
 	receivedMessages := make(chan any, 10)
 	bus := &mockBusWithReceive{roomID: room.ID, received: receivedMessages}
@@ -204,13 +200,11 @@ func TestIntegration_PubSubUnsubscribe(t *testing.T) {
 	// Add two clients to the same room
 	client1 := room.NewClient(entity.ClientID("client-unsub-1"))
 	room.Clients.Add(client1)
-	client1.WithRoom(room)
-	hub.AddClient(client1)
+	hub.AddClient(context.Background(), room, client1)
 
 	client2 := room.NewClient(entity.ClientID("client-unsub-2"))
 	room.Clients.Add(client2)
-	client2.WithRoom(room)
-	hub.AddClient(client2)
+	hub.AddClient(context.Background(), room, client2)
 
 	bus1 := &mockBus{roomID: room.ID}
 	bus2 := &mockBus{roomID: room.ID}
@@ -250,8 +244,7 @@ func TestIntegration_BroadcastToRoom(t *testing.T) {
 
 	client1 := room.NewClient(entity.ClientID("client-broadcast-1"))
 	room.Clients.Add(client1)
-	client1.WithRoom(room)
-	hub.AddClient(client1)
+	hub.AddClient(context.Background(), room, client1)
 
 	receivedMessages := make(chan any, 10)
 	bus := &mockBusWithReceive{roomID: room.ID, received: receivedMessages}
@@ -348,8 +341,7 @@ func TestIntegration_Close(t *testing.T) {
 	assert.NoError(t, err)
 	client1 := room.NewClient(entity.ClientID("client-close-1"))
 	room.Clients.Add(client1)
-	client1.WithRoom(room)
-	hub.AddClient(client1)
+	hub.AddClient(context.Background(), room, client1)
 
 	bus := &mockBus{roomID: room.ID}
 	hub.AddBus(context.Background(), client1.ID.String(), bus)
