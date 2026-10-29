@@ -1,17 +1,13 @@
 module planning-poker
 
-go 1.25.4
-
-require github.com/gorilla/websocket v1.5.3
+go 1.27.2
 
 require (
 	github.com/bruno303/go-toolkit v0.0.3
 	github.com/google/uuid v1.6.0
-)
-
-require (
 	github.com/gorilla/handlers v1.5.2
 	github.com/gorilla/mux v1.8.1
+	github.com/gorilla/websocket v1.5.3
 	github.com/redis/go-redis/v9 v9.17.3
 	github.com/samber/lo v1.51.0
 	github.com/stretchr/testify v1.11.1

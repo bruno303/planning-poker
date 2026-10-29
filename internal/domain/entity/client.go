@@ -3,52 +3,30 @@ package entity
 import (
 	"context"
 	"time"
-
-	"github.com/bruno303/go-toolkit/pkg/log"
 )
 
 type (
 	Client struct {
-		ID   string
+		ID   ClientID
 		Name string
 
-		room *Room
-
-		CurrentVote *string
+		CurrentVote *Vote
 		HasVoted    bool
 		VotedAt     *time.Time
 		IsSpectator bool
 		IsOwner     bool
-
-		logger log.Logger
 	}
 )
 
-func newClient(id string) *Client {
+func newClient(id ClientID) *Client {
 	return &Client{
-		ID:     id,
-		logger: log.NewLogger("planningpoker.client"),
+		ID: id,
 	}
 }
 
-func (c *Client) WithLogger(logger log.Logger) *Client {
-	c.logger = logger
-	return c
-}
-
-func (c *Client) WithRoom(room *Room) *Client {
-	c.room = room
-	return c
-}
-
-func (c *Client) Vote(ctx context.Context, vote *string) {
-	if c.room.Reveal {
-		c.logger.Debug(ctx, "Vote ignored for client %s because votes are already revealed", c.ID)
-		return
-	}
-
+func (c *Client) applyVote(vote *Vote) {
 	c.CurrentVote = vote
-	if vote != nil && *vote != "" {
+	if vote != nil && !vote.IsEmpty() {
 		c.HasVoted = true
 		now := time.Now().UTC()
 		c.VotedAt = &now
@@ -56,10 +34,6 @@ func (c *Client) Vote(ctx context.Context, vote *string) {
 		c.HasVoted = false
 		c.VotedAt = nil
 	}
-}
-
-func (c *Client) Room() *Room {
-	return c.room
 }
 
 func (c *Client) UpdateName(ctx context.Context, name string) {

@@ -186,23 +186,21 @@ func (h *RedisHub) FindClientByID(clientID string) (*entity.Client, bool) {
 	}
 
 	client, ok := room.Clients.Filter(func(c *entity.Client) bool {
-		return c.ID == clientID
+		return c.ID == entity.ClientID(clientID)
 	}).First()
 
 	return client, ok
 }
 
-func (h *RedisHub) AddClient(c *entity.Client) {
-	ctx := context.Background()
-	key := clientKeyPrefix + c.ID
+func (h *RedisHub) AddClient(ctx context.Context, room *entity.Room, c *entity.Client) {
+	key := clientKeyPrefix + c.ID.String()
 
-	if err := h.client.Set(ctx, key, c.Room().ID, twentyFourHours).Err(); err != nil {
+	if err := h.client.Set(ctx, key, room.ID, twentyFourHours).Err(); err != nil {
 		h.logger.Error(ctx, fmt.Sprintf("Failed to save client %s to Redis", c.ID), err)
 		return
 	}
 
 	// Save the updated room state to Redis after adding the client
-	room := c.Room()
 	if err := h.saveRoom(ctx, room); err != nil {
 		h.logger.Error(ctx, fmt.Sprintf("Failed to save room %s after adding client %s", room.ID, c.ID), err)
 	}
@@ -330,7 +328,7 @@ func (h *RedisHub) RemoveClient(ctx context.Context, clientID string, roomID str
 			return nil, err
 		}
 
-		if err := room.RemoveClient(ctx, clientID); err != nil {
+		if err := room.RemoveClient(ctx, entity.ClientID(clientID)); err != nil {
 			return nil, err
 		}
 
@@ -421,7 +419,7 @@ func (h *RedisHub) saveRoom(ctx context.Context, room *entity.Room) error {
 	if !ok {
 		return fmt.Errorf("unexpected save version")
 	}
-	room.RoomVersion = uint64(nextVersion)
+	room.RoomVersion = entity.RoomVersion(nextVersion)
 
 	return nil
 }
@@ -462,7 +460,7 @@ func (h *RedisHub) saveRoomConditionally(ctx context.Context, room *entity.Room,
 	}
 	nextVersion := *expectedVersion + 1
 	persistedRoom := *room
-	persistedRoom.RoomVersion = nextVersion
+	persistedRoom.RoomVersion = entity.RoomVersion(nextVersion)
 	data, err := SerializeRoom(&persistedRoom)
 	if err != nil {
 		return fmt.Errorf("failed to serialize room: %w", err)
@@ -482,7 +480,7 @@ func (h *RedisHub) saveRoomConditionally(ctx context.Context, room *entity.Room,
 	if status != 1 {
 		return domain.ErrStaleRoomVersion
 	}
-	room.RoomVersion = nextVersion
+	room.RoomVersion = entity.RoomVersion(nextVersion)
 	return nil
 }
 
@@ -510,7 +508,7 @@ func (h *RedisHub) forwardToLocalClients(ctx context.Context, roomID string, mes
 	}
 
 	for _, client := range room.Clients.Values() {
-		bus, ok := h.buses[client.ID]
+		bus, ok := h.buses[client.ID.String()]
 		if !ok {
 			continue
 		}

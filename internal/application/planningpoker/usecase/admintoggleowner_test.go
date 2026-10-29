@@ -27,9 +27,9 @@ func TestAdminToggleOwnerUseCase_Execute_Success(t *testing.T) {
 		Clients: clientcollection.New(),
 	}
 
-	owner := room.NewClient("owner123")
+	owner := room.NewClient(entity.ClientID("owner123"))
 	owner.IsOwner = true
-	target := room.NewClient(targetID)
+	target := room.NewClient(entity.ClientID(targetID))
 	target.IsOwner = false
 
 	mockLockManager.EXPECT().
@@ -104,9 +104,9 @@ func TestAdminToggleOwnerUseCase_Execute_SaveRoomError(t *testing.T) {
 		Clients: clientcollection.New(),
 	}
 
-	owner := room.NewClient("owner123")
+	owner := room.NewClient(entity.ClientID("owner123"))
 	owner.IsOwner = true
-	room.NewClient(targetID)
+	room.NewClient(entity.ClientID(targetID))
 	expectedError := errors.New("failed to save room")
 
 	mockLockManager.EXPECT().
@@ -149,9 +149,9 @@ func TestAdminToggleOwnerUseCase_Execute_BroadcastError(t *testing.T) {
 		Clients: clientcollection.New(),
 	}
 
-	owner := room.NewClient("owner123")
+	owner := room.NewClient(entity.ClientID("owner123"))
 	owner.IsOwner = true
-	target := room.NewClient(targetID)
+	target := room.NewClient(entity.ClientID(targetID))
 	target.IsOwner = false
 	expectedError := errors.New("broadcast failed")
 
@@ -197,7 +197,7 @@ func TestAdminToggleOwnerUseCase_Execute_LastOwnerRefused(t *testing.T) {
 	}
 
 	// Only one client in the room, and they are the owner — so AdminToggleOwner returns ErrLastOwner
-	client := room.NewClient(targetID)
+	client := room.NewClient(entity.ClientID(targetID))
 	client.IsOwner = true
 
 	mockLockManager.EXPECT().

@@ -65,7 +65,7 @@ func reorderStoryTestRoom() *entity.Room {
 		Stories:           []entity.Story{{ID: "current", Name: "Current"}, {ID: "pending", Name: "Pending"}},
 		CurrentStoryIndex: 0,
 	}
-	owner := room.NewClient("owner")
+	owner := room.NewClient(entity.ClientID("owner"))
 	owner.IsOwner = true
 	return room
 }

@@ -95,7 +95,7 @@ func TestRedisHub_SaveRoom_WhenRedisFailsWrapsError(t *testing.T) {
 
 	hub := newErrorTestHub(mockRedis)
 	room := &entity.Room{ID: "room-1", Clients: clientcollection.New()}
-	expectedVersion := room.RoomVersion
+	expectedVersion := room.RoomVersion.Uint64()
 	err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion)
 
 	assert.ErrorIs(t, err, wantErr)
@@ -150,11 +150,10 @@ func TestRedisHub_AddClient_WhenClientMappingFailsDoesNotSaveRoom(t *testing.T) 
 	mockRedis.EXPECT().Set(gomock.Any(), "planning-poker:client:client-1", "room-1", twentyFourHours).Return(statusCmd)
 
 	room := &entity.Room{ID: "room-1", Clients: clientcollection.New()}
-	client := room.NewClient("client-1")
-	client.WithRoom(room)
+	client := room.NewClient(entity.ClientID("client-1"))
 	hub := newErrorTestHub(mockRedis)
 
-	hub.AddClient(client)
+	hub.AddClient(context.Background(), room, client)
 }
 
 func TestRedisHub_AddBus_WithEmptyRoomIDDoesNotSubscribe(t *testing.T) {

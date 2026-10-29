@@ -34,17 +34,17 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 	}}
 
 	// Add some clients
-	client1 := originalRoom.NewClient("client-1")
+	client1 := originalRoom.NewClient(entity.ClientID("client-1"))
 	client1.Name = "Alice"
 	client1.IsOwner = true
 	client1.IsSpectator = false
 
-	client2 := originalRoom.NewClient("client-2")
+	client2 := originalRoom.NewClient(entity.ClientID("client-2"))
 	client2.Name = "Bob"
 	client2.IsOwner = false
 	client2.IsSpectator = false
 	vote := "5"
-	client2.CurrentVote = &vote
+	client2.CurrentVote = entity.VotePtr(vote)
 	client2.HasVoted = true
 	client2.VotedAt = lo.ToPtr(time.Date(2026, time.September, 3, 12, 1, 0, 0, time.FixedZone("BRT", -3*60*60)))
 

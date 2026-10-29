@@ -16,7 +16,7 @@ func TestNewRoomStateCommand(t *testing.T) {
 	startedAt := time.Date(2026, time.September, 3, 12, 0, 0, 0, time.UTC)
 	votedAt := time.Date(2026, time.September, 3, 12, 1, 0, 0, time.UTC)
 	clients := []*entity.Client{
-		{ID: "1", Name: "Alice", CurrentVote: &vote, HasVoted: true, VotedAt: &votedAt, IsSpectator: false, IsOwner: true},
+		{ID: "1", Name: "Alice", CurrentVote: entity.VotePtr(vote), HasVoted: true, VotedAt: &votedAt, IsSpectator: false, IsOwner: true},
 		{ID: "2", Name: "Bob", CurrentVote: nil, HasVoted: false, IsSpectator: true, IsOwner: false},
 	}
 
@@ -90,9 +90,9 @@ func TestNewUpdateClientIDCommand(t *testing.T) {
 func TestMapToParticipants(t *testing.T) {
 	votedAt := time.Date(2026, time.September, 3, 12, 1, 0, 0, time.UTC)
 	clients := []*entity.Client{
-		{ID: "1", Name: "Alice", CurrentVote: lo.ToPtr("5"), HasVoted: true, VotedAt: &votedAt, IsSpectator: false, IsOwner: false},
-		{ID: "2", Name: "Bob", CurrentVote: lo.ToPtr("3"), HasVoted: true, IsSpectator: false, IsOwner: true},
-		{ID: "3", Name: "Charlie", CurrentVote: lo.ToPtr("?"), HasVoted: true, IsSpectator: true, IsOwner: false},
+		{ID: "1", Name: "Alice", CurrentVote: entity.VotePtr("5"), HasVoted: true, VotedAt: &votedAt, IsSpectator: false, IsOwner: false},
+		{ID: "2", Name: "Bob", CurrentVote: entity.VotePtr("3"), HasVoted: true, IsSpectator: false, IsOwner: true},
+		{ID: "3", Name: "Charlie", CurrentVote: entity.VotePtr("?"), HasVoted: true, IsSpectator: true, IsOwner: false},
 	}
 	participants := MapToParticipants(clients)
 

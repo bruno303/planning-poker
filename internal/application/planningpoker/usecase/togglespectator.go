@@ -5,6 +5,7 @@ import (
 	"planning-poker/internal/application/lock"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
 	"planning-poker/internal/domain"
+	"planning-poker/internal/domain/entity"
 )
 
 type (
@@ -36,7 +37,7 @@ func (uc ToggleSpectatorUseCase) Execute(ctx context.Context, cmd ToggleSpectato
 			return err
 		}
 
-		if err := room.ToggleSpectator(ctx, cmd.SenderID, cmd.TargetClientID); err != nil {
+		if err := room.ToggleSpectator(ctx, entity.ClientID(cmd.SenderID), entity.ClientID(cmd.TargetClientID)); err != nil {
 			return err
 		}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
 	"planning-poker/internal/domain"
+	"planning-poker/internal/domain/entity"
 )
 
 type (
@@ -31,7 +32,7 @@ func (uc UpdateNameUseCase) Execute(ctx context.Context, cmd UpdateNameCommand) 
 		return err
 	}
 
-	if err := room.UpdateClientName(ctx, cmd.SenderID, cmd.Username); err != nil {
+	if err := room.UpdateClientName(ctx, entity.ClientID(cmd.SenderID), cmd.Username); err != nil {
 		return err
 	}
 

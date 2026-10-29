@@ -42,7 +42,7 @@ func TestVoteUseCase_Execute_Success(t *testing.T) {
 		Clients: clientcollection.New(),
 	}
 
-	room.NewClient(senderID)
+	room.NewClient(entity.ClientID(senderID))
 
 	mockLockManager.EXPECT().
 		ExecuteWithLock(gomock.Any(), roomID, gomock.Any()).
@@ -84,7 +84,7 @@ func TestVoteUseCase_Execute_SaveRoomError(t *testing.T) {
 		Clients: clientcollection.New(),
 	}
 
-	room.NewClient(senderID)
+	room.NewClient(entity.ClientID(senderID))
 	expectedError := errors.New("failed to save room")
 
 	mockLockManager.EXPECT().
@@ -164,7 +164,7 @@ func TestVoteUseCase_Execute_BroadcastError(t *testing.T) {
 		Clients: clientcollection.New(),
 	}
 
-	room.NewClient(senderID)
+	room.NewClient(entity.ClientID(senderID))
 	expectedError := errors.New("broadcast failed")
 
 	mockLockManager.EXPECT().

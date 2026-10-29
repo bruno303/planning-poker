@@ -80,15 +80,15 @@ func (c *MockHubAddBusCall) DoAndReturn(f func(context.Context, string, Bus) err
 }
 
 // AddClient mocks base method.
-func (m *MockHub) AddClient(c *entity.Client) {
+func (m *MockHub) AddClient(ctx context.Context, room *entity.Room, client *entity.Client) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AddClient", c)
+	m.ctrl.Call(m, "AddClient", ctx, room, client)
 }
 
 // AddClient indicates an expected call of AddClient.
-func (mr *MockHubMockRecorder) AddClient(c any) *MockHubAddClientCall {
+func (mr *MockHubMockRecorder) AddClient(ctx, room, client any) *MockHubAddClientCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddClient", reflect.TypeOf((*MockHub)(nil).AddClient), c)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddClient", reflect.TypeOf((*MockHub)(nil).AddClient), ctx, room, client)
 	return &MockHubAddClientCall{Call: call}
 }
 
@@ -98,21 +98,21 @@ type MockHubAddClientCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c_2 *MockHubAddClientCall) Return() *MockHubAddClientCall {
-	c_2.Call = c_2.Call.Return()
-	return c_2
+func (c *MockHubAddClientCall) Return() *MockHubAddClientCall {
+	c.Call = c.Call.Return()
+	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c_2 *MockHubAddClientCall) Do(f func(*entity.Client)) *MockHubAddClientCall {
-	c_2.Call = c_2.Call.Do(f)
-	return c_2
+func (c *MockHubAddClientCall) Do(f func(context.Context, *entity.Room, *entity.Client)) *MockHubAddClientCall {
+	c.Call = c.Call.Do(f)
+	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c_2 *MockHubAddClientCall) DoAndReturn(f func(*entity.Client)) *MockHubAddClientCall {
-	c_2.Call = c_2.Call.DoAndReturn(f)
-	return c_2
+func (c *MockHubAddClientCall) DoAndReturn(f func(context.Context, *entity.Room, *entity.Client)) *MockHubAddClientCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // BroadcastToRoom mocks base method.

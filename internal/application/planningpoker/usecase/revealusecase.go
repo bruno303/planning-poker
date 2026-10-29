@@ -5,6 +5,7 @@ import (
 	"planning-poker/internal/application/lock"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
 	"planning-poker/internal/domain"
+	"planning-poker/internal/domain/entity"
 )
 
 type (
@@ -35,7 +36,7 @@ func (uc RevealUseCase) Execute(ctx context.Context, cmd RevealCommand) error {
 			return err
 		}
 
-		if err := room.ToggleReveal(ctx, cmd.SenderID); err != nil {
+		if err := room.ToggleReveal(ctx, entity.ClientID(cmd.SenderID)); err != nil {
 			return err
 		}
 
