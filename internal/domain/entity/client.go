@@ -9,7 +9,7 @@ import (
 
 type (
 	Client struct {
-		ID   string
+		ID   ClientID
 		Name string
 
 		room *Room
@@ -24,7 +24,7 @@ type (
 	}
 )
 
-func newClient(id string) *Client {
+func newClient(id ClientID) *Client {
 	return &Client{
 		ID:     id,
 		logger: log.NewLogger("planningpoker.client"),

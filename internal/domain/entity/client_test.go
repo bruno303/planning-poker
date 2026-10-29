@@ -13,7 +13,7 @@ func assertNewClient(t *testing.T, client *Client, wantID string) {
 	if client == nil {
 		t.Fatal("newClient() returned nil")
 	}
-	if client.ID != wantID {
+	if client.ID != cid(wantID) {
 		t.Errorf("newClient() ID = %v, want %v", client.ID, wantID)
 	}
 	if client.Name != "" {
@@ -75,7 +75,7 @@ func TestNewClient(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assertNewClient(t, newClient(tt.clientID), tt.clientID)
+			assertNewClient(t, newClient(cid(tt.clientID)), tt.clientID)
 		})
 	}
 }

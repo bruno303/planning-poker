@@ -188,7 +188,7 @@ func TestRedisHub_AddClient_RemoveRoom(t *testing.T) {
 
 	room := entity.NewRoom(clientcollection.New())
 	room.ID = "room2"
-	client := room.NewClient("client1")
+	client := room.NewClient(entity.ClientID("client1"))
 	client.WithRoom(room)
 	room.Clients.Add(client)
 
@@ -250,7 +250,7 @@ func TestRedisHub_FindClientByID(t *testing.T) {
 
 	room := entity.NewRoom(clientcollection.New())
 	room.ID = "room3"
-	client := room.NewClient("client2")
+	client := room.NewClient(entity.ClientID("client2"))
 	client.WithRoom(room)
 	room.Clients.Add(client)
 
@@ -284,9 +284,9 @@ func TestRedisHub_RemoveClient(t *testing.T) {
 
 	room := entity.NewRoom(clientcollection.New())
 	room.ID = "room4"
-	client := room.NewClient("client3")
+	client := room.NewClient(entity.ClientID("client3"))
 	client.WithRoom(room)
-	anotherClient := room.NewClient("client4")
+	anotherClient := room.NewClient(entity.ClientID("client4"))
 	anotherClient.WithRoom(room)
 	room.Clients.Add(client)
 
@@ -352,9 +352,9 @@ func TestRedisHub_RemoveClient_ClientDeleteFailsAndRoomSavesSuccessfully_Returns
 
 	room := entity.NewRoom(clientcollection.New())
 	room.ID = "room4"
-	client := room.NewClient("client3")
+	client := room.NewClient(entity.ClientID("client3"))
 	client.WithRoom(room)
-	anotherClient := room.NewClient("client4")
+	anotherClient := room.NewClient(entity.ClientID("client4"))
 	anotherClient.WithRoom(room)
 
 	deleteErr := errors.New("delete failed")
@@ -394,9 +394,9 @@ func TestRedisHub_RemoveClient_SaveRoomFails_PropagatesError(t *testing.T) {
 
 	room := entity.NewRoom(clientcollection.New())
 	room.ID = "room4"
-	client := room.NewClient("client3")
+	client := room.NewClient(entity.ClientID("client3"))
 	client.WithRoom(room)
-	anotherClient := room.NewClient("client4")
+	anotherClient := room.NewClient(entity.ClientID("client4"))
 	anotherClient.WithRoom(room)
 
 	intCmd := redis.NewIntCmd(context.Background())

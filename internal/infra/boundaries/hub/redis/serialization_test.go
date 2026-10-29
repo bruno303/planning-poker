@@ -34,12 +34,12 @@ func TestSerializeDeserializeRoom(t *testing.T) {
 	}}
 
 	// Add some clients
-	client1 := originalRoom.NewClient("client-1")
+	client1 := originalRoom.NewClient(entity.ClientID("client-1"))
 	client1.Name = "Alice"
 	client1.IsOwner = true
 	client1.IsSpectator = false
 
-	client2 := originalRoom.NewClient("client-2")
+	client2 := originalRoom.NewClient(entity.ClientID("client-2"))
 	client2.Name = "Bob"
 	client2.IsOwner = false
 	client2.IsSpectator = false

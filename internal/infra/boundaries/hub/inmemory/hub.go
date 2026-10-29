@@ -143,10 +143,10 @@ func (h *InMemoryHub) FindClientByID(clientID string) (*entity.Client, bool) {
 
 func (h *InMemoryHub) AddClient(c *entity.Client) {
 	h.roomMu.Lock()
-	h.Clients[c.ID] = c
+	h.Clients[c.ID.String()] = c
 	room := c.Room()
 	if room != nil {
-		h.removedClients[room.ID+"\x00"+c.ID] = make(chan struct{})
+		h.removedClients[room.ID+"\x00"+c.ID.String()] = make(chan struct{})
 	}
 	h.roomMu.Unlock()
 	if room != nil {
@@ -183,7 +183,7 @@ func (h *InMemoryHub) RemoveClient(ctx context.Context, clientID string, roomID 
 			return nil, err
 		}
 
-		err = room.RemoveClient(ctx, clientID)
+		err = room.RemoveClient(ctx, entity.ClientID(clientID))
 		if err != nil {
 			return nil, err
 		}
@@ -329,7 +329,7 @@ func (h *InMemoryHub) BroadcastToRoom(ctx context.Context, roomID string, messag
 		}
 
 		for _, client := range room.Clients.Values() {
-			bus, ok := h.GetBus(client.ID)
+			bus, ok := h.GetBus(client.ID.String())
 			if !ok {
 				h.logger.Warn(ctx, "bus not found for client %s", client.ID)
 				continue

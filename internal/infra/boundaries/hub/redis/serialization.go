@@ -56,7 +56,7 @@ func (sc SerializedClient) Client(room *entity.Room) *entity.Client {
 	}
 
 	client := &entity.Client{
-		ID:          sc.ID,
+		ID:          entity.ClientID(sc.ID),
 		Name:        sc.Name,
 		CurrentVote: currentVote,
 		HasVoted:    sc.HasVoted,
@@ -74,7 +74,7 @@ func SerializeRoom(room *entity.Room) ([]byte, error) {
 	clients := make([]SerializedClient, 0, room.Clients.Count())
 	room.Clients.ForEach(func(client *entity.Client) {
 		clients = append(clients, SerializedClient{
-			ID:          client.ID,
+			ID:          string(client.ID),
 			Name:        client.Name,
 			CurrentVote: client.CurrentVote.Ptr(),
 			HasVoted:    client.HasVoted,
@@ -112,7 +112,7 @@ func serializeStories(stories []entity.Story) []SerializedStory {
 	result := make([]SerializedStory, len(stories))
 	for i, s := range stories {
 		result[i] = SerializedStory{
-			ID:                 s.ID,
+			ID:                 string(s.ID),
 			Name:               s.Name,
 			Result:             s.Result,
 			MostAppearingVotes: s.MostAppearingVotes,
@@ -167,7 +167,7 @@ func deserializeStories(stories []SerializedStory) ([]entity.Story, error) {
 			return nil, fmt.Errorf("story at index %d is missing an ID", i)
 		}
 		result[i] = entity.Story{
-			ID:                 s.ID,
+			ID:                 entity.StoryID(s.ID),
 			Name:               s.Name,
 			Result:             s.Result,
 			MostAppearingVotes: s.MostAppearingVotes,

@@ -130,11 +130,11 @@ func TestRemoveRoom(t *testing.T) {
 
 func TestAddAndFindClient(t *testing.T) {
 	hub := NewHub()
-	client := &entity.Client{ID: "client1", Name: "Alice"}
+	client := &entity.Client{ID: entity.ClientID("client1"), Name: "Alice"}
 
 	hub.AddClient(client)
 
-	got, ok := hub.FindClientByID(client.ID)
+	got, ok := hub.FindClientByID(client.ID.String())
 	if !ok {
 		t.Fatalf("expected to find client but got not found")
 	}
@@ -221,28 +221,28 @@ func TestRemoveClient_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	client := &entity.Client{ID: "client1", Name: "Alice"}
+	client := &entity.Client{ID: entity.ClientID("client1"), Name: "Alice"}
 	hub.AddClient(client)
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockBus := domain.NewMockBus(ctrl)
-	hub.AddBus(ctx, client.ID, mockBus)
+	hub.AddBus(ctx, client.ID.String(), mockBus)
 
 	// Add client to room
 	room.Clients.Add(client)
 
-	err = hub.RemoveClient(ctx, client.ID, room.ID)
+	err = hub.RemoveClient(ctx, client.ID.String(), room.ID)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	_, ok := hub.FindClientByID(client.ID)
+	_, ok := hub.FindClientByID(client.ID.String())
 	if ok {
 		t.Error("expected client to be removed from hub")
 	}
 
-	_, ok = hub.GetBus(client.ID)
+	_, ok = hub.GetBus(client.ID.String())
 	if ok {
 		t.Error("expected bus to be removed")
 	}
@@ -256,8 +256,8 @@ func TestRemoveClient_RefreshesSavedSnapshotWithoutAdvancingRoomVersion(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	client1 := room.NewClient("client1")
-	client2 := room.NewClient("client2")
+	client1 := room.NewClient(entity.ClientID("client1"))
+	client2 := room.NewClient(entity.ClientID("client2"))
 	hub.AddClient(client1)
 	hub.AddClient(client2)
 	expectedVersion := uint64(0)
@@ -265,7 +265,7 @@ func TestRemoveClient_RefreshesSavedSnapshotWithoutAdvancingRoomVersion(t *testi
 		t.Fatal(err)
 	}
 
-	if err := hub.RemoveClient(ctx, client2.ID, room.ID); err != nil {
+	if err := hub.RemoveClient(ctx, client2.ID.String(), room.ID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -288,25 +288,25 @@ func TestRemoveClient_RoomNotFound(t *testing.T) {
 	ctx := context.Background()
 	hub := NewHub()
 
-	client := &entity.Client{ID: "client1", Name: "Alice"}
+	client := &entity.Client{ID: entity.ClientID("client1"), Name: "Alice"}
 	hub.AddClient(client)
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockBus := domain.NewMockBus(ctrl)
-	hub.AddBus(ctx, client.ID, mockBus)
+	hub.AddBus(ctx, client.ID.String(), mockBus)
 
-	err := hub.RemoveClient(ctx, client.ID, "non-existent-room")
+	err := hub.RemoveClient(ctx, client.ID.String(), "non-existent-room")
 	if err != nil {
 		t.Fatalf("expected no error when room not found, got %v", err)
 	}
 
-	_, ok := hub.FindClientByID(client.ID)
+	_, ok := hub.FindClientByID(client.ID.String())
 	if ok {
 		t.Error("expected client to be removed even when room not found")
 	}
 
-	_, ok = hub.GetBus(client.ID)
+	_, ok = hub.GetBus(client.ID.String())
 	if ok {
 		t.Error("expected bus to be removed even when room not found")
 	}
@@ -320,13 +320,13 @@ func TestRemoveClient_EmptyRoomRemoval(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	client := &entity.Client{ID: "client1", Name: "Alice"}
+	client := &entity.Client{ID: entity.ClientID("client1"), Name: "Alice"}
 	hub.AddClient(client)
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockBus := domain.NewMockBus(ctrl)
-	hub.AddBus(ctx, client.ID, mockBus)
+	hub.AddBus(ctx, client.ID.String(), mockBus)
 
 	room.Clients.Add(client)
 
@@ -334,7 +334,7 @@ func TestRemoveClient_EmptyRoomRemoval(t *testing.T) {
 		t.Fatalf("expected 1 room, got %d", len(hub.Rooms))
 	}
 
-	err = hub.RemoveClient(ctx, client.ID, room.ID)
+	err = hub.RemoveClient(ctx, client.ID.String(), room.ID)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -356,8 +356,8 @@ func TestBroadcastToRoom_Success(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	client1 := &entity.Client{ID: "client1", Name: "Alice"}
-	client2 := &entity.Client{ID: "client2", Name: "Bob"}
+	client1 := &entity.Client{ID: entity.ClientID("client1"), Name: "Alice"}
+	client2 := &entity.Client{ID: entity.ClientID("client2"), Name: "Bob"}
 
 	hub.AddClient(client1)
 	hub.AddClient(client2)
@@ -366,8 +366,8 @@ func TestBroadcastToRoom_Success(t *testing.T) {
 
 	mockBus1 := domain.NewMockBus(ctrl)
 	mockBus2 := domain.NewMockBus(ctrl)
-	hub.AddBus(ctx, client1.ID, mockBus1)
-	hub.AddBus(ctx, client2.ID, mockBus2)
+	hub.AddBus(ctx, client1.ID.String(), mockBus1)
+	hub.AddBus(ctx, client2.ID.String(), mockBus2)
 
 	message := map[string]string{"type": "test", "data": "hello"}
 
@@ -403,7 +403,7 @@ func TestBroadcastToRoom_BusNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	client := &entity.Client{ID: "client1", Name: "Alice"}
+	client := &entity.Client{ID: entity.ClientID("client1"), Name: "Alice"}
 	hub.AddClient(client)
 	room.Clients.Add(client)
 
@@ -428,12 +428,12 @@ func TestBroadcastToRoom_SendError(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	client := &entity.Client{ID: "client1", Name: "Alice"}
+	client := &entity.Client{ID: entity.ClientID("client1"), Name: "Alice"}
 	hub.AddClient(client)
 	room.Clients.Add(client)
 
 	mockBus := domain.NewMockBus(ctrl)
-	hub.AddBus(ctx, client.ID, mockBus)
+	hub.AddBus(ctx, client.ID.String(), mockBus)
 
 	message := map[string]string{"type": "test"}
 	expectedError := errors.New("send failed")
@@ -573,14 +573,14 @@ func TestSaveRoomIfVersion_StaleMutationPreservesJoinedClient(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	room.NewClient("client1")
+	room.NewClient(entity.ClientID("client1"))
 	hub.AddClient(room.Clients.Values()[0])
 	expectedVersion := uint64(0)
 	if err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion); err != nil {
 		t.Fatal(err)
 	}
 
-	joined := room.NewClient("client2")
+	joined := room.NewClient(entity.ClientID("client2"))
 	hub.AddClient(joined)
 	room.Reveal = true
 	if err := hub.SaveRoomIfVersion(context.Background(), room, &expectedVersion); !errors.Is(err, domain.ErrStaleRoomVersion) {
@@ -591,7 +591,7 @@ func TestSaveRoomIfVersion_StaleMutationPreservesJoinedClient(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := stored.FindClient("client2"); !ok {
+	if _, ok := stored.FindClient(entity.ClientID("client2")); !ok {
 		t.Fatal("stale mutation lost newly joined client")
 	}
 	if stored.RoomVersion != 1 {
@@ -605,8 +605,8 @@ func TestSaveRoomIfVersion_StaleMutationDoesNotResurrectRemovedClient(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	client1 := room.NewClient("client1")
-	client2 := room.NewClient("client2")
+	client1 := room.NewClient(entity.ClientID("client1"))
+	client2 := room.NewClient(entity.ClientID("client2"))
 	hub.AddClient(client1)
 	hub.AddClient(client2)
 	expectedVersion := uint64(0)
@@ -614,7 +614,7 @@ func TestSaveRoomIfVersion_StaleMutationDoesNotResurrectRemovedClient(t *testing
 		t.Fatal(err)
 	}
 
-	if err := hub.RemoveClient(context.Background(), client2.ID, room.ID); err != nil {
+	if err := hub.RemoveClient(context.Background(), client2.ID.String(), room.ID); err != nil {
 		t.Fatal(err)
 	}
 	room.Reveal = true

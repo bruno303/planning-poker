@@ -41,7 +41,7 @@ func (uc *voteUseCase) Execute(ctx context.Context, cmd VoteCommand) error {
 			vote = entity.VotePtr(*cmd.Vote)
 		}
 
-		if err := room.Vote(ctx, cmd.SenderID, vote); err != nil {
+		if err := room.Vote(ctx, entity.ClientID(cmd.SenderID), vote); err != nil {
 			return err
 		}
 

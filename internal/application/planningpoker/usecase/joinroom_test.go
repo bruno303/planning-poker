@@ -763,7 +763,7 @@ func TestJoinRoomUseCase_Execute_ReconnectClientExists(t *testing.T) {
 		ID:      roomID,
 		Clients: clientcollection.New(),
 	}
-	room.NewClient(clientID)
+	room.NewClient(entity.ClientID(clientID))
 
 	mockLockManager.EXPECT().
 		WithLock(gomock.Any(), roomID, gomock.Any()).
@@ -798,7 +798,7 @@ func TestJoinRoomUseCase_Execute_ReconnectClientExists(t *testing.T) {
 	if output.Client == nil {
 		t.Fatal("expected client to be non-nil")
 	}
-	if output.Client.ID != clientID {
+	if output.Client.ID != entity.ClientID(clientID) {
 		t.Fatalf("expected client ID %s, got %s", clientID, output.Client.ID)
 	}
 	if output.Room != room {
@@ -827,7 +827,7 @@ func TestJoinRoomUseCase_Execute_ReconnectNoOldBus(t *testing.T) {
 		ID:      roomID,
 		Clients: clientcollection.New(),
 	}
-	room.NewClient(clientID)
+	room.NewClient(entity.ClientID(clientID))
 
 	mockLockManager.EXPECT().
 		WithLock(gomock.Any(), roomID, gomock.Any()).
@@ -860,7 +860,7 @@ func TestJoinRoomUseCase_Execute_ReconnectNoOldBus(t *testing.T) {
 	if output.Client == nil {
 		t.Fatal("expected client to be non-nil")
 	}
-	if output.Client.ID != clientID {
+	if output.Client.ID != entity.ClientID(clientID) {
 		t.Fatalf("expected client ID %s, got %s", clientID, output.Client.ID)
 	}
 
@@ -886,7 +886,7 @@ func TestJoinRoomUseCase_Execute_ReconnectSendErrorRollback(t *testing.T) {
 		ID:      roomID,
 		Clients: clientcollection.New(),
 	}
-	room.NewClient(clientID)
+	room.NewClient(entity.ClientID(clientID))
 	sendErr := errors.New("send failed")
 
 	mockLockManager.EXPECT().
@@ -943,7 +943,7 @@ func TestJoinRoomUseCase_Execute_ReconnectBroadcastErrorRollback(t *testing.T) {
 		ID:      roomID,
 		Clients: clientcollection.New(),
 	}
-	room.NewClient(clientID)
+	room.NewClient(entity.ClientID(clientID))
 	broadcastErr := errors.New("broadcast failed")
 
 	mockLockManager.EXPECT().

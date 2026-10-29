@@ -40,7 +40,7 @@ func TestAdminRemoveClientUseCase_Execute_Success(t *testing.T) {
 	clientID := "client456"
 	room := &entity.Room{
 		ID:      roomID,
-		Clients: clientcollection.New(&entity.Client{ID: clientID}),
+		Clients: clientcollection.New(&entity.Client{ID: entity.ClientID(clientID)}),
 	}
 
 	mockBus := domain.NewMockBus(ctrl)
@@ -73,7 +73,7 @@ func TestAdminRemoveClientUseCase_Execute_Success_NoBus(t *testing.T) {
 	clientID := "client456"
 	room := &entity.Room{
 		ID:      roomID,
-		Clients: clientcollection.New(&entity.Client{ID: clientID}),
+		Clients: clientcollection.New(&entity.Client{ID: entity.ClientID(clientID)}),
 	}
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
@@ -124,7 +124,7 @@ func TestAdminRemoveClientUseCase_Execute_ClientNotFound(t *testing.T) {
 	clientID := "absentClient"
 	room := &entity.Room{
 		ID:      roomID,
-		Clients: clientcollection.New(&entity.Client{ID: "otherClient"}),
+		Clients: clientcollection.New(&entity.Client{ID: entity.ClientID("otherClient")}),
 	}
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
@@ -152,7 +152,7 @@ func TestAdminRemoveClientUseCase_Execute_LeaveRoomError(t *testing.T) {
 	clientID := "client456"
 	room := &entity.Room{
 		ID:      roomID,
-		Clients: clientcollection.New(&entity.Client{ID: clientID}),
+		Clients: clientcollection.New(&entity.Client{ID: entity.ClientID(clientID)}),
 	}
 
 	leaveRoomErr := errors.New("leave room failed")
@@ -184,7 +184,7 @@ func TestAdminRemoveClientUseCase_Execute_BusCloseError(t *testing.T) {
 	clientID := "client456"
 	room := &entity.Room{
 		ID:      roomID,
-		Clients: clientcollection.New(&entity.Client{ID: clientID}),
+		Clients: clientcollection.New(&entity.Client{ID: entity.ClientID(clientID)}),
 	}
 
 	mockBus := domain.NewMockBus(ctrl)

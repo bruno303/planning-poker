@@ -218,7 +218,7 @@ func newRevealedEmptyBacklogRoom(t *testing.T) *entity.Room {
 	if err := room.AddStory(ctx, owner.ID, "Checkout flow"); err != nil {
 		t.Fatalf("add story: %v", err)
 	}
-	if err := room.ToggleReveal(ctx, owner.ID); err != nil {
+	if err := room.ToggleReveal(ctx, owner.ID.String()); err != nil {
 		t.Fatalf("toggle reveal: %v", err)
 	}
 	if !room.Reveal {
@@ -239,11 +239,11 @@ func newWireRoom(t *testing.T) *entity.Room {
 func addWireParticipants(t *testing.T, room *entity.Room) (owner, voter, spectator *entity.Client) {
 	t.Helper()
 
-	owner = room.NewClient("owner-1")
+	owner = room.NewClient(entity.ClientID("owner-1"))
 	owner.Name = "Alice"
-	voter = room.NewClient("voter-1")
+	voter = room.NewClient(entity.ClientID("voter-1"))
 	voter.Name = "Bob"
-	spectator = room.NewClient("spectator-1")
+	spectator = room.NewClient(entity.ClientID("spectator-1"))
 	spectator.Name = "Carol"
 
 	if !owner.IsOwner {

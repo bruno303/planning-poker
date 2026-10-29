@@ -42,9 +42,9 @@ func TestToggleSpectatorUseCase_Execute_Success(t *testing.T) {
 		Clients: clientcollection.New(),
 	}
 
-	sender := room.NewClient(senderID)
+	sender := room.NewClient(entity.ClientID(senderID))
 	sender.IsOwner = true
-	target := room.NewClient(targetID)
+	target := room.NewClient(entity.ClientID(targetID))
 	target.IsSpectator = false
 
 	mockLockManager.EXPECT().
@@ -87,9 +87,9 @@ func TestToggleSpectatorUseCase_Execute_SaveRoomError(t *testing.T) {
 		Clients: clientcollection.New(),
 	}
 
-	client := room.NewClient(senderID)
+	client := room.NewClient(entity.ClientID(senderID))
 	client.IsOwner = true
-	room.NewClient(targetClientID)
+	room.NewClient(entity.ClientID(targetClientID))
 	expectedError := errors.New("failed to save room")
 
 	mockLockManager.EXPECT().
@@ -169,9 +169,9 @@ func TestToggleSpectatorUseCase_Execute_BroadcastError(t *testing.T) {
 		Clients: clientcollection.New(),
 	}
 
-	sender := room.NewClient(senderID)
+	sender := room.NewClient(entity.ClientID(senderID))
 	sender.IsOwner = true
-	target := room.NewClient(targetID)
+	target := room.NewClient(entity.ClientID(targetID))
 	target.IsSpectator = false
 	expectedError := errors.New("broadcast failed")
 

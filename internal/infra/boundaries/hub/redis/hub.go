@@ -186,7 +186,7 @@ func (h *RedisHub) FindClientByID(clientID string) (*entity.Client, bool) {
 	}
 
 	client, ok := room.Clients.Filter(func(c *entity.Client) bool {
-		return c.ID == clientID
+		return c.ID == entity.ClientID(clientID)
 	}).First()
 
 	return client, ok
@@ -194,7 +194,7 @@ func (h *RedisHub) FindClientByID(clientID string) (*entity.Client, bool) {
 
 func (h *RedisHub) AddClient(c *entity.Client) {
 	ctx := context.Background()
-	key := clientKeyPrefix + c.ID
+	key := clientKeyPrefix + c.ID.String()
 
 	if err := h.client.Set(ctx, key, c.Room().ID, twentyFourHours).Err(); err != nil {
 		h.logger.Error(ctx, fmt.Sprintf("Failed to save client %s to Redis", c.ID), err)
@@ -330,7 +330,7 @@ func (h *RedisHub) RemoveClient(ctx context.Context, clientID string, roomID str
 			return nil, err
 		}
 
-		if err := room.RemoveClient(ctx, clientID); err != nil {
+		if err := room.RemoveClient(ctx, entity.ClientID(clientID)); err != nil {
 			return nil, err
 		}
 
@@ -510,7 +510,7 @@ func (h *RedisHub) forwardToLocalClients(ctx context.Context, roomID string, mes
 	}
 
 	for _, client := range room.Clients.Values() {
-		bus, ok := h.buses[client.ID]
+		bus, ok := h.buses[client.ID.String()]
 		if !ok {
 			continue
 		}

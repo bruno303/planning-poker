@@ -32,8 +32,8 @@ func TestRoomStartedAtReturnsValueCopy(t *testing.T) {
 
 func TestClientVoteTracksLatestNonEmptySelectionAndClearsOnReset(t *testing.T) {
 	room := entity.NewRoom(clientcollection.New())
-	owner := room.NewClient("owner")
-	room.NewClient("participant")
+	owner := room.NewClient(entity.ClientID("owner"))
+	room.NewClient(entity.ClientID("participant"))
 
 	firstVote := "5"
 	if err := room.Vote(context.Background(), owner.ID, entity.VotePtr(firstVote)); err != nil {
@@ -55,7 +55,7 @@ func TestClientVoteTracksLatestNonEmptySelectionAndClearsOnReset(t *testing.T) {
 		t.Fatal("replacement vote did not replace the timestamp")
 	}
 
-	if err := room.ResetVoting(context.Background(), owner.ID); err != nil {
+	if err := room.ResetVoting(context.Background(), owner.ID.String()); err != nil {
 		t.Fatalf("reset voting returned error: %v", err)
 	}
 	if owner.CurrentVote != nil || owner.HasVoted || owner.VotedAt != nil {
@@ -72,26 +72,26 @@ func TestRoomRoundResetsClearParticipantVoteTimestamps(t *testing.T) {
 		{
 			name: "select story",
 			action: func(ctx context.Context, room *entity.Room, ownerID string) error {
-				return room.SelectStory(ctx, ownerID, "pending")
+				return room.SelectStory(ctx, entity.ClientID(ownerID), entity.StoryID("pending"))
 			},
 		},
 		{
 			name: "advance story",
 			action: func(ctx context.Context, room *entity.Room, ownerID string) error {
-				return room.AdvanceToNextStory(ctx, ownerID)
+				return room.AdvanceToNextStory(ctx, entity.ClientID(ownerID))
 			},
 		},
 		{
 			name:  "previous story",
 			setup: func(room *entity.Room) { room.CurrentStoryIndex = 1 },
 			action: func(ctx context.Context, room *entity.Room, ownerID string) error {
-				return room.PrevStory(ctx, ownerID)
+				return room.PrevStory(ctx, entity.ClientID(ownerID))
 			},
 		},
 		{
 			name: "remove active story",
 			action: func(ctx context.Context, room *entity.Room, ownerID string) error {
-				return room.RemoveStory(ctx, ownerID, "current")
+				return room.RemoveStory(ctx, entity.ClientID(ownerID), entity.StoryID("current"))
 			},
 		},
 	}
@@ -99,9 +99,9 @@ func TestRoomRoundResetsClearParticipantVoteTimestamps(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			room := entity.NewRoom(clientcollection.New())
-			owner := room.NewClient("owner")
-			participant := room.NewClient("participant")
-			room.Stories = []entity.Story{{ID: "current", Name: "Current"}, {ID: "pending", Name: "Pending"}}
+			owner := room.NewClient(entity.ClientID("owner"))
+			participant := room.NewClient(entity.ClientID("participant"))
+			room.Stories = []entity.Story{{ID: entity.StoryID("current"), Name: "Current"}, {ID: entity.StoryID("pending"), Name: "Pending"}}
 			vote := "5"
 			votedAt := time.Date(2026, time.September, 3, 12, 0, 0, 0, time.UTC)
 			for _, client := range []*entity.Client{owner, participant} {
@@ -113,7 +113,7 @@ func TestRoomRoundResetsClearParticipantVoteTimestamps(t *testing.T) {
 				tt.setup(room)
 			}
 
-			if err := tt.action(context.Background(), room, owner.ID); err != nil {
+			if err := tt.action(context.Background(), room, owner.ID.String()); err != nil {
 				t.Fatalf("round reset returned error: %v", err)
 			}
 			for _, client := range []*entity.Client{owner, participant} {
@@ -127,9 +127,9 @@ func TestRoomRoundResetsClearParticipantVoteTimestamps(t *testing.T) {
 
 func TestRoomRemovingOnlyActiveStoryClearsVoteTimestamps(t *testing.T) {
 	room := entity.NewRoom(clientcollection.New())
-	owner := room.NewClient("owner")
-	participant := room.NewClient("participant")
-	room.Stories = []entity.Story{{ID: "only", Name: "Only story"}}
+	owner := room.NewClient(entity.ClientID("owner"))
+	participant := room.NewClient(entity.ClientID("participant"))
+	room.Stories = []entity.Story{{ID: entity.StoryID("only"), Name: "Only story"}}
 	vote := "5"
 	votedAt := time.Now().UTC()
 	for _, client := range []*entity.Client{owner, participant} {
@@ -138,7 +138,7 @@ func TestRoomRemovingOnlyActiveStoryClearsVoteTimestamps(t *testing.T) {
 		client.VotedAt = &votedAt
 	}
 
-	if err := room.RemoveStory(context.Background(), owner.ID, "only"); err != nil {
+	if err := room.RemoveStory(context.Background(), owner.ID, entity.StoryID("only")); err != nil {
 		t.Fatalf("remove story returned error: %v", err)
 	}
 	for _, client := range []*entity.Client{owner, participant} {
@@ -150,8 +150,8 @@ func TestRoomRemovingOnlyActiveStoryClearsVoteTimestamps(t *testing.T) {
 
 func TestRoomStoryTitleEditPreservesVoteTimestamp(t *testing.T) {
 	room := entity.NewRoom(clientcollection.New())
-	owner := room.NewClient("owner")
-	room.Stories = []entity.Story{{ID: "current", Name: "Original"}}
+	owner := room.NewClient(entity.ClientID("owner"))
+	room.Stories = []entity.Story{{ID: entity.StoryID("current"), Name: "Original"}}
 	vote := "5"
 	votedAt := time.Date(2026, time.September, 3, 12, 0, 0, 0, time.UTC)
 	owner.CurrentVote = entity.VotePtr(vote)

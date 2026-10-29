@@ -95,7 +95,7 @@ func (r *Room) StartedAt() time.Time {
 	return r.startedAt
 }
 
-func (r *Room) NewClient(id string) *Client {
+func (r *Room) NewClient(id ClientID) *Client {
 	client := newClient(id)
 	r.Clients.Add(client)
 	client.room = r
@@ -107,8 +107,8 @@ func (r *Room) NewClient(id string) *Client {
 	return client
 }
 
-func (r *Room) RemoveClient(ctx context.Context, clientID string) error {
-	r.Clients.Remove(clientID)
+func (r *Room) RemoveClient(ctx context.Context, clientID ClientID) error {
+	r.Clients.Remove(clientID.String())
 
 	if r.CountOwners() == 0 && r.Clients.Count() > 0 {
 		if client, ok := r.Clients.First(); ok {
@@ -122,7 +122,7 @@ func (r *Room) RemoveClient(ctx context.Context, clientID string) error {
 }
 
 func (r *Room) ToggleBacklogMode(ctx context.Context, clientID string) error {
-	client, ok := r.FindClient(clientID)
+	client, ok := r.FindClient(ClientID(clientID))
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
 	}
@@ -133,7 +133,7 @@ func (r *Room) ToggleBacklogMode(ctx context.Context, clientID string) error {
 	if !r.BacklogMode {
 		r.BacklogMode = true
 		if r.CurrentStory != "" {
-			r.Stories = []Story{{ID: uuid.NewString(), Name: r.CurrentStory}}
+			r.Stories = []Story{{ID: StoryID(uuid.NewString()), Name: r.CurrentStory}}
 			r.CurrentStoryIndex = 0
 		}
 	} else {
@@ -147,7 +147,7 @@ func (r *Room) ToggleBacklogMode(ctx context.Context, clientID string) error {
 	return nil
 }
 
-func (r *Room) AddStory(ctx context.Context, clientID string, name string) error {
+func (r *Room) AddStory(ctx context.Context, clientID ClientID, name string) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
@@ -160,14 +160,14 @@ func (r *Room) AddStory(ctx context.Context, clientID string, name string) error
 		r.BacklogMode = true
 	}
 
-	r.Stories = append(r.Stories, Story{ID: uuid.NewString(), Name: name})
+	r.Stories = append(r.Stories, Story{ID: StoryID(uuid.NewString()), Name: name})
 	if len(r.Stories) == 1 {
 		r.CurrentStoryIndex = 0
 	}
 	return nil
 }
 
-func (r *Room) RemoveStory(ctx context.Context, clientID string, storyID string) error {
+func (r *Room) RemoveStory(ctx context.Context, clientID ClientID, storyID StoryID) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
@@ -208,7 +208,7 @@ func (r *Room) RemoveStory(ctx context.Context, clientID string, storyID string)
 }
 
 // SelectStory selects a pending story and starts a fresh voting round.
-func (r *Room) SelectStory(ctx context.Context, clientID string, storyID string) error {
+func (r *Room) SelectStory(ctx context.Context, clientID ClientID, storyID StoryID) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
@@ -241,7 +241,7 @@ func (r *Room) SelectStory(ctx context.Context, clientID string, storyID string)
 
 // ReorderStory moves a story to targetIndex. The current story remains
 // identified by its stable ID.
-func (r *Room) ReorderStory(ctx context.Context, clientID string, storyID string, targetIndex int) error {
+func (r *Room) ReorderStory(ctx context.Context, clientID ClientID, storyID StoryID, targetIndex int) error {
 	storyIndex, err := r.validateReorderStory(clientID, storyID, targetIndex)
 	if err != nil {
 		return err
@@ -258,7 +258,7 @@ func (r *Room) ReorderStory(ctx context.Context, clientID string, storyID string
 	return nil
 }
 
-func (r *Room) validateReorderStory(clientID string, storyID string, targetIndex int) (int, error) {
+func (r *Room) validateReorderStory(clientID ClientID, storyID StoryID, targetIndex int) (int, error) {
 	client, ok := r.FindClient(clientID)
 	if !ok {
 		return 0, fmt.Errorf("client %s not found in room %s", clientID, r.ID)
@@ -281,14 +281,14 @@ func (r *Room) validateReorderStory(clientID string, storyID string, targetIndex
 	return storyIndex, nil
 }
 
-func (r *Room) currentStoryID() string {
+func (r *Room) currentStoryID() StoryID {
 	if r.CurrentStoryIndex < 0 || r.CurrentStoryIndex >= len(r.Stories) {
 		return ""
 	}
 	return r.Stories[r.CurrentStoryIndex].ID
 }
 
-func (r *Room) updateCurrentStoryIndex(storyIndex, targetIndex int, currentStoryID string) {
+func (r *Room) updateCurrentStoryIndex(storyIndex, targetIndex int, currentStoryID StoryID) {
 	if currentStoryID != "" {
 		r.CurrentStoryIndex = r.storyIndexByID(currentStoryID)
 		return
@@ -305,7 +305,7 @@ func (r *Room) updateCurrentStoryIndex(storyIndex, targetIndex int, currentStory
 	}
 }
 
-func (r *Room) storyIndexByID(storyID string) int {
+func (r *Room) storyIndexByID(storyID StoryID) int {
 	for index, story := range r.Stories {
 		if story.ID == storyID {
 			return index
@@ -314,7 +314,7 @@ func (r *Room) storyIndexByID(storyID string) int {
 	return -1
 }
 
-func (r *Room) AdvanceToNextStory(ctx context.Context, clientID string) error {
+func (r *Room) AdvanceToNextStory(ctx context.Context, clientID ClientID) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
@@ -333,7 +333,7 @@ func (r *Room) AdvanceToNextStory(ctx context.Context, clientID string) error {
 	return nil
 }
 
-func (r *Room) PrevStory(ctx context.Context, clientID string) error {
+func (r *Room) PrevStory(ctx context.Context, clientID ClientID) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
@@ -367,7 +367,7 @@ func (r *Room) getCurrentStoryName() string {
 }
 
 func (r *Room) ResetVoting(ctx context.Context, clientID string) error {
-	client, ok := r.FindClient(clientID)
+	client, ok := r.FindClient(ClientID(clientID))
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
 	}
@@ -401,7 +401,7 @@ func (r *Room) CountOwners() int {
 	}).Count()
 }
 
-func (r *Room) ToggleSpectator(ctx context.Context, clientID string, targetClientID string) error {
+func (r *Room) ToggleSpectator(ctx context.Context, clientID ClientID, targetClientID ClientID) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
@@ -420,7 +420,7 @@ func (r *Room) ToggleSpectator(ctx context.Context, clientID string, targetClien
 	return nil
 }
 
-func (r *Room) ToggleOwner(ctx context.Context, clientID string, targetClientID string) error {
+func (r *Room) ToggleOwner(ctx context.Context, clientID ClientID, targetClientID ClientID) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
@@ -452,7 +452,7 @@ func (r *Room) ToggleOwner(ctx context.Context, clientID string, targetClientID 
 
 // AdminToggleOwner toggles a client's owner status without checking
 // that the caller is an owner
-func (r *Room) AdminToggleOwner(ctx context.Context, targetClientID string) error {
+func (r *Room) AdminToggleOwner(ctx context.Context, targetClientID ClientID) error {
 	owners := r.Clients.Filter(func(client *Client) bool {
 		return client.IsOwner
 	})
@@ -475,7 +475,7 @@ func (r *Room) AdminToggleOwner(ctx context.Context, targetClientID string) erro
 	return nil
 }
 
-func (r *Room) SetCurrentStory(ctx context.Context, clientID string, story string) error {
+func (r *Room) SetCurrentStory(ctx context.Context, clientID ClientID, story string) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
@@ -493,7 +493,7 @@ func (r *Room) SetCurrentStory(ctx context.Context, clientID string, story strin
 }
 
 func (r *Room) ToggleReveal(ctx context.Context, clientID string) error {
-	client, ok := r.FindClient(clientID)
+	client, ok := r.FindClient(ClientID(clientID))
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
 	}
@@ -694,13 +694,13 @@ func (r *Room) IsEmpty() bool {
 	return r.Clients.Count() == 0
 }
 
-func (r *Room) FindClient(clientID string) (*Client, bool) {
+func (r *Room) FindClient(clientID ClientID) (*Client, bool) {
 	return r.Clients.Filter(func(client *Client) bool {
 		return client.ID == clientID
 	}).First()
 }
 
-func (r *Room) Vote(ctx context.Context, clientID string, vote *Vote) error {
+func (r *Room) Vote(ctx context.Context, clientID ClientID, vote *Vote) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
@@ -719,7 +719,7 @@ func (r *Room) Vote(ctx context.Context, clientID string, vote *Vote) error {
 	return nil
 }
 
-func (r *Room) UpdateClientName(ctx context.Context, clientID string, name string) error {
+func (r *Room) UpdateClientName(ctx context.Context, clientID ClientID, name string) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)

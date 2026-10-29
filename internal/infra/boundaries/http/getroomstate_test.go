@@ -52,13 +52,13 @@ func TestGetRoomStateAPI_Handle_Success(t *testing.T) {
 	api := NewGetRoomStateAPI(mockHub, middleware.NewAdminMiddleware(apiKey))
 
 	client1 := &entity.Client{
-		ID:          "client1",
+		ID: entity.ClientID("client1"),
 		Name:        "Alice",
 		IsSpectator: false,
 		IsOwner:     true,
 	}
 	client2 := &entity.Client{
-		ID:          "client2",
+		ID: entity.ClientID("client2"),
 		Name:        "Bob",
 		IsSpectator: true,
 		IsOwner:     false,

@@ -98,7 +98,7 @@ func NewKickNotification() KickNotification {
 func mapStories(stories []entity.Story) []Story {
 	return lo.Map(stories, func(s entity.Story, _ int) Story {
 		return Story{
-			ID:                 s.ID,
+			ID:                 string(s.ID),
 			Name:               s.Name,
 			Result:             s.Result,
 			MostAppearingVotes: s.MostAppearingVotes,
@@ -116,7 +116,7 @@ func MapToParticipants(clients []*entity.Client) []Participant {
 		clients,
 		func(client *entity.Client, _ int) Participant {
 			return Participant{
-				ID:          client.ID,
+				ID:          string(client.ID),
 				Name:        client.Name,
 				Vote:        client.CurrentVote.Ptr(),
 				HasVoted:    client.HasVoted,
