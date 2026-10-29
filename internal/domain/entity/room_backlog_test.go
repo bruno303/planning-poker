@@ -92,7 +92,7 @@ func testToggleBacklogModeEnable(t *testing.T) {
 	room.BacklogMode = false
 	room.CurrentStory = "Story 1"
 
-	err := room.ToggleBacklogMode(context.Background(), "client1")
+	err := room.ToggleBacklogMode(context.Background(), cid("client1"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -109,7 +109,7 @@ func testToggleBacklogModeDisable(t *testing.T) {
 	room.Stories = []Story{{Name: "Story A"}, {Name: "Story B"}}
 	room.CurrentStoryIndex = 1
 
-	err := room.ToggleBacklogMode(context.Background(), "client1")
+	err := room.ToggleBacklogMode(context.Background(), cid("client1"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -127,7 +127,7 @@ func testToggleBacklogModeNonOwner(t *testing.T) {
 	mockCC.EXPECT().First().Return(nonOwner, true)
 	room := &Room{ID: "room1", Clients: mockCC}
 
-	if err := room.ToggleBacklogMode(context.Background(), "client2"); err == nil {
+	if err := room.ToggleBacklogMode(context.Background(), cid("client2")); err == nil {
 		t.Error("expected error, got nil")
 	}
 }
@@ -140,7 +140,7 @@ func testToggleBacklogModeClientNotFound(t *testing.T) {
 	mockCC.EXPECT().First().Return(nil, false)
 	room := &Room{ID: "room1", Clients: mockCC}
 
-	if err := room.ToggleBacklogMode(context.Background(), "nonexistent"); err == nil {
+	if err := room.ToggleBacklogMode(context.Background(), cid("nonexistent")); err == nil {
 		t.Error("expected error, got nil")
 	}
 }

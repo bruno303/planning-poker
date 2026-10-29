@@ -55,7 +55,7 @@ func TestClientVoteTracksLatestNonEmptySelectionAndClearsOnReset(t *testing.T) {
 		t.Fatal("replacement vote did not replace the timestamp")
 	}
 
-	if err := room.ResetVoting(context.Background(), owner.ID.String()); err != nil {
+	if err := room.ResetVoting(context.Background(), owner.ID); err != nil {
 		t.Fatalf("reset voting returned error: %v", err)
 	}
 	if owner.CurrentVote != nil || owner.HasVoted || owner.VotedAt != nil {

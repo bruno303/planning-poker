@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bruno303/go-toolkit/pkg/log"
-
 	"planning-poker/internal/domain/entity"
 )
 
@@ -65,8 +63,7 @@ func (sc SerializedClient) Client() *entity.Client {
 		IsOwner:     sc.IsOwner,
 	}
 
-	return client.
-		WithLogger(log.NewLogger("planningpoker.client"))
+	return client
 }
 
 func SerializeRoom(room *entity.Room) ([]byte, error) {

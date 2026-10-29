@@ -5,6 +5,7 @@ import (
 	"planning-poker/internal/application/lock"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
 	"planning-poker/internal/domain"
+	"planning-poker/internal/domain/entity"
 )
 
 type (
@@ -35,7 +36,7 @@ func (uc ToggleBacklogModeUseCase) Execute(ctx context.Context, cmd ToggleBacklo
 			return err
 		}
 
-		if err := room.ToggleBacklogMode(ctx, cmd.SenderID); err != nil {
+		if err := room.ToggleBacklogMode(ctx, entity.ClientID(cmd.SenderID)); err != nil {
 			return err
 		}
 

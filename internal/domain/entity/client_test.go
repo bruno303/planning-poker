@@ -34,9 +34,6 @@ func assertNewClient(t *testing.T, client *Client, wantID string) {
 	if client.IsOwner {
 		t.Errorf("newClient() IsOwner = %v, want false", client.IsOwner)
 	}
-	if client.logger == nil {
-		t.Error("newClient() logger is nil")
-	}
 }
 
 func assertVoteResult(t *testing.T, client *Client, wantVote *Vote, wantHasVoted bool) {

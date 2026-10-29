@@ -3,8 +3,6 @@ package entity
 import (
 	"context"
 	"time"
-
-	"github.com/bruno303/go-toolkit/pkg/log"
 )
 
 type (
@@ -17,21 +15,13 @@ type (
 		VotedAt     *time.Time
 		IsSpectator bool
 		IsOwner     bool
-
-		logger log.Logger
 	}
 )
 
 func newClient(id ClientID) *Client {
 	return &Client{
-		ID:     id,
-		logger: log.NewLogger("planningpoker.client"),
+		ID: id,
 	}
-}
-
-func (c *Client) WithLogger(logger log.Logger) *Client {
-	c.logger = logger
-	return c
 }
 
 func (c *Client) applyVote(vote *Vote) {

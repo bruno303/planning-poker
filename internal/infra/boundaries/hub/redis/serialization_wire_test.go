@@ -218,7 +218,7 @@ func newRevealedEmptyBacklogRoom(t *testing.T) *entity.Room {
 	if err := room.AddStory(ctx, owner.ID, "Checkout flow"); err != nil {
 		t.Fatalf("add story: %v", err)
 	}
-	if err := room.ToggleReveal(ctx, owner.ID.String()); err != nil {
+	if err := room.ToggleReveal(ctx, owner.ID); err != nil {
 		t.Fatalf("toggle reveal: %v", err)
 	}
 	if !room.Reveal {

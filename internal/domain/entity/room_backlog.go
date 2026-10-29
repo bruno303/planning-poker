@@ -9,8 +9,8 @@ import (
 	"github.com/google/uuid"
 )
 
-func (r *Room) ToggleBacklogMode(ctx context.Context, clientID string) error {
-	client, ok := r.FindClient(ClientID(clientID))
+func (r *Room) ToggleBacklogMode(ctx context.Context, clientID ClientID) error {
+	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
 	}

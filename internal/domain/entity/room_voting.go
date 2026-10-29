@@ -47,8 +47,8 @@ func (r *Room) applyVote(client *Client, vote *Vote) bool {
 	return true
 }
 
-func (r *Room) ToggleReveal(ctx context.Context, clientID string) error {
-	client, ok := r.FindClient(ClientID(clientID))
+func (r *Room) ToggleReveal(ctx context.Context, clientID ClientID) error {
+	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
 	}
@@ -60,8 +60,8 @@ func (r *Room) ToggleReveal(ctx context.Context, clientID string) error {
 	return nil
 }
 
-func (r *Room) ResetVoting(ctx context.Context, clientID string) error {
-	client, ok := r.FindClient(ClientID(clientID))
+func (r *Room) ResetVoting(ctx context.Context, clientID ClientID) error {
+	client, ok := r.FindClient(clientID)
 	if !ok {
 		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
 	}

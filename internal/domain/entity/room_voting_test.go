@@ -383,7 +383,7 @@ func TestRoom_ResetVoting(t *testing.T) {
 		room.Reveal = true
 		room.CurrentStory = "Keep this story"
 
-		err := room.ResetVoting(ctx, "client1")
+		err := room.ResetVoting(ctx, cid("client1"))
 		if err != nil {
 			t.Errorf("ResetVoting() error = %v", err)
 		}
@@ -413,7 +413,7 @@ func TestRoom_ResetVoting(t *testing.T) {
 
 		room := NewRoom(mockCC)
 
-		err := room.ResetVoting(ctx, "client1")
+		err := room.ResetVoting(ctx, cid("client1"))
 		if err == nil {
 			t.Error("ResetVoting() expected error for non-owner")
 		}
@@ -438,7 +438,7 @@ func TestRoom_ToggleReveal(t *testing.T) {
 		room := NewRoom(mockCC)
 		room.Reveal = false
 
-		err := room.ToggleReveal(ctx, "owner")
+		err := room.ToggleReveal(ctx, cid("owner"))
 		if err != nil {
 			t.Errorf("ToggleReveal() error = %v", err)
 		}
@@ -451,7 +451,7 @@ func TestRoom_ToggleReveal(t *testing.T) {
 		mockCC.EXPECT().Filter(gomock.Any()).Return(mockCC)
 		mockCC.EXPECT().First().Return(owner, true)
 
-		err = room.ToggleReveal(ctx, "owner")
+		err = room.ToggleReveal(ctx, cid("owner"))
 		if err != nil {
 			t.Errorf("ToggleReveal() error = %v", err)
 		}
@@ -473,7 +473,7 @@ func TestRoom_ToggleReveal(t *testing.T) {
 
 		room := NewRoom(mockCC)
 
-		err := room.ToggleReveal(ctx, "client1")
+		err := room.ToggleReveal(ctx, cid("client1"))
 		if err == nil {
 			t.Error("ToggleReveal() expected error for non-owner")
 		}
