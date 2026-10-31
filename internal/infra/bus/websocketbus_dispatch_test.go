@@ -194,18 +194,18 @@ func TestMapUsecases_DispatchesSupportedCommands(t *testing.T) {
 }
 
 func TestGuardedCommandAndExpectedRoomVersion(t *testing.T) {
-	version, ok := expectedRoomVersion(map[string]uint64{"expectedRoomVersion": 7})
-	if !ok || version == nil || *version != 7 {
-		t.Fatalf("expectedRoomVersion returned (%v, %t), want (7, true)", version, ok)
+	version, ok, err := expectedRoomVersion(map[string]uint64{"expectedRoomVersion": 7})
+	if err != nil || !ok || version == nil || *version != 7 {
+		t.Fatalf("expectedRoomVersion returned (%v, %t, %v), want (7, true, nil)", version, ok, err)
 	}
-	if _, ok := expectedRoomVersion(map[string]string{"expectedRoomVersion": "invalid"}); ok {
-		t.Fatal("expectedRoomVersion accepted an invalid revision")
+	if _, _, err := expectedRoomVersion(map[string]string{"expectedRoomVersion": "invalid"}); !errors.Is(err, ErrInvalidPayload) {
+		t.Fatalf("expectedRoomVersion accepted an invalid revision: %v", err)
 	}
-	if _, ok := expectedRoomVersion(nil); ok {
-		t.Fatal("expectedRoomVersion accepted a missing revision")
+	if version, ok, err := expectedRoomVersion(nil); err != nil || ok || version != nil {
+		t.Fatalf("expectedRoomVersion returned (%v, %t, %v) for a missing revision, want (nil, false, nil)", version, ok, err)
 	}
-	if _, ok := expectedRoomVersion(func() {}); ok {
-		t.Fatal("expectedRoomVersion accepted an unserializable payload")
+	if _, _, err := expectedRoomVersion(func() {}); !errors.Is(err, ErrInvalidPayload) {
+		t.Fatalf("expectedRoomVersion accepted an unserializable payload: %v", err)
 	}
 }
 
@@ -289,7 +289,7 @@ func TestWebsocketBus_Process_WhenUseCaseReportsStaleVersion(t *testing.T) {
 	calls := map[string]useCaseCall{
 		"reset": func(context.Context, WebSocketMessage) error { return domain.ErrStaleRoomVersion },
 	}
-	bus := NewWebsocketBus("client-1", "room-1", serverConn, hub, usecase.UseCasesFacade{}, WebSocketConfig{WriteTimeout: time.Second})
+	bus := NewWebsocketBus("client-1", "room-1", serverConn, hub, usecase.UseCasesFacade{}, nil, WebSocketConfig{WriteTimeout: time.Second})
 	bus.calls = calls
 	bus.Detach()
 	defer bus.Close()
@@ -329,6 +329,7 @@ func TestWebsocketBus_Listen_DispatchesIncomingMessage(t *testing.T) {
 		serverConn,
 		domain.NewMockHub(ctrl),
 		usecase.UseCasesFacade{UpdateName: updateName, LeaveRoom: leaveRoom},
+		nil,
 		WebSocketConfig{ReadTimeout: time.Second, WriteTimeout: time.Second, PingInterval: time.Second},
 	)
 
@@ -356,7 +357,7 @@ func TestWebsocketBus_Send_WritesMessage(t *testing.T) {
 	serverConn, clientConn := websocketPair(t)
 	defer clientConn.Close()
 
-	bus := NewWebsocketBus("client-1", "room-1", serverConn, domain.NewMockHub(gomock.NewController(t)), usecase.UseCasesFacade{}, WebSocketConfig{WriteTimeout: time.Second})
+	bus := NewWebsocketBus("client-1", "room-1", serverConn, domain.NewMockHub(gomock.NewController(t)), usecase.UseCasesFacade{}, nil, WebSocketConfig{WriteTimeout: time.Second})
 	bus.Detach()
 	defer bus.Close()
 
@@ -379,7 +380,7 @@ func TestWebsocketBus_Send_WhenConnectionClosedReturnsError(t *testing.T) {
 	serverConn, clientConn := websocketPair(t)
 	defer clientConn.Close()
 
-	bus := NewWebsocketBus("client-1", "room-1", serverConn, domain.NewMockHub(ctrl), usecase.UseCasesFacade{}, WebSocketConfig{})
+	bus := NewWebsocketBus("client-1", "room-1", serverConn, domain.NewMockHub(ctrl), usecase.UseCasesFacade{}, nil, WebSocketConfig{})
 	bus.Detach()
 	if err := bus.Close(); err != nil {
 		t.Fatalf("Close returned error: %v", err)
@@ -395,7 +396,7 @@ func TestWebsocketBus_Send_WhenSocketWriteFailsReturnsError(t *testing.T) {
 	serverConn, clientConn := websocketPair(t)
 	defer clientConn.Close()
 
-	bus := NewWebsocketBus("client-1", "room-1", serverConn, domain.NewMockHub(ctrl), usecase.UseCasesFacade{}, WebSocketConfig{})
+	bus := NewWebsocketBus("client-1", "room-1", serverConn, domain.NewMockHub(ctrl), usecase.UseCasesFacade{}, nil, WebSocketConfig{})
 	bus.Detach()
 	if err := serverConn.Close(); err != nil {
 		t.Fatalf("failed to close server connection: %v", err)

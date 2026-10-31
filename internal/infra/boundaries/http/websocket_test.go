@@ -19,7 +19,7 @@ import (
 
 func TestWebsocketAPI_Handle_MissingRoomIDReturnsBadRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	api := NewWebsocketAPI(usecase.UseCasesFacade{}, bus.NewWebSocketBusFactory(domain.NewMockHub(ctrl), usecase.UseCasesFacade{}, bus.WebSocketConfig{}))
+	api := NewWebsocketAPI(usecase.UseCasesFacade{}, bus.NewWebSocketBusFactory(domain.NewMockHub(ctrl), usecase.UseCasesFacade{}, nil, bus.WebSocketConfig{}))
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/planning//ws", nil)
 
@@ -30,7 +30,7 @@ func TestWebsocketAPI_Handle_MissingRoomIDReturnsBadRequest(t *testing.T) {
 
 func TestWebsocketAPI_Handle_WhenUpgradeFailsReturnsBadRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	api := NewWebsocketAPI(usecase.UseCasesFacade{}, bus.NewWebSocketBusFactory(domain.NewMockHub(ctrl), usecase.UseCasesFacade{}, bus.WebSocketConfig{}))
+	api := NewWebsocketAPI(usecase.UseCasesFacade{}, bus.NewWebSocketBusFactory(domain.NewMockHub(ctrl), usecase.UseCasesFacade{}, nil, bus.WebSocketConfig{}))
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/planning/room-1/ws", nil)
 	request = mux.SetURLVars(request, map[string]string{"roomID": "room-1"})
@@ -49,7 +49,7 @@ func TestWebsocketAPI_Handle_WhenCreateClientFailsSendsWebsocketError(t *testing
 
 	api := NewWebsocketAPI(
 		usecase.UseCasesFacade{CreateClient: createClient},
-		bus.NewWebSocketBusFactory(domain.NewMockHub(ctrl), usecase.UseCasesFacade{}, bus.WebSocketConfig{}),
+		bus.NewWebSocketBusFactory(domain.NewMockHub(ctrl), usecase.UseCasesFacade{}, nil, bus.WebSocketConfig{}),
 	)
 	server := newWebsocketAPITestServer(t, api)
 	defer server.Close()
@@ -72,7 +72,7 @@ func TestWebsocketAPI_Handle_WhenJoinFailsSendsWebsocketError(t *testing.T) {
 
 	api := NewWebsocketAPI(
 		usecase.UseCasesFacade{JoinRoom: joinRoom},
-		bus.NewWebSocketBusFactory(domain.NewMockHub(ctrl), usecase.UseCasesFacade{}, bus.WebSocketConfig{}),
+		bus.NewWebSocketBusFactory(domain.NewMockHub(ctrl), usecase.UseCasesFacade{}, nil, bus.WebSocketConfig{}),
 	)
 	server := newWebsocketAPITestServer(t, api)
 	defer server.Close()

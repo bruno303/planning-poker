@@ -14,6 +14,7 @@ import (
 
 	"github.com/bruno303/go-toolkit/pkg/log"
 	"github.com/bruno303/go-toolkit/pkg/trace"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/samber/lo"
 )
@@ -22,6 +23,7 @@ type (
 	WebSocketBusFactory struct {
 		hub          domain.Hub
 		usecases     usecase.UseCasesFacade
+		ledger       CommandLedger
 		websocketCfg WebSocketConfig
 	}
 	WebSocketBusFactoryInput struct {
@@ -30,8 +32,9 @@ type (
 		Socket   *websocket.Conn
 	}
 	WebSocketMessage struct {
-		Type    string `json:"type"`
-		Payload any    `json:"payload"`
+		Type      string `json:"type"`
+		CommandID string `json:"commandId,omitempty"`
+		Payload   any    `json:"payload"`
 	}
 	UpdateNamePayload struct {
 		Username string `json:"username"`
@@ -77,6 +80,7 @@ type (
 		cfg         WebSocketConfig
 		calls       map[string]useCaseCall
 		usecases    usecase.UseCasesFacade
+		ledger      CommandLedger
 		roomID      string
 		closed      atomic.Bool
 		closeOnce   sync.Once
@@ -94,10 +98,11 @@ type (
 
 var _ domain.Bus = (*WebsocketBus)(nil)
 
-func NewWebSocketBusFactory(hub domain.Hub, usecases usecase.UseCasesFacade, websocketCfg WebSocketConfig) *WebSocketBusFactory {
+func NewWebSocketBusFactory(hub domain.Hub, usecases usecase.UseCasesFacade, ledger CommandLedger, websocketCfg WebSocketConfig) *WebSocketBusFactory {
 	return &WebSocketBusFactory{
 		hub:          hub,
 		usecases:     usecases,
+		ledger:       ledger,
 		websocketCfg: websocketCfg,
 	}
 }
@@ -109,6 +114,7 @@ func (f *WebSocketBusFactory) NewBus(input WebSocketBusFactoryInput) domain.Bus 
 		input.Socket,
 		f.hub,
 		f.usecases,
+		f.ledger,
 		f.websocketCfg,
 	)
 }
@@ -119,6 +125,7 @@ func NewWebsocketBus(
 	socket *websocket.Conn,
 	hub domain.Hub,
 	usecases usecase.UseCasesFacade,
+	ledger CommandLedger,
 	websocketCfg WebSocketConfig,
 ) *WebsocketBus {
 	return &WebsocketBus{
@@ -128,6 +135,7 @@ func NewWebsocketBus(
 		cfg:      websocketCfg,
 		logger:   log.NewLogger("websocket.client"),
 		usecases: usecases,
+		ledger:   ledger,
 		calls:    mapUsecases(usecases, id, roomID),
 		roomID:   roomID,
 		done:     make(chan struct{}),
@@ -175,6 +183,27 @@ func (c *WebsocketBus) Send(ctx context.Context, message any) error {
 	return err
 }
 
+// sendRaw writes pre-encoded bytes using the same write serialization and
+// deadline discipline as Send.
+func (c *WebsocketBus) sendRaw(ctx context.Context, payload []byte) error {
+	_, err := trace.Trace(ctx, trace.NameConfig("WebsocketBus", "sendRaw"), func(ctx context.Context) (any, error) {
+		if c.closed.Load() {
+			c.logger.Warn(ctx, "Attempted to send message to closed connection for client %v", c.ID)
+			return nil, errors.New("connection closed")
+		}
+		c.logger.Debug(ctx, "Sending raw message to client: %v", payload)
+		c.writeMu.Lock()
+		defer c.writeMu.Unlock()
+		_ = c.conn.SetWriteDeadline(time.Now().Add(c.cfg.WriteTimeout))
+		err := c.conn.WriteMessage(websocket.TextMessage, payload)
+		if err != nil {
+			c.logger.Error(ctx, fmt.Sprintf("WriteMessage error for client %v: %v", c.ID, err), err)
+		}
+		return nil, err
+	})
+	return err
+}
+
 func (c *WebsocketBus) receive(ctx context.Context) (WebSocketMessage, error) {
 	msg, err := trace.Trace(ctx, trace.NameConfig("WebsocketBus", "receive"), func(ctx context.Context) (any, error) {
 		var msg WebSocketMessage
@@ -211,11 +240,127 @@ func (c *WebsocketBus) process(ctx context.Context, msg WebSocketMessage) {
 	c.logger.Debug(ctx, "Processing message for event type '%v' with payload: %v", msg.Type, msg)
 	usecaseCall, exists := c.calls[msg.Type]
 	if !exists {
-		c.logger.Error(ctx, fmt.Sprintf("Unknown event type '%v' for client %v", msg.Type, c.ID), errors.New("unknown event type"))
+		c.processUnknown(ctx, msg)
 		return
 	}
-	err := usecaseCall(ctx, msg)
+
+	if msg.CommandID == "" {
+		c.processLegacy(ctx, usecaseCall, msg)
+		return
+	}
+
+	c.processCommand(ctx, usecaseCall, msg)
+}
+
+func (c *WebsocketBus) processUnknown(ctx context.Context, msg WebSocketMessage) {
+	if msg.CommandID != "" {
+		_ = c.Send(ctx, newCommandError(msg.CommandID, wireCodeUnknownCommand, "unknown command type", nil))
+		return
+	}
+	c.logger.Error(ctx, fmt.Sprintf("Unknown event type '%v' for client %v", msg.Type, c.ID), errors.New("unknown event type"))
+}
+
+func (c *WebsocketBus) processCommand(ctx context.Context, usecaseCall useCaseCall, msg WebSocketMessage) {
+	parsed, err := uuid.Parse(msg.CommandID)
 	if err != nil {
+		_ = c.Send(ctx, newCommandError(msg.CommandID, wireCodeInvalidCommandID, "commandId must be a UUID", nil))
+		return
+	}
+	commandID := parsed.String()
+
+	if c.ledger == nil {
+		c.logger.Error(ctx, fmt.Sprintf("Command ledger unavailable for client %v", c.ID), errors.New("command ledger is not configured"))
+		_ = c.Send(ctx, newCommandError(commandID, wireCodeInternal, "internal error", nil))
+		return
+	}
+
+	outcome, found, err := c.ledger.Claim(ctx, c.roomID, c.ID, commandID)
+	if err != nil {
+		c.handleClaimError(ctx, commandID, err)
+		return
+	}
+
+	if found {
+		c.logger.Debug(ctx, "Replaying stored outcome for command %v of client %v", commandID, c.ID)
+		_ = c.sendRaw(ctx, outcome)
+		return
+	}
+
+	if err := usecaseCall(ctx, msg); err != nil {
+		c.finishError(ctx, commandID, err)
+		return
+	}
+
+	c.finishAck(ctx, commandID)
+}
+
+func (c *WebsocketBus) handleClaimError(ctx context.Context, commandID string, err error) {
+	if errors.Is(err, ErrCommandInProgress) {
+		c.logger.Debug(ctx, "Command %v for client %v is already being processed", commandID, c.ID)
+		_ = c.Send(ctx, newCommandError(commandID, wireCodeCommandInProgress, "command is already being processed", nil))
+		return
+	}
+	c.logger.Error(ctx, fmt.Sprintf("Failed to claim command %v for client %v", commandID, c.ID), err)
+	_ = c.Send(ctx, newCommandError(commandID, wireCodeInternal, "internal error", nil))
+}
+
+func (c *WebsocketBus) finishError(ctx context.Context, commandID string, err error) {
+	frame := commandErrorFor(commandID, err)
+	if frame.Code == wireCodeStaleVersion {
+		version, loadErr := c.roomVersion(ctx)
+		if loadErr != nil {
+			c.logger.Debug(ctx, "Failed to load room %v while reporting stale command for client %v: %v", c.roomID, c.ID, loadErr)
+		} else {
+			frame.RoomVersion = version
+		}
+	}
+	if frame.Code == wireCodeInternal {
+		c.logger.Error(ctx, fmt.Sprintf("Error handling event for client %v", c.ID), err)
+	} else {
+		c.logger.Debug(ctx, "Command %v failed for client %v with code %v: %v", commandID, c.ID, frame.Code, err)
+	}
+	c.finishCommand(ctx, commandID, frame)
+}
+
+func (c *WebsocketBus) finishAck(ctx context.Context, commandID string) {
+	frame := newCommandAck(commandID, nil)
+	version, err := c.roomVersion(ctx)
+	if err != nil {
+		c.logger.Debug(ctx, "Failed to load room %v while acknowledging command for client %v: %v", c.roomID, c.ID, err)
+	} else {
+		frame.RoomVersion = version
+	}
+	c.finishCommand(ctx, commandID, frame)
+}
+
+func (c *WebsocketBus) roomVersion(ctx context.Context) (*uint64, error) {
+	room, err := c.hub.LoadRoom(ctx, c.roomID)
+	if err != nil {
+		return nil, err
+	}
+	version := room.RoomVersion
+	return &version, nil
+}
+
+// finishCommand stores the encoded frame as the command outcome and writes those
+// exact bytes back to the client.
+func (c *WebsocketBus) finishCommand(ctx context.Context, commandID string, frame any) {
+	payload, err := json.Marshal(frame)
+	if err != nil {
+		c.logger.Error(ctx, fmt.Sprintf("Failed to encode command frame for client %v", c.ID), err)
+		_ = c.Send(ctx, frame)
+		return
+	}
+
+	if err := c.ledger.Complete(ctx, c.roomID, c.ID, commandID, payload); err != nil {
+		c.logger.Error(ctx, fmt.Sprintf("Failed to store outcome of command %v for client %v", commandID, c.ID), err)
+	}
+
+	_ = c.sendRaw(ctx, payload)
+}
+
+func (c *WebsocketBus) processLegacy(ctx context.Context, usecaseCall useCaseCall, msg WebSocketMessage) {
+	if err := usecaseCall(ctx, msg); err != nil {
 		if errors.Is(err, domain.ErrStaleRoomVersion) {
 			room, loadErr := c.hub.LoadRoom(ctx, c.roomID)
 			version := uint64(0)
@@ -226,26 +371,31 @@ func (c *WebsocketBus) process(ctx context.Context, msg WebSocketMessage) {
 			return
 		}
 		c.logger.Error(ctx, fmt.Sprintf("Error handling event for client %v", c.ID), err)
-		return
 	}
 }
 
-func expectedRoomVersion(payload any) (*uint64, bool) {
+func expectedRoomVersion(payload any) (*uint64, bool, error) {
 	data, err := json.Marshal(payload)
 	if err != nil {
-		return nil, false
+		return nil, false, ErrInvalidPayload
 	}
 	var value struct {
 		ExpectedRoomVersion *uint64 `json:"expectedRoomVersion"`
 	}
-	if json.Unmarshal(data, &value) != nil || value.ExpectedRoomVersion == nil {
-		return nil, false
+	if json.Unmarshal(data, &value) != nil {
+		return nil, false, ErrInvalidPayload
 	}
-	return value.ExpectedRoomVersion, true
+	if value.ExpectedRoomVersion == nil {
+		return nil, false, nil
+	}
+	return value.ExpectedRoomVersion, true, nil
 }
 
 func withExpectedRoomVersion(payload any, execute func(*uint64) error) error {
-	expected, _ := expectedRoomVersion(payload)
+	expected, _, err := expectedRoomVersion(payload)
+	if err != nil {
+		return err
+	}
 	return execute(expected)
 }
 
@@ -318,7 +468,7 @@ func decodePayload(payload, out any) error {
 func withPayload[T any](payload any, execute func(T) error) error {
 	var decoded T
 	if err := decodePayload(payload, &decoded); err != nil {
-		return errors.New("invalid payload")
+		return ErrInvalidPayload
 	}
 
 	return execute(decoded)
