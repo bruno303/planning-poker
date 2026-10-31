@@ -1,103 +1,74 @@
 package dto
 
 import (
-	"time"
-
-	"planning-poker/internal/domain/entity"
 	"slices"
 	"strings"
+
+	"planning-poker/internal/domain/entity"
+	"planning-poker/internal/protocol"
 
 	"github.com/samber/lo"
 )
 
-type (
-	Story struct {
-		ID                 string   `json:"id"`
-		Name               string   `json:"name"`
-		Result             *float32 `json:"result,omitempty"`
-		MostAppearingVotes []string `json:"mostAppearingVotes"`
-		Voted              bool     `json:"voted"`
-	}
-
-	RoomState struct {
-		Type               string        `json:"type"`
-		StartedAt          *time.Time    `json:"startedAt,omitempty"`
-		Deck               entity.Deck   `json:"deck"`
-		CurrentStory       string        `json:"currentStory"`
-		Reveal             bool          `json:"reveal"`
-		Result             *float32      `json:"result,omitempty"`
-		MostAppearingVotes []string      `json:"mostAppearingVotes"`
-		Consensus          string        `json:"consensus,omitempty"`
-		LowestVote         *string       `json:"lowestVote,omitempty"`
-		HighestVote        *string       `json:"highestVote,omitempty"`
-		VoteRange          *int          `json:"voteRange,omitempty"`
-		VoteSpread         *int          `json:"voteSpread,omitempty"`
-		SpecialVoteCount   int           `json:"specialVoteCount,omitempty"`
-		Participants       []Participant `json:"participants"`
-		BacklogMode        bool          `json:"backlogMode"`
-		Stories            []Story       `json:"stories"`
-		CurrentStoryIndex  int           `json:"currentStoryIndex"`
-		RoomVersion        uint64        `json:"roomVersion"`
-	}
-	Participant struct {
-		ID          string     `json:"id"`
-		Name        string     `json:"name"`
-		Vote        *string    `json:"vote"`
-		HasVoted    bool       `json:"hasVoted"`
-		VotedAt     *time.Time `json:"votedAt,omitempty"`
-		IsSpectator bool       `json:"isSpectator"`
-		IsOwner     bool       `json:"isOwner"`
-	}
-
-	UpdateClientID struct {
-		Type     string `json:"type"`
-		ClientID string `json:"clientId"`
-	}
-
-	KickNotification struct {
-		Type string `json:"type"`
-	}
-)
-
-func NewRoomStateCommand(room *entity.Room) RoomState {
-	return RoomState{
-		Type:               "room-state",
-		StartedAt:          entity.OptionalUTCTime(room.StartedAt()),
-		Deck:               room.Deck(),
+func NewRoomStateCommand(room *entity.Room) protocol.RoomState {
+	deck := room.Deck()
+	return protocol.RoomState{
+		Type:      protocol.MessageTypeRoomState,
+		StartedAt: entity.OptionalUTCTime(room.StartedAt()),
+		Deck: protocol.DeckDescriptor{
+			ID:    deck.ID,
+			Name:  deck.Name,
+			Kind:  protocol.DeckKind(deck.Kind),
+			Cards: deck.Cards,
+		},
 		CurrentStory:       room.EffectiveCurrentStory(),
 		Reveal:             room.Reveal,
 		Participants:       MapToParticipants(room.Clients.Values()),
 		Result:             room.Result,
 		MostAppearingVotes: room.MostAppearingVotes,
-		Consensus:          room.Consensus,
+		Consensus:          optionalConsensus(room.Consensus),
 		LowestVote:         room.LowestVote,
 		HighestVote:        room.HighestVote,
 		VoteRange:          room.VoteRange,
 		VoteSpread:         room.VoteSpread,
-		SpecialVoteCount:   room.SpecialVoteCount,
-		BacklogMode:        room.BacklogMode,
+		SpecialVoteCount:   optionalInt(room.SpecialVoteCount),
+		BacklogMode:        lo.ToPtr(room.BacklogMode),
 		Stories:            mapStories(room.Stories),
-		CurrentStoryIndex:  room.CurrentStoryIndex,
+		CurrentStoryIndex:  lo.ToPtr(room.CurrentStoryIndex),
 		RoomVersion:        room.RoomVersion,
 	}
 }
 
-func NewUpdateClientIDCommand(clientID string) UpdateClientID {
-	return UpdateClientID{
-		Type:     "update-client-id",
+func NewUpdateClientIDCommand(clientID string) protocol.UpdateClientID {
+	return protocol.UpdateClientID{
+		Type:     protocol.MessageTypeUpdateClientID,
 		ClientID: clientID,
 	}
 }
 
-func NewKickNotification() KickNotification {
-	return KickNotification{
-		Type: "kicked",
+func NewKickNotification() protocol.Kicked {
+	return protocol.Kicked{
+		Type: protocol.MessageTypeKicked,
 	}
 }
 
-func mapStories(stories []entity.Story) []Story {
-	return lo.Map(stories, func(s entity.Story, _ int) Story {
-		return Story{
+func optionalConsensus(consensus string) *protocol.ConsensusLevel {
+	if consensus == "" {
+		return nil
+	}
+	return lo.ToPtr(protocol.ConsensusLevel(consensus))
+}
+
+func optionalInt(value int) *int {
+	if value == 0 {
+		return nil
+	}
+	return lo.ToPtr(value)
+}
+
+func mapStories(stories []entity.Story) []protocol.Story {
+	return lo.Map(stories, func(s entity.Story, _ int) protocol.Story {
+		return protocol.Story{
 			ID:                 s.ID,
 			Name:               s.Name,
 			Result:             s.Result,
@@ -107,15 +78,15 @@ func mapStories(stories []entity.Story) []Story {
 	})
 }
 
-func MapToParticipants(clients []*entity.Client) []Participant {
+func MapToParticipants(clients []*entity.Client) []protocol.Participant {
 	slices.SortFunc(clients, func(a, b *entity.Client) int {
 		return strings.Compare(a.Name, b.Name)
 	})
 
 	return lo.Map(
 		clients,
-		func(client *entity.Client, _ int) Participant {
-			return Participant{
+		func(client *entity.Client, _ int) protocol.Participant {
+			return protocol.Participant{
 				ID:          client.ID,
 				Name:        client.Name,
 				Vote:        client.CurrentVote,

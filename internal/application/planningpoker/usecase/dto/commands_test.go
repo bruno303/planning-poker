@@ -5,6 +5,7 @@ import (
 
 	"planning-poker/internal/domain/entity"
 	"planning-poker/internal/infra/boundaries/hub/clientcollection"
+	"planning-poker/internal/protocol"
 	"reflect"
 	"testing"
 
@@ -38,28 +39,34 @@ func TestNewRoomStateCommand(t *testing.T) {
 	room.SpecialVoteCount = 1
 	room.BacklogMode = true
 	room.RoomVersion = 4
+	deck := entity.DefaultDeck()
 	got := NewRoomStateCommand(room)
-	want := RoomState{
-		Type:         "room-state",
-		StartedAt:    &startedAt,
-		Deck:         entity.DefaultDeck(),
+	want := protocol.RoomState{
+		Type:      protocol.MessageTypeRoomState,
+		StartedAt: &startedAt,
+		Deck: protocol.DeckDescriptor{
+			ID:    deck.ID,
+			Name:  deck.Name,
+			Kind:  protocol.DeckKind(deck.Kind),
+			Cards: deck.Cards,
+		},
 		CurrentStory: "Story 1",
 		Reveal:       true,
-		Participants: []Participant{
+		Participants: []protocol.Participant{
 			{ID: "1", Name: "Alice", Vote: &vote, HasVoted: true, VotedAt: &votedAt, IsSpectator: false, IsOwner: true},
 			{ID: "2", Name: "Bob", Vote: nil, HasVoted: false, IsSpectator: true, IsOwner: false},
 		},
 		Result:             lo.ToPtr(float32(5)),
 		MostAppearingVotes: []string{"1", "2"},
-		Consensus:          "Medium",
+		Consensus:          lo.ToPtr(protocol.ConsensusLevelMedium),
 		LowestVote:         lo.ToPtr("3"),
 		HighestVote:        lo.ToPtr("8"),
 		VoteRange:          lo.ToPtr(5),
 		VoteSpread:         lo.ToPtr(2),
-		SpecialVoteCount:   1,
-		BacklogMode:        true,
-		Stories:            []Story{},
-		CurrentStoryIndex:  0,
+		SpecialVoteCount:   lo.ToPtr(1),
+		BacklogMode:        lo.ToPtr(true),
+		Stories:            []protocol.Story{},
+		CurrentStoryIndex:  lo.ToPtr(0),
 		RoomVersion:        4,
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -71,15 +78,15 @@ func TestNewRoomStateCommandIncludesDeckKind(t *testing.T) {
 	room := entity.NewRoomWithIDAndDeck("room1", clientcollection.New(), entity.DeckTypeTShirt)
 
 	got := NewRoomStateCommand(room)
-	if got.Deck.Kind != entity.DeckKindCategorical {
-		t.Errorf("room state deck kind = %q, want %q", got.Deck.Kind, entity.DeckKindCategorical)
+	if got.Deck.Kind != protocol.DeckKindCategorical {
+		t.Errorf("room state deck kind = %q, want %q", got.Deck.Kind, protocol.DeckKindCategorical)
 	}
 }
 
 func TestNewUpdateClientIDCommand(t *testing.T) {
 	got := NewUpdateClientIDCommand("client-123")
-	want := UpdateClientID{
-		Type:     "update-client-id",
+	want := protocol.UpdateClientID{
+		Type:     protocol.MessageTypeUpdateClientID,
 		ClientID: "client-123",
 	}
 	if got != want {
@@ -96,7 +103,7 @@ func TestMapToParticipants(t *testing.T) {
 	}
 	participants := MapToParticipants(clients)
 
-	expected := []Participant{
+	expected := []protocol.Participant{
 		{ID: "1", Name: "Alice", Vote: lo.ToPtr("5"), HasVoted: true, VotedAt: &votedAt, IsSpectator: false, IsOwner: false},
 		{ID: "2", Name: "Bob", Vote: lo.ToPtr("3"), HasVoted: true, IsSpectator: false, IsOwner: true},
 		{ID: "3", Name: "Charlie", Vote: lo.ToPtr("?"), HasVoted: true, IsSpectator: true, IsOwner: false},

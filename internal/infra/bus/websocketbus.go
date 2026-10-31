@@ -8,6 +8,7 @@ import (
 	"net"
 	"planning-poker/internal/application/planningpoker/usecase"
 	"planning-poker/internal/domain"
+	"planning-poker/internal/protocol"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -254,7 +255,7 @@ func (c *WebsocketBus) process(ctx context.Context, msg WebSocketMessage) {
 
 func (c *WebsocketBus) processUnknown(ctx context.Context, msg WebSocketMessage) {
 	if msg.CommandID != "" {
-		_ = c.Send(ctx, newCommandError(msg.CommandID, wireCodeUnknownCommand, "unknown command type", nil))
+		_ = c.Send(ctx, newCommandError(msg.CommandID, protocol.CommandErrorCodeUnknownCommand, "unknown command type", nil))
 		return
 	}
 	c.logger.Error(ctx, fmt.Sprintf("Unknown event type '%v' for client %v", msg.Type, c.ID), errors.New("unknown event type"))
@@ -263,14 +264,14 @@ func (c *WebsocketBus) processUnknown(ctx context.Context, msg WebSocketMessage)
 func (c *WebsocketBus) processCommand(ctx context.Context, usecaseCall useCaseCall, msg WebSocketMessage) {
 	parsed, err := uuid.Parse(msg.CommandID)
 	if err != nil {
-		_ = c.Send(ctx, newCommandError(msg.CommandID, wireCodeInvalidCommandID, "commandId must be a UUID", nil))
+		_ = c.Send(ctx, newCommandError(msg.CommandID, protocol.CommandErrorCodeInvalidCommandID, "commandId must be a UUID", nil))
 		return
 	}
 	commandID := parsed.String()
 
 	if c.ledger == nil {
 		c.logger.Error(ctx, fmt.Sprintf("Command ledger unavailable for client %v", c.ID), errors.New("command ledger is not configured"))
-		_ = c.Send(ctx, newCommandError(commandID, wireCodeInternal, "internal error", nil))
+		_ = c.Send(ctx, newCommandError(commandID, protocol.CommandErrorCodeInternal, "internal error", nil))
 		return
 	}
 
@@ -297,16 +298,18 @@ func (c *WebsocketBus) processCommand(ctx context.Context, usecaseCall useCaseCa
 func (c *WebsocketBus) handleClaimError(ctx context.Context, commandID string, err error) {
 	if errors.Is(err, ErrCommandInProgress) {
 		c.logger.Debug(ctx, "Command %v for client %v is already being processed", commandID, c.ID)
-		_ = c.Send(ctx, newCommandError(commandID, wireCodeCommandInProgress, "command is already being processed", nil))
+		// protocol.CommandErrorCodeCommandInProgress is emitted when a commandId is
+		// retried while a previous execution still holds its reservation.
+		_ = c.Send(ctx, newCommandError(commandID, protocol.CommandErrorCodeCommandInProgress, "command is already being processed", nil))
 		return
 	}
 	c.logger.Error(ctx, fmt.Sprintf("Failed to claim command %v for client %v", commandID, c.ID), err)
-	_ = c.Send(ctx, newCommandError(commandID, wireCodeInternal, "internal error", nil))
+	_ = c.Send(ctx, newCommandError(commandID, protocol.CommandErrorCodeInternal, "internal error", nil))
 }
 
 func (c *WebsocketBus) finishError(ctx context.Context, commandID string, err error) {
 	frame := commandErrorFor(commandID, err)
-	if frame.Code == wireCodeStaleVersion {
+	if frame.Code == protocol.CommandErrorCodeStaleVersion {
 		version, loadErr := c.roomVersion(ctx)
 		if loadErr != nil {
 			c.logger.Debug(ctx, "Failed to load room %v while reporting stale command for client %v: %v", c.roomID, c.ID, loadErr)
@@ -314,7 +317,7 @@ func (c *WebsocketBus) finishError(ctx context.Context, commandID string, err er
 			frame.RoomVersion = version
 		}
 	}
-	if frame.Code == wireCodeInternal {
+	if frame.Code == protocol.CommandErrorCodeInternal {
 		c.logger.Error(ctx, fmt.Sprintf("Error handling event for client %v", c.ID), err)
 	} else {
 		c.logger.Debug(ctx, "Command %v failed for client %v with code %v: %v", commandID, c.ID, frame.Code, err)
@@ -367,7 +370,7 @@ func (c *WebsocketBus) processLegacy(ctx context.Context, usecaseCall useCaseCal
 			if loadErr == nil {
 				version = room.RoomVersion
 			}
-			_ = c.Send(ctx, map[string]any{"type": "stale-command", "roomVersion": version})
+			_ = c.Send(ctx, protocol.StaleCommand{Type: protocol.MessageTypeStaleCommand, RoomVersion: version})
 			return
 		}
 		c.logger.Error(ctx, fmt.Sprintf("Error handling event for client %v", c.ID), err)

@@ -12,6 +12,7 @@ import (
 	"planning-poker/internal/application/planningpoker/usecase"
 	"planning-poker/internal/domain"
 	"planning-poker/internal/domain/entity"
+	"planning-poker/internal/protocol"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
 	"github.com/gorilla/websocket"
@@ -307,7 +308,7 @@ func assertStaleCommand(t *testing.T, conn *websocket.Conn, hasVersion bool, ver
 	if err := conn.ReadJSON(&message); err != nil {
 		t.Fatalf("failed to read stale command: %v", err)
 	}
-	if message.Type != "stale-command" || (hasVersion && message.RoomVersion != version) || (!hasVersion && message.RoomVersion != 0) {
+	if message.Type != protocol.MessageTypeStaleCommand || (hasVersion && message.RoomVersion != version) || (!hasVersion && message.RoomVersion != 0) {
 		t.Fatalf("unexpected stale command: %+v", message)
 	}
 }
