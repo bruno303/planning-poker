@@ -124,10 +124,10 @@ func (r *Room) RemoveClient(ctx context.Context, clientID string) error {
 func (r *Room) ToggleBacklogMode(ctx context.Context, clientID string) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, "client %s not found in room %s", clientID, r.ID)
 	}
 	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can toggle backlog mode")
+		return domainerror.Newf(domainerror.CodeForbidden, "only the room owner can toggle backlog mode")
 	}
 
 	if !r.BacklogMode {
@@ -150,10 +150,10 @@ func (r *Room) ToggleBacklogMode(ctx context.Context, clientID string) error {
 func (r *Room) AddStory(ctx context.Context, clientID string, name string) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, "client %s not found in room %s", clientID, r.ID)
 	}
 	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can add a story")
+		return domainerror.Newf(domainerror.CodeForbidden, "only the room owner can add a story")
 	}
 
 	if !r.BacklogMode {
@@ -170,17 +170,17 @@ func (r *Room) AddStory(ctx context.Context, clientID string, name string) error
 func (r *Room) RemoveStory(ctx context.Context, clientID string, storyID string) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, "client %s not found in room %s", clientID, r.ID)
 	}
 	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can remove a story")
+		return domainerror.Newf(domainerror.CodeForbidden, "only the room owner can remove a story")
 	}
 	if storyID == "" {
-		return fmt.Errorf("story ID cannot be empty")
+		return domainerror.Newf(domainerror.CodeValidation, "story ID cannot be empty")
 	}
 	index := r.storyIndexByID(storyID)
 	if index == -1 {
-		return fmt.Errorf("story %s not found in room %s", storyID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, "story %s not found in room %s", storyID, r.ID)
 	}
 
 	if index == r.CurrentStoryIndex {
@@ -211,24 +211,24 @@ func (r *Room) RemoveStory(ctx context.Context, clientID string, storyID string)
 func (r *Room) SelectStory(ctx context.Context, clientID string, storyID string) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, "client %s not found in room %s", clientID, r.ID)
 	}
 	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can select a story")
+		return domainerror.Newf(domainerror.CodeForbidden, "only the room owner can select a story")
 	}
 	if storyID == "" {
-		return fmt.Errorf("story ID cannot be empty")
+		return domainerror.Newf(domainerror.CodeValidation, "story ID cannot be empty")
 	}
 
 	index := r.storyIndexByID(storyID)
 	if index == -1 {
-		return fmt.Errorf("story %s not found in room %s", storyID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, "story %s not found in room %s", storyID, r.ID)
 	}
 	if index == r.CurrentStoryIndex {
-		return fmt.Errorf("story %s is already the current story", storyID)
+		return domainerror.Newf(domainerror.CodeConflict, "story %s is already the current story", storyID)
 	}
 	if r.Stories[index].Voted {
-		return fmt.Errorf("estimated story %s cannot be selected", storyID)
+		return domainerror.Newf(domainerror.CodeConflict, "estimated story %s cannot be selected", storyID)
 	}
 
 	r.CurrentStoryIndex = index
@@ -261,21 +261,21 @@ func (r *Room) ReorderStory(ctx context.Context, clientID string, storyID string
 func (r *Room) validateReorderStory(clientID string, storyID string, targetIndex int) (int, error) {
 	client, ok := r.FindClient(clientID)
 	if !ok {
-		return 0, fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+		return 0, domainerror.Newf(domainerror.CodeNotFound, "client %s not found in room %s", clientID, r.ID)
 	}
 	if !client.IsOwner {
-		return 0, fmt.Errorf("only the room owner can reorder stories")
+		return 0, domainerror.Newf(domainerror.CodeForbidden, "only the room owner can reorder stories")
 	}
 	if storyID == "" {
-		return 0, fmt.Errorf("story ID cannot be empty")
+		return 0, domainerror.Newf(domainerror.CodeValidation, "story ID cannot be empty")
 	}
 	if targetIndex < 0 || targetIndex >= len(r.Stories) {
-		return 0, fmt.Errorf("target story index %d out of range", targetIndex)
+		return 0, domainerror.Newf(domainerror.CodeValidation, "target story index %d out of range", targetIndex)
 	}
 
 	storyIndex := r.storyIndexByID(storyID)
 	if storyIndex == -1 {
-		return 0, fmt.Errorf("story %s not found in room %s", storyID, r.ID)
+		return 0, domainerror.Newf(domainerror.CodeNotFound, "story %s not found in room %s", storyID, r.ID)
 	}
 
 	return storyIndex, nil
@@ -317,10 +317,10 @@ func (r *Room) storyIndexByID(storyID string) int {
 func (r *Room) AdvanceToNextStory(ctx context.Context, clientID string) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, "client %s not found in room %s", clientID, r.ID)
 	}
 	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can advance to the next story")
+		return domainerror.Newf(domainerror.CodeForbidden, "only the room owner can advance to the next story")
 	}
 
 	if r.CurrentStoryIndex < len(r.Stories)-1 {
@@ -336,10 +336,10 @@ func (r *Room) AdvanceToNextStory(ctx context.Context, clientID string) error {
 func (r *Room) PrevStory(ctx context.Context, clientID string) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, "client %s not found in room %s", clientID, r.ID)
 	}
 	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can go to the previous story")
+		return domainerror.Newf(domainerror.CodeForbidden, "only the room owner can go to the previous story")
 	}
 
 	if r.CurrentStoryIndex > 0 {
@@ -369,10 +369,10 @@ func (r *Room) getCurrentStoryName() string {
 func (r *Room) ResetVoting(ctx context.Context, clientID string) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, "client %s not found in room %s", clientID, r.ID)
 	}
 	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can reset voting")
+		return domainerror.Newf(domainerror.CodeForbidden, "only the room owner can reset voting")
 	}
 
 	r.reveal(false)
@@ -404,10 +404,10 @@ func (r *Room) CountOwners() int {
 func (r *Room) ToggleSpectator(ctx context.Context, clientID string, targetClientID string) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, "client %s not found in room %s", clientID, r.ID)
 	}
 	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can toggle ownership")
+		return domainerror.Newf(domainerror.CodeForbidden, "only the room owner can toggle ownership")
 	}
 
 	if targetClient, ok := r.FindClient(targetClientID); ok {
@@ -415,7 +415,7 @@ func (r *Room) ToggleSpectator(ctx context.Context, clientID string, targetClien
 		targetClient.Vote(ctx, nil)
 		r.checkReveal()
 	} else {
-		return fmt.Errorf("target client %s not found in room %s", targetClientID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, "target client %s not found in room %s", targetClientID, r.ID)
 	}
 	return nil
 }
@@ -423,10 +423,10 @@ func (r *Room) ToggleSpectator(ctx context.Context, clientID string, targetClien
 func (r *Room) ToggleOwner(ctx context.Context, clientID string, targetClientID string) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, "client %s not found in room %s", clientID, r.ID)
 	}
 	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can toggle ownership")
+		return domainerror.Newf(domainerror.CodeForbidden, "only the room owner can toggle ownership")
 	}
 
 	owners := r.Clients.Filter(func(client *Client) bool {
@@ -445,7 +445,7 @@ func (r *Room) ToggleOwner(ctx context.Context, clientID string, targetClientID 
 	if targetClient, ok := r.FindClient(targetClientID); ok {
 		targetClient.IsOwner = !targetClient.IsOwner
 	} else {
-		return fmt.Errorf("target client %s not found in room %s", targetClientID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, "target client %s not found in room %s", targetClientID, r.ID)
 	}
 	return nil
 }
@@ -478,10 +478,10 @@ func (r *Room) AdminToggleOwner(ctx context.Context, targetClientID string) erro
 func (r *Room) SetCurrentStory(ctx context.Context, clientID string, story string) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, "client %s not found in room %s", clientID, r.ID)
 	}
 	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can set the current story")
+		return domainerror.Newf(domainerror.CodeForbidden, "only the room owner can set the current story")
 	}
 
 	if r.BacklogMode && r.CurrentStoryIndex >= 0 && r.CurrentStoryIndex < len(r.Stories) {
@@ -495,10 +495,10 @@ func (r *Room) SetCurrentStory(ctx context.Context, clientID string, story strin
 func (r *Room) ToggleReveal(ctx context.Context, clientID string) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, "client %s not found in room %s", clientID, r.ID)
 	}
 	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can toggle reveal")
+		return domainerror.Newf(domainerror.CodeForbidden, "only the room owner can toggle reveal")
 	}
 
 	r.reveal(!r.Reveal)
@@ -703,13 +703,13 @@ func (r *Room) FindClient(clientID string) (*Client, bool) {
 func (r *Room) Vote(ctx context.Context, clientID string, vote *string) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, "client %s not found in room %s", clientID, r.ID)
 	}
 
 	if vote != nil && *vote != "" {
 		deck := r.Deck()
 		if !deck.HasCard(*vote) {
-			return fmt.Errorf("vote %q is not part of deck %s", *vote, deck.ID)
+			return domainerror.Newf(domainerror.CodeValidation, "vote %q is not part of deck %s", *vote, deck.ID)
 		}
 	}
 
@@ -722,7 +722,7 @@ func (r *Room) Vote(ctx context.Context, clientID string, vote *string) error {
 func (r *Room) UpdateClientName(ctx context.Context, clientID string, name string) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, "client %s not found in room %s", clientID, r.ID)
 	}
 
 	client.UpdateName(ctx, name)
