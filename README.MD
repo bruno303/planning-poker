@@ -124,6 +124,13 @@ See `example.env` and `frontend/planning-poker-front/example.env` for configurat
 - Backend: `make build` or use the provided Dockerfile
 - Frontend: `npm run build` in the frontend directory or use the provided Dockerfile
 
+## WebSocket protocol
+
+- [protocol/README.md](protocol/README.md) documents every WebSocket message.
+- [protocol/asyncapi.yaml](protocol/asyncapi.yaml) is the AsyncAPI contract.
+
+Change the contract by editing the spec, running `make protocol`, and committing the generated files.
+
 ## License
 
 MIT

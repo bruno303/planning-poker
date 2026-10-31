@@ -65,6 +65,9 @@ jobs:
       - name: Verify Dependencies
         run: go mod verify
 
+      - name: Verify protocol artifacts
+        run: go run ./tools/protocolgen --check
+
       - name: Run Tests
         env:
           REDIS_HOST: localhost

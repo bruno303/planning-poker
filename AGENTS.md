@@ -156,34 +156,13 @@ unique `COMPOSE_PROJECT_NAME` and `REDIS_HOST_PORT`.
 
 ### WebSocket command protocol
 
-- Every client frame uses the same envelope: `{"type": string, "payload": any, "commandId"?: string}`.
-- With a non-empty `commandId`, the server answers exactly one result frame for that command:
-
-  ```json
-  {"type": "command-ack", "commandId": "<uuid>", "roomVersion": <n>}
-  ```
-
-  ```json
-  {"type": "command-error", "commandId": "<uuid>", "code": "<code>", "message": "<msg>", "roomVersion": <n>}
-  ```
-
-  `roomVersion` is optional on both frames. It is omitted on an ack when the room cannot be
-  loaded, and it is only set on a `command-error` for `stale_version`.
-- Error codes:
-
-  | Code | Emitted when |
-  | --- | --- |
-  | `validation` | The payload is semantically invalid for the room (for example a vote outside the deck, an empty `storyId`, or a reorder target index out of range). Name updates are currently not validated. |
-  | `forbidden` | The sender is not allowed to run the command (for example a non-owner toggling reveal). |
-  | `not_found` | The target room, client, or story does not exist. |
-  | `conflict` | The command cannot be applied to the current room state. |
-  | `stale_version` | `expectedRoomVersion` does not match the stored room version; the frame carries the current `roomVersion`. |
-  | `invalid_payload` | The `payload` cannot be decoded into the command DTO. |
-  | `unknown_command` | `type` is not a known command. |
-  | `invalid_command_id` | `commandId` is not a UUID. |
-  | `command_in_progress` | The same `commandId` is retried while its first execution still holds the pending reservation. |
-  | `internal` | Unexpected server failure; the message is literally `internal error`. |
-
+- The contract lives in `protocol/`: `protocol/asyncapi.yaml` is the AsyncAPI spec and
+  `protocol/README.md` is the generated message table. The spec and the generated artifacts are
+  the source of truth; do not hand-maintain frame shapes, error codes, or type inventories here.
+- Run `make protocol` after any spec edit and commit the generated files.
+- Never hand-edit `*.generated.go`, `protocol.generated.ts`, or `protocol/README.md`.
+- Adding a command = spec entry + `mapUsecases` entry.
+- Adding an event = spec entry + emit site.
 - Idempotency uses a Redis ledger: the pending reservation lives for 30s, a completed outcome
   for 5m, under the key `planning-poker:command:<roomID>:<clientID>:<canonicalCommandID>`.
 - Use one fresh UUID per command. Reusing a `commandId` replays the first stored outcome
