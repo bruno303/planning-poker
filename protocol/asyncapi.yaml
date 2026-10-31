@@ -63,32 +63,32 @@ operations:
     channel:
       $ref: '#/channels/roomSocket'
     messages:
-      - $ref: '#/components/messages/vote'
-      - $ref: '#/components/messages/update-name'
-      - $ref: '#/components/messages/reset'
-      - $ref: '#/components/messages/reveal-votes'
-      - $ref: '#/components/messages/toggle-spectator'
-      - $ref: '#/components/messages/toggle-owner'
-      - $ref: '#/components/messages/update-story'
-      - $ref: '#/components/messages/vote-again'
-      - $ref: '#/components/messages/toggle-backlog-mode'
-      - $ref: '#/components/messages/add-story'
-      - $ref: '#/components/messages/remove-story'
-      - $ref: '#/components/messages/advance-story'
-      - $ref: '#/components/messages/prev-story'
-      - $ref: '#/components/messages/select-story'
-      - $ref: '#/components/messages/reorder-story'
+      - $ref: '#/channels/roomSocket/messages/vote'
+      - $ref: '#/channels/roomSocket/messages/update-name'
+      - $ref: '#/channels/roomSocket/messages/reset'
+      - $ref: '#/channels/roomSocket/messages/reveal-votes'
+      - $ref: '#/channels/roomSocket/messages/toggle-spectator'
+      - $ref: '#/channels/roomSocket/messages/toggle-owner'
+      - $ref: '#/channels/roomSocket/messages/update-story'
+      - $ref: '#/channels/roomSocket/messages/vote-again'
+      - $ref: '#/channels/roomSocket/messages/toggle-backlog-mode'
+      - $ref: '#/channels/roomSocket/messages/add-story'
+      - $ref: '#/channels/roomSocket/messages/remove-story'
+      - $ref: '#/channels/roomSocket/messages/advance-story'
+      - $ref: '#/channels/roomSocket/messages/prev-story'
+      - $ref: '#/channels/roomSocket/messages/select-story'
+      - $ref: '#/channels/roomSocket/messages/reorder-story'
   receiveEvent:
     action: receive
     channel:
       $ref: '#/channels/roomSocket'
     messages:
-      - $ref: '#/components/messages/room-state'
-      - $ref: '#/components/messages/update-client-id'
-      - $ref: '#/components/messages/kicked'
-      - $ref: '#/components/messages/stale-command'
-      - $ref: '#/components/messages/command-ack'
-      - $ref: '#/components/messages/command-error'
+      - $ref: '#/channels/roomSocket/messages/room-state'
+      - $ref: '#/channels/roomSocket/messages/update-client-id'
+      - $ref: '#/channels/roomSocket/messages/kicked'
+      - $ref: '#/channels/roomSocket/messages/stale-command'
+      - $ref: '#/channels/roomSocket/messages/command-ack'
+      - $ref: '#/channels/roomSocket/messages/command-error'
 
 components:
   messages:

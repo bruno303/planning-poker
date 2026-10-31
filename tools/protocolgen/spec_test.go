@@ -296,6 +296,41 @@ func assertPointerValue(t *testing.T, document map[string]any, pointer string, e
 	}
 }
 
+func TestAddOperationDirectionsRequiresChannelMessageRef(t *testing.T) {
+	operation := func(action, ref string) map[string]any {
+		return map[string]any{
+			"action": action,
+			"messages": []any{
+				map[string]any{"$ref": ref},
+			},
+		}
+	}
+
+	t.Run("rejects components message ref", func(t *testing.T) {
+		directions := make(map[string]Direction)
+		err := addOperationDirections(directions, "sendCommand", operation("send", "#/components/messages/vote"))
+		if err == nil {
+			t.Fatal("addOperationDirections error = nil, want component message ref rejection")
+		}
+		if !strings.Contains(err.Error(), "sendCommand") || !strings.Contains(err.Error(), "messages[0]") {
+			t.Fatalf("addOperationDirections error = %v, want operation and message index", err)
+		}
+		if len(directions) != 0 {
+			t.Fatalf("directions = %v, want empty", directions)
+		}
+	})
+
+	t.Run("accepts channel message ref", func(t *testing.T) {
+		directions := make(map[string]Direction)
+		if err := addOperationDirections(directions, "sendCommand", operation("send", "#/channels/roomSocket/messages/vote")); err != nil {
+			t.Fatalf("addOperationDirections: %v", err)
+		}
+		if directions["vote"] != DirectionSend {
+			t.Fatalf("directions[vote] = %q, want %q", directions["vote"], DirectionSend)
+		}
+	})
+}
+
 func TestLoadSpecRejectsDuplicateDefinitions(t *testing.T) {
 	root := tempRepo(t)
 	extra := `{"$defs": {"RoomState": {"type": "object", "properties": {}}}}`

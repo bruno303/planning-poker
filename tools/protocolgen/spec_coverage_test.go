@@ -158,11 +158,11 @@ func TestOperationDirections(t *testing.T) {
 		"operations": map[string]any{
 			"sendCommand": map[string]any{
 				"action":   "send",
-				"messages": []any{map[string]any{"$ref": "#/components/messages/vote"}},
+				"messages": []any{map[string]any{"$ref": "#/channels/roomSocket/messages/vote"}},
 			},
 			"receiveEvent": map[string]any{
 				"action":   "receive",
-				"messages": []any{map[string]any{"$ref": "#/components/messages/room-state"}},
+				"messages": []any{map[string]any{"$ref": "#/channels/roomSocket/messages/room-state"}},
 			},
 		},
 	}
@@ -182,13 +182,13 @@ func TestOperationDirections(t *testing.T) {
 	}{
 		{name: "missing operations", document: map[string]any{}, wantErr: "missing operations object"},
 		{name: "operation not object", document: map[string]any{"operations": map[string]any{"send": "nope"}}, wantErr: "must be an object"},
-		{name: "invalid action", document: map[string]any{"operations": map[string]any{"send": map[string]any{"action": "publish", "messages": []any{message("#/m/a")}}}}, wantErr: "action must be send or receive"},
+		{name: "invalid action", document: map[string]any{"operations": map[string]any{"send": map[string]any{"action": "publish", "messages": []any{message("#/channels/roomSocket/messages/a")}}}}, wantErr: "action must be send or receive"},
 		{name: "messages not array", document: map[string]any{"operations": map[string]any{"send": map[string]any{"action": "send", "messages": "nope"}}}, wantErr: "must be a non-empty array"},
 		{name: "messages empty", document: map[string]any{"operations": map[string]any{"send": map[string]any{"action": "send", "messages": []any{}}}}, wantErr: "must be a non-empty array"},
 		{name: "entry not object", document: map[string]any{"operations": map[string]any{"send": map[string]any{"action": "send", "messages": []any{"nope"}}}}, wantErr: "entry must be an object"},
 		{name: "duplicate message", document: map[string]any{"operations": map[string]any{
-			"send":    map[string]any{"action": "send", "messages": []any{message("#/m/a")}},
-			"receive": map[string]any{"action": "receive", "messages": []any{message("#/m/a")}},
+			"send":    map[string]any{"action": "send", "messages": []any{message("#/channels/roomSocket/messages/a")}},
+			"receive": map[string]any{"action": "receive", "messages": []any{message("#/channels/roomSocket/messages/a")}},
 		}}, wantErr: "listed by multiple operations"},
 	}
 	for _, test := range tests {
