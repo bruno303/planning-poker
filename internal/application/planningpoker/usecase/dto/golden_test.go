@@ -21,20 +21,43 @@ const roomStateGoldenPath = "testdata/room-state.golden.json"
 var updateGolden = flag.Bool("update", false, "rewrite the room-state golden fixture")
 
 func TestRoomStateGolden(t *testing.T) {
-	got, err := json.Marshal(NewRoomStateCommand(goldenRoom()))
-	require.NoError(t, err)
+	t.Run("populated room matches the golden fixture", func(t *testing.T) {
+		got, err := json.Marshal(NewRoomStateCommand(goldenRoom()))
+		require.NoError(t, err)
 
-	if *updateGolden {
-		require.NoError(t, os.MkdirAll(filepath.Dir(roomStateGoldenPath), 0o755))
-		require.NoError(t, os.WriteFile(roomStateGoldenPath, append(got, '\n'), 0o644))
-		t.Logf("updated golden fixture at %s", roomStateGoldenPath)
-		return
-	}
+		if *updateGolden {
+			require.NoError(t, os.MkdirAll(filepath.Dir(roomStateGoldenPath), 0o755))
+			require.NoError(t, os.WriteFile(roomStateGoldenPath, append(got, '\n'), 0o644))
+			t.Logf("updated golden fixture at %s", roomStateGoldenPath)
+			return
+		}
 
-	want, err := os.ReadFile(roomStateGoldenPath)
-	require.NoError(t, err)
+		want, err := os.ReadFile(roomStateGoldenPath)
+		require.NoError(t, err)
 
-	assert.JSONEq(t, string(want), string(got))
+		assert.JSONEq(t, string(want), string(got))
+	})
+
+	t.Run("zero-value optionals are omitted", func(t *testing.T) {
+		room := goldenRoom()
+		room.Consensus = ""
+		room.SpecialVoteCount = 0
+
+		got, err := json.Marshal(NewRoomStateCommand(room))
+		require.NoError(t, err)
+
+		var fields map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(got, &fields))
+
+		_, hasConsensus := fields["consensus"]
+		assert.False(t, hasConsensus, "consensus must be omitted when empty")
+		_, hasSpecialVoteCount := fields["specialVoteCount"]
+		assert.False(t, hasSpecialVoteCount, "specialVoteCount must be omitted when zero")
+		_, hasBacklogMode := fields["backlogMode"]
+		assert.True(t, hasBacklogMode, "backlogMode is always emitted")
+		_, hasCurrentStoryIndex := fields["currentStoryIndex"]
+		assert.True(t, hasCurrentStoryIndex, "currentStoryIndex is always emitted")
+	})
 }
 
 func goldenRoom() *entity.Room {

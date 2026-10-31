@@ -151,7 +151,7 @@
         },
         "commandId": {
           "type": "string",
-          "format": "uuid"
+          "description": "Echoes the raw client commandId, including when it is not a valid UUID (invalid_command_id)."
         },
         "code": {
           "$ref": "#/$defs/CommandErrorCode"

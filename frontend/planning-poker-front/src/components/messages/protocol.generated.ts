@@ -394,7 +394,7 @@ export function isCommandError(value: unknown): value is CommandError {
 
   return (
     isCommandErrorCode(value.code) &&
-    isUUID(value.commandId) &&
+    typeof value.commandId === 'string' &&
     typeof value.message === 'string' &&
     (!('roomVersion' in value) || isInteger(value.roomVersion)) &&
     value.type === 'command-error'
