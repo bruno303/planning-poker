@@ -103,6 +103,15 @@ func mutateFile(t *testing.T, path, oldValue, newValue string) {
 func TestLoadSpec(t *testing.T) {
 	spec := loadSampleSpec(t)
 
+	assertSpecCounts(t, spec)
+	assertMessagesSorted(t, spec)
+	assertRoomStateMessage(t, spec)
+	assertReorderStoryMessage(t, spec)
+	assertGuardedMessages(t, spec)
+}
+
+func assertSpecCounts(t *testing.T, spec *Spec) {
+	t.Helper()
 	if len(spec.Messages) != 21 {
 		t.Fatalf("messages = %d, want 21", len(spec.Messages))
 	}
@@ -115,12 +124,19 @@ func TestLoadSpec(t *testing.T) {
 	if got := len(spec.Definitions); got != 42 {
 		t.Fatalf("definitions = %d, want 42", got)
 	}
+}
+
+func assertMessagesSorted(t *testing.T, spec *Spec) {
+	t.Helper()
 	for index := 1; index < len(spec.Messages); index++ {
 		if spec.Messages[index-1].WireType >= spec.Messages[index].WireType {
 			t.Fatalf("messages are not sorted: %q before %q", spec.Messages[index-1].WireType, spec.Messages[index].WireType)
 		}
 	}
+}
 
+func assertRoomStateMessage(t *testing.T, spec *Spec) {
+	t.Helper()
 	roomState := messageByType(t, spec, "room-state")
 	if roomState.Direction != DirectionReceive {
 		t.Errorf("room-state direction = %q, want %q", roomState.Direction, DirectionReceive)
@@ -134,7 +150,10 @@ func TestLoadSpec(t *testing.T) {
 	if roomState.SchemaFile != "protocol/schemas/events.schema.json" || roomState.SchemaPointer != "#/$defs/RoomState" {
 		t.Errorf("room-state schema = %q%s", roomState.SchemaFile, roomState.SchemaPointer)
 	}
+}
 
+func assertReorderStoryMessage(t *testing.T, spec *Spec) {
+	t.Helper()
 	reorder := messageByType(t, spec, "reorder-story")
 	if reorder.Direction != DirectionSend || !reorder.IsCommand() {
 		t.Errorf("reorder-story direction = %q, want send", reorder.Direction)
@@ -142,7 +161,10 @@ func TestLoadSpec(t *testing.T) {
 	if reorder.DefName != "ReorderStoryCommand" || reorder.PayloadType != "ReorderStoryPayload" {
 		t.Errorf("reorder-story types = %q/%q", reorder.DefName, reorder.PayloadType)
 	}
+}
 
+func assertGuardedMessages(t *testing.T, spec *Spec) {
+	t.Helper()
 	guarded := spec.GuardedMessages()
 	if len(guarded) != 12 {
 		t.Fatalf("guarded commands = %d, want 12", len(guarded))
@@ -157,6 +179,14 @@ func TestLoadSpec(t *testing.T) {
 func TestLoadSpecSchemaShape(t *testing.T) {
 	spec := loadSampleSpec(t)
 
+	assertStorySchema(t, spec)
+	assertParticipantSchema(t, spec)
+	assertRoomStateSchema(t, spec)
+	assertDeckDescriptorSchema(t, spec)
+}
+
+func assertStorySchema(t *testing.T, spec *Spec) {
+	t.Helper()
 	story := definitionByName(t, spec, "Story").Schema
 	result, ok := story.Property("result")
 	if !ok {
@@ -172,7 +202,10 @@ func TestLoadSpecSchemaShape(t *testing.T) {
 	if !ok || !mostAppearingVotes.Schema.Nullable || !mostAppearingVotes.Required {
 		t.Errorf("Story.mostAppearingVotes must be required and nullable")
 	}
+}
 
+func assertParticipantSchema(t *testing.T, spec *Spec) {
+	t.Helper()
 	participant := definitionByName(t, spec, "Participant").Schema
 	vote, ok := participant.Property("vote")
 	if !ok || !vote.Schema.Nullable || !vote.Required {
@@ -182,7 +215,10 @@ func TestLoadSpecSchemaShape(t *testing.T) {
 	if !ok || votedAt.Schema.Format != "date-time" || votedAt.Required {
 		t.Errorf("Participant.votedAt must be an optional date-time")
 	}
+}
 
+func assertRoomStateSchema(t *testing.T, spec *Spec) {
+	t.Helper()
 	roomState := definitionByName(t, spec, "RoomState").Schema
 	stories, ok := roomState.Property("stories")
 	if !ok || !stories.Schema.Nullable || stories.Required || stories.Schema.Kind != KindArray {
@@ -195,7 +231,10 @@ func TestLoadSpecSchemaShape(t *testing.T) {
 	if !ok || roomVersion.Schema.GoType != "uint64" {
 		t.Errorf("RoomState.roomVersion must carry x-go-type uint64")
 	}
+}
 
+func assertDeckDescriptorSchema(t *testing.T, spec *Spec) {
+	t.Helper()
 	deck := definitionByName(t, spec, "DeckDescriptor").Schema
 	kind, ok := deck.Property("kind")
 	if !ok || kind.Schema.RefName != "DeckKind" {
@@ -232,23 +271,28 @@ func TestPointerValue(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			value, err := pointerValue(document, test.pointer)
-			if test.wantErr {
-				if err == nil {
-					t.Fatalf("pointerValue(%q) = %v, want error", test.pointer, value)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("pointerValue(%q): %v", test.pointer, err)
-			}
-			if test.pointer == "" {
-				return
-			}
-			if value != test.expected {
-				t.Fatalf("pointerValue(%q) = %v, want %v", test.pointer, value, test.expected)
-			}
+			assertPointerValue(t, document, test.pointer, test.expected, test.wantErr)
 		})
+	}
+}
+
+func assertPointerValue(t *testing.T, document map[string]any, pointer string, expected any, wantErr bool) {
+	t.Helper()
+	value, err := pointerValue(document, pointer)
+	if wantErr {
+		if err == nil {
+			t.Fatalf("pointerValue(%q) = %v, want error", pointer, value)
+		}
+		return
+	}
+	if err != nil {
+		t.Fatalf("pointerValue(%q): %v", pointer, err)
+	}
+	if pointer == "" {
+		return
+	}
+	if value != expected {
+		t.Fatalf("pointerValue(%q) = %v, want %v", pointer, value, expected)
 	}
 }
 

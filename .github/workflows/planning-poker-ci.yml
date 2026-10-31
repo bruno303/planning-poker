@@ -73,7 +73,7 @@ jobs:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
           REDIS_DB: 0
-        run: go test -count=1 -timeout 30s -coverpkg=./internal/... -coverprofile=coverage.out ./...
+        run: go test -count=1 -timeout 30s -coverpkg=./internal/...,./tools/... -coverprofile=coverage.out ./...
 
       - name: Generate Coverage Report
         run: go tool cover -func=coverage.out

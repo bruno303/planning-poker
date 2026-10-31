@@ -128,51 +128,61 @@ func TestClientPayloadDecoding(t *testing.T) {
 	seenCommandIDs := make(map[string]string)
 	for _, name := range jsonFiles(t, clientDir) {
 		t.Run("valid/"+name, func(t *testing.T) {
-			fixture := readClientFixture(t, filepath.Join(clientDir, name))
-			commandType := strings.TrimSuffix(name, ".json")
-
-			if fixture.Type != commandType {
-				t.Fatalf("fixture type %q does not match file name command %q", fixture.Type, commandType)
-			}
-			if fixture.CommandID == nil || *fixture.CommandID == "" {
-				t.Fatalf("fixture %q has no commandId", name)
-			}
-			if other, ok := seenCommandIDs[*fixture.CommandID]; ok {
-				t.Fatalf("fixture %q reuses the commandId of %q", name, other)
-			}
-			seenCommandIDs[*fixture.CommandID] = name
-
-			payload, ok := protocol.NewClientCommandPayload(fixture.Type)
-			if !ok {
-				t.Fatalf("no generated payload for command type %q", fixture.Type)
-			}
-			if err := json.Unmarshal(fixture.Payload, payload); err != nil {
-				t.Fatalf("decode payload of fixture %q: %v", name, err)
-			}
-
-			want, ok := expected[fixture.Type]
-			if !ok {
-				t.Fatalf("no expected payload registered for command type %q", fixture.Type)
-			}
-			if !reflect.DeepEqual(payload, want) {
-				t.Fatalf("decoded payload of fixture %q = %#v, want %#v", name, payload, want)
-			}
+			assertValidClientPayload(t, filepath.Join(clientDir, name), name, expected, seenCommandIDs)
 		})
 	}
 
 	invalidDir := filepath.Join(clientDir, "invalid")
 	for _, name := range jsonFiles(t, invalidDir) {
 		t.Run("invalid/"+name, func(t *testing.T) {
-			fixture := readClientFixture(t, filepath.Join(invalidDir, name))
-
-			payload, ok := protocol.NewClientCommandPayload(fixture.Type)
-			if !ok {
-				t.Fatalf("no generated payload for command type %q", fixture.Type)
-			}
-			if err := json.Unmarshal(fixture.Payload, payload); err == nil {
-				t.Fatalf("payload of invalid fixture %q decoded without error", name)
-			}
+			assertInvalidClientPayload(t, filepath.Join(invalidDir, name), name)
 		})
+	}
+}
+
+func assertValidClientPayload(t *testing.T, path, name string, expected map[string]any, seenCommandIDs map[string]string) {
+	t.Helper()
+	fixture := readClientFixture(t, path)
+	commandType := strings.TrimSuffix(name, ".json")
+
+	if fixture.Type != commandType {
+		t.Fatalf("fixture type %q does not match file name command %q", fixture.Type, commandType)
+	}
+	if fixture.CommandID == nil || *fixture.CommandID == "" {
+		t.Fatalf("fixture %q has no commandId", name)
+	}
+	if other, ok := seenCommandIDs[*fixture.CommandID]; ok {
+		t.Fatalf("fixture %q reuses the commandId of %q", name, other)
+	}
+	seenCommandIDs[*fixture.CommandID] = name
+
+	payload, ok := protocol.NewClientCommandPayload(fixture.Type)
+	if !ok {
+		t.Fatalf("no generated payload for command type %q", fixture.Type)
+	}
+	if err := json.Unmarshal(fixture.Payload, payload); err != nil {
+		t.Fatalf("decode payload of fixture %q: %v", name, err)
+	}
+
+	want, ok := expected[fixture.Type]
+	if !ok {
+		t.Fatalf("no expected payload registered for command type %q", fixture.Type)
+	}
+	if !reflect.DeepEqual(payload, want) {
+		t.Fatalf("decoded payload of fixture %q = %#v, want %#v", name, payload, want)
+	}
+}
+
+func assertInvalidClientPayload(t *testing.T, path, name string) {
+	t.Helper()
+	fixture := readClientFixture(t, path)
+
+	payload, ok := protocol.NewClientCommandPayload(fixture.Type)
+	if !ok {
+		t.Fatalf("no generated payload for command type %q", fixture.Type)
+	}
+	if err := json.Unmarshal(fixture.Payload, payload); err == nil {
+		t.Fatalf("payload of invalid fixture %q decoded without error", name)
 	}
 }
 

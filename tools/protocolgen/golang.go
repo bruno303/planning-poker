@@ -94,40 +94,52 @@ func goTypeName(spec *Spec, schema *Schema) (string, error) {
 		}
 		return "string", nil
 	case KindInteger:
-		switch schema.GoType {
-		case "":
-			return "int", nil
-		case "uint64":
-			return "uint64", nil
-		default:
-			return "", fmt.Errorf("unsupported x-go-type %q for integer", schema.GoType)
-		}
+		return goIntegerType(schema.GoType)
 	case KindNumber:
-		switch schema.GoType {
-		case "":
-			return "float64", nil
-		case "float32":
-			return "float32", nil
-		default:
-			return "", fmt.Errorf("unsupported x-go-type %q for number", schema.GoType)
-		}
+		return goNumberType(schema.GoType)
 	case KindBoolean:
 		return "bool", nil
 	case KindArray:
-		if schema.Items == nil {
-			return "", fmt.Errorf("array without items")
-		}
-		itemType, err := goTypeName(spec, schema.Items)
-		if err != nil {
-			return "", err
-		}
-		if schema.Items.Nullable {
-			itemType = "*" + itemType
-		}
-		return "[]" + itemType, nil
+		return goArrayType(spec, schema)
 	default:
 		return "", fmt.Errorf("unsupported type %q", schema.Kind)
 	}
+}
+
+func goIntegerType(goType string) (string, error) {
+	switch goType {
+	case "":
+		return "int", nil
+	case "uint64":
+		return "uint64", nil
+	default:
+		return "", fmt.Errorf("unsupported x-go-type %q for integer", goType)
+	}
+}
+
+func goNumberType(goType string) (string, error) {
+	switch goType {
+	case "":
+		return "float64", nil
+	case "float32":
+		return "float32", nil
+	default:
+		return "", fmt.Errorf("unsupported x-go-type %q for number", goType)
+	}
+}
+
+func goArrayType(spec *Spec, schema *Schema) (string, error) {
+	if schema.Items == nil {
+		return "", fmt.Errorf("array without items")
+	}
+	itemType, err := goTypeName(spec, schema.Items)
+	if err != nil {
+		return "", err
+	}
+	if schema.Items.Nullable {
+		itemType = "*" + itemType
+	}
+	return "[]" + itemType, nil
 }
 
 func specUsesTime(spec *Spec) bool {

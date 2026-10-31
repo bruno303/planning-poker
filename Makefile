@@ -101,7 +101,7 @@ test-integration: lint fmt
 test-coverage:
 	@status=0; \
 	$(MAKE) test-infra-up || status=$$?; \
-	if [ $$status -eq 0 ]; then REDIS_HOST=localhost REDIS_PORT=$(REDIS_HOST_PORT) go test -count=1 -coverprofile=coverage.out -coverpkg=./internal/... ./internal/... ./test/integration/... || status=$$?; fi; \
+	if [ $$status -eq 0 ]; then REDIS_HOST=localhost REDIS_PORT=$(REDIS_HOST_PORT) go test -count=1 -coverprofile=coverage.out -coverpkg=./internal/...,./tools/... ./internal/... ./tools/... ./test/integration/... || status=$$?; fi; \
 	$(MAKE) test-infra-down || true; \
 	if [ $$status -eq 0 ]; then go tool cover -html=coverage.out -o coverage.html; echo "Generated coverage report at coverage.html"; fi; \
 	exit $$status

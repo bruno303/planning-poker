@@ -326,6 +326,40 @@ func TestWebsocketBus_Process_MapsDomainErrorCodes(t *testing.T) {
 	}
 }
 
+func TestWebsocketBus_Process_HidesUnmappedDomainErrorCode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	hub := domain.NewMockHub(ctrl)
+
+	updateName := usecase.NewMockUseCase[usecase.UpdateNameCommand](ctrl)
+	updateName.EXPECT().Execute(gomock.Any(), gomock.Any()).Return(domainerror.Newf(domainerror.Code("unmapped"), "should never leave the process"))
+
+	bus, clientConn := newCommandTestBus(t, hub, mapUsecases(
+		usecase.UseCasesFacade{UpdateName: updateName},
+		commandTestClientID,
+		commandTestRoomID,
+	), newFakeCommandLedger())
+
+	bus.process(context.Background(), WebSocketMessage{
+		Type:      "update-name",
+		CommandID: commandTestCommandID,
+		Payload:   protocol.UpdateNamePayload{Username: "Alice"},
+	})
+
+	frame := readCommandFrame(t, clientConn)
+	if frame.Type != protocol.MessageTypeCommandError {
+		t.Fatalf("expected frame type %q, got %q", protocol.MessageTypeCommandError, frame.Type)
+	}
+	if frame.Code != protocol.CommandErrorCodeInternal {
+		t.Fatalf("expected code %q, got %q", protocol.CommandErrorCodeInternal, frame.Code)
+	}
+	if frame.Message != "internal error" {
+		t.Fatalf("expected message %q, got %q", "internal error", frame.Message)
+	}
+	if frame.RoomVersion != nil {
+		t.Fatalf("expected no roomVersion for internal error, got %d", *frame.RoomVersion)
+	}
+}
+
 func TestWebsocketBus_Process_HidesInternalErrors(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	hub := domain.NewMockHub(ctrl)

@@ -259,31 +259,9 @@ func tsCheck(spec *Spec, schema *Schema, accessor string) (string, error) {
 func tsNonNullCheck(spec *Spec, schema *Schema, accessor string) (string, error) {
 	switch schema.Kind {
 	case KindRef:
-		definition, ok := spec.Definition(schema.RefName)
-		if !ok {
-			return "", fmt.Errorf("unknown $ref %q", schema.RefName)
-		}
-		switch definition.Schema.Kind {
-		case KindObject:
-			return fmt.Sprintf("is%s(%s)", definition.Name, accessor), nil
-		case KindString:
-			if len(definition.Schema.Enum) > 0 {
-				return fmt.Sprintf("is%s(%s)", definition.Name, accessor), nil
-			}
-		}
-		return "", fmt.Errorf("$ref %q cannot be validated", schema.RefName)
+		return tsRefCheck(spec, schema.RefName, accessor)
 	case KindString:
-		if schema.Const != "" {
-			return fmt.Sprintf("%s === %s", accessor, singleQuote(schema.Const)), nil
-		}
-		switch schema.Format {
-		case "date-time":
-			return fmt.Sprintf("isRFC3339Timestamp(%s)", accessor), nil
-		case "uuid":
-			return fmt.Sprintf("isUUID(%s)", accessor), nil
-		default:
-			return fmt.Sprintf("typeof %s === 'string'", accessor), nil
-		}
+		return tsStringCheck(schema, accessor), nil
 	case KindInteger:
 		return fmt.Sprintf("isInteger(%s)", accessor), nil
 	case KindNumber:
@@ -291,17 +269,53 @@ func tsNonNullCheck(spec *Spec, schema *Schema, accessor string) (string, error)
 	case KindBoolean:
 		return fmt.Sprintf("typeof %s === 'boolean'", accessor), nil
 	case KindArray:
-		if schema.Items == nil {
-			return "", fmt.Errorf("array without items")
-		}
-		itemCheck, err := tsCheck(spec, schema.Items, "item")
-		if err != nil {
-			return "", err
-		}
-		return fmt.Sprintf("Array.isArray(%s) && %s.every((item) => %s)", accessor, accessor, itemCheck), nil
+		return tsArrayCheck(spec, schema, accessor)
 	default:
 		return "", fmt.Errorf("unsupported type %q", schema.Kind)
 	}
+}
+
+func tsRefCheck(spec *Spec, refName, accessor string) (string, error) {
+	definition, ok := spec.Definition(refName)
+	if !ok {
+		return "", fmt.Errorf("unknown $ref %q", refName)
+	}
+	if tsRefIsValidatable(definition.Schema) {
+		return fmt.Sprintf("is%s(%s)", definition.Name, accessor), nil
+	}
+	return "", fmt.Errorf("$ref %q cannot be validated", refName)
+}
+
+func tsRefIsValidatable(schema *Schema) bool {
+	if schema.Kind == KindObject {
+		return true
+	}
+	return schema.Kind == KindString && len(schema.Enum) > 0
+}
+
+func tsStringCheck(schema *Schema, accessor string) string {
+	if schema.Const != "" {
+		return fmt.Sprintf("%s === %s", accessor, singleQuote(schema.Const))
+	}
+	switch schema.Format {
+	case "date-time":
+		return fmt.Sprintf("isRFC3339Timestamp(%s)", accessor)
+	case "uuid":
+		return fmt.Sprintf("isUUID(%s)", accessor)
+	default:
+		return fmt.Sprintf("typeof %s === 'string'", accessor)
+	}
+}
+
+func tsArrayCheck(spec *Spec, schema *Schema, accessor string) (string, error) {
+	if schema.Items == nil {
+		return "", fmt.Errorf("array without items")
+	}
+	itemCheck, err := tsCheck(spec, schema.Items, "item")
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("Array.isArray(%s) && %s.every((item) => %s)", accessor, accessor, itemCheck), nil
 }
 
 type typeScriptUsage struct {

@@ -157,6 +157,90 @@ func TestGoGenerationIsDeterministic(t *testing.T) {
 	}
 }
 
+func TestGoTypeNameBranches(t *testing.T) {
+	spec := loadSampleSpec(t)
+	tests := []struct {
+		name    string
+		schema  *Schema
+		want    string
+		wantErr string
+	}{
+		{name: "ref", schema: &Schema{Kind: KindRef, RefName: "Story"}, want: "Story"},
+		{name: "unknown ref", schema: &Schema{Kind: KindRef, RefName: "Missing"}, wantErr: "unknown $ref"},
+		{name: "date-time", schema: &Schema{Kind: KindString, Format: "date-time"}, want: "time.Time"},
+		{name: "plain string", schema: &Schema{Kind: KindString}, want: "string"},
+		{name: "integer default", schema: &Schema{Kind: KindInteger}, want: "int"},
+		{name: "integer uint64", schema: &Schema{Kind: KindInteger, GoType: "uint64"}, want: "uint64"},
+		{name: "integer unsupported", schema: &Schema{Kind: KindInteger, GoType: "int32"}, wantErr: "unsupported x-go-type"},
+		{name: "number default", schema: &Schema{Kind: KindNumber}, want: "float64"},
+		{name: "number float32", schema: &Schema{Kind: KindNumber, GoType: "float32"}, want: "float32"},
+		{name: "number unsupported", schema: &Schema{Kind: KindNumber, GoType: "float64"}, wantErr: "unsupported x-go-type"},
+		{name: "boolean", schema: &Schema{Kind: KindBoolean}, want: "bool"},
+		{name: "array without items", schema: &Schema{Kind: KindArray}, wantErr: "array without items"},
+		{name: "array of refs", schema: &Schema{Kind: KindArray, Items: &Schema{Kind: KindRef, RefName: "Story"}}, want: "[]Story"},
+		{name: "array of nullable items", schema: &Schema{Kind: KindArray, Items: &Schema{Kind: KindString, Nullable: true}}, want: "[]*string"},
+		{name: "array of invalid items", schema: &Schema{Kind: KindArray, Items: &Schema{Kind: KindRef, RefName: "Missing"}}, wantErr: "unknown $ref"},
+		{name: "unsupported", schema: &Schema{Kind: SchemaKind("unsupported")}, wantErr: "unsupported type"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := goTypeName(spec, test.schema)
+			if test.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+					t.Fatalf("goTypeName error = %v, want %q", err, test.wantErr)
+				}
+				return
+			}
+			if err != nil || got != test.want {
+				t.Fatalf("goTypeName = %q/%v, want %q", got, err, test.want)
+			}
+		})
+	}
+}
+
+func TestEmitGoTypesErrorsAndTimeUsage(t *testing.T) {
+	broken, err := newSpec(nil, []*Definition{{
+		Name: "Broken",
+		Schema: &Schema{
+			Kind: KindObject,
+			Properties: []Property{{
+				Name:   "reference",
+				Schema: &Schema{Kind: KindRef, RefName: "Missing"},
+			}},
+		},
+	}})
+	if err != nil {
+		t.Fatalf("newSpec: %v", err)
+	}
+	if _, err := emitGoTypes(broken); err == nil || !strings.Contains(err.Error(), "unknown $ref") {
+		t.Fatalf("emitGoTypes error = %v, want unknown ref", err)
+	}
+
+	unsupported, err := newSpec(nil, []*Definition{{Name: "List", Schema: &Schema{Kind: KindArray}}})
+	if err != nil {
+		t.Fatalf("newSpec: %v", err)
+	}
+	if _, err := emitGoTypes(unsupported); err == nil || !strings.Contains(err.Error(), "unsupported definition kind") {
+		t.Fatalf("emitGoTypes error = %v, want unsupported definition", err)
+	}
+
+	withoutTime, err := newSpec(nil, []*Definition{{
+		Name:   "Kind",
+		Schema: &Schema{Kind: KindString, Enum: []string{"a"}},
+	}})
+	if err != nil {
+		t.Fatalf("newSpec: %v", err)
+	}
+	output, err := emitGoTypes(withoutTime)
+	if err != nil {
+		t.Fatalf("emitGoTypes: %v", err)
+	}
+	if strings.Contains(string(output), `import "time"`) {
+		t.Fatal("emitGoTypes imported time for a schema without timestamps")
+	}
+}
+
 func TestGeneratedGoProtocolBehaviour(t *testing.T) {
 	payload, ok := protocol.NewClientCommandPayload(protocol.MessageTypeReorderStory)
 	if !ok {

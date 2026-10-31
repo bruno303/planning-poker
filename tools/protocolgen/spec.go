@@ -189,7 +189,22 @@ func newSchemaLoader(root string) (*schemaLoader, error) {
 		parsing: make(map[string]bool),
 	}
 
-	directory := filepath.Join(root, filepath.FromSlash(schemaDirectory))
+	files, err := schemaFiles(filepath.Join(root, filepath.FromSlash(schemaDirectory)))
+	if err != nil {
+		return nil, err
+	}
+	if err := loader.loadDefinitions(files); err != nil {
+		return nil, err
+	}
+	if err := loader.parseDefinitions(); err != nil {
+		return nil, err
+	}
+
+	return loader, nil
+}
+
+// schemaFiles lists the schema documents under directory in stable order.
+func schemaFiles(directory string) ([]string, error) {
 	entries, err := os.ReadDir(directory)
 	if err != nil {
 		return nil, fmt.Errorf("read schema directory: %w", err)
@@ -206,40 +221,60 @@ func newSchemaLoader(root string) (*schemaLoader, error) {
 	if len(files) == 0 {
 		return nil, fmt.Errorf("no *.schema.json files in %s", schemaDirectory)
 	}
+	return files, nil
+}
 
+// loadDefinitions registers every $defs entry from the schema documents.
+func (l *schemaLoader) loadDefinitions(files []string) error {
 	for _, file := range files {
-		document, err := loader.loadDoc(file)
-		if err != nil {
-			return nil, err
-		}
-		defsRaw, ok := asMap(document["$defs"])
-		if !ok {
-			return nil, fmt.Errorf("%s: missing $defs object", loader.relPath(file))
-		}
-		for _, name := range sortedKeys(defsRaw) {
-			raw, ok := asMap(defsRaw[name])
-			if !ok {
-				return nil, fmt.Errorf("%s: $defs.%s is not an object", loader.relPath(file), name)
-			}
-			if existing, exists := loader.defs[name]; exists {
-				return nil, fmt.Errorf("duplicate $defs %q in %s and %s", name, existing.relFile, loader.relPath(file))
-			}
-			loader.defs[name] = &rawDefinition{
-				name:    name,
-				file:    filepath.Clean(file),
-				relFile: loader.relPath(file),
-				raw:     raw,
-			}
+		if err := l.loadDefinitionsFrom(file); err != nil {
+			return err
 		}
 	}
+	return nil
+}
 
-	for _, name := range loader.definitionNames() {
-		if _, err := loader.parseDefinition(name); err != nil {
-			return nil, err
+func (l *schemaLoader) loadDefinitionsFrom(file string) error {
+	document, err := l.loadDoc(file)
+	if err != nil {
+		return err
+	}
+	defsRaw, ok := asMap(document["$defs"])
+	if !ok {
+		return fmt.Errorf("%s: missing $defs object", l.relPath(file))
+	}
+	for _, name := range sortedKeys(defsRaw) {
+		if err := l.registerDefinition(file, name, defsRaw[name]); err != nil {
+			return err
 		}
 	}
+	return nil
+}
 
-	return loader, nil
+func (l *schemaLoader) registerDefinition(file, name string, value any) error {
+	raw, ok := asMap(value)
+	if !ok {
+		return fmt.Errorf("%s: $defs.%s is not an object", l.relPath(file), name)
+	}
+	if existing, exists := l.defs[name]; exists {
+		return fmt.Errorf("duplicate $defs %q in %s and %s", name, existing.relFile, l.relPath(file))
+	}
+	l.defs[name] = &rawDefinition{
+		name:    name,
+		file:    filepath.Clean(file),
+		relFile: l.relPath(file),
+		raw:     raw,
+	}
+	return nil
+}
+
+func (l *schemaLoader) parseDefinitions() error {
+	for _, name := range l.definitionNames() {
+		if _, err := l.parseDefinition(name); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (l *schemaLoader) relPath(file string) string {
@@ -300,26 +335,7 @@ func (l *schemaLoader) parseDefinition(name string) (*Schema, error) {
 
 func (l *schemaLoader) parseSchema(raw map[string]any, file string) (*Schema, error) {
 	if rawRef, ok := raw["$ref"]; ok {
-		ref, ok := rawRef.(string)
-		if !ok {
-			return nil, errors.New("$ref must be a string")
-		}
-		targetFile, fragment, err := l.resolveRef(file, ref)
-		if err != nil {
-			return nil, err
-		}
-		refName := pointerName(fragment)
-		definition, exists := l.defs[refName]
-		if !exists {
-			return nil, fmt.Errorf("$ref %q does not point at a known $defs entry", ref)
-		}
-		if filepath.Clean(targetFile) != filepath.Clean(definition.file) {
-			return nil, fmt.Errorf("$ref %q resolves to %s but $defs.%s lives in %s", ref, l.relPath(targetFile), refName, definition.relFile)
-		}
-		if _, err := l.parseDefinition(refName); err != nil {
-			return nil, err
-		}
-		return &Schema{Kind: KindRef, RefName: refName}, nil
+		return l.parseRefSchema(rawRef, file)
 	}
 
 	kind, nullable, err := schemaKind(raw)
@@ -328,109 +344,171 @@ func (l *schemaLoader) parseSchema(raw map[string]any, file string) (*Schema, er
 	}
 	schema := &Schema{Kind: kind, Nullable: nullable}
 
-	if rawEnum, ok := raw["enum"]; ok {
-		values, ok := rawEnum.([]any)
-		if !ok {
-			return nil, errors.New("enum must be an array")
-		}
-		if kind != KindString {
-			return nil, fmt.Errorf("enum requires a string type, got %q", kind)
-		}
-		seen := make(map[string]bool, len(values))
-		for _, value := range values {
-			text, ok := value.(string)
-			if !ok {
-				return nil, errors.New("enum values must be strings")
-			}
-			if seen[text] {
-				return nil, fmt.Errorf("duplicate enum value %q", text)
-			}
-			seen[text] = true
-			schema.Enum = append(schema.Enum, text)
-		}
-		if len(schema.Enum) == 0 {
-			return nil, errors.New("enum must not be empty")
-		}
-	}
-
-	if rawConst, ok := raw["const"]; ok {
-		text, ok := rawConst.(string)
-		if !ok {
-			return nil, errors.New("const must be a string")
-		}
-		if kind != KindString {
-			return nil, fmt.Errorf("const requires a string type, got %q", kind)
-		}
-		schema.Const = text
-	}
-
-	if rawFormat, ok := raw["format"]; ok {
-		format, ok := rawFormat.(string)
-		if !ok {
-			return nil, errors.New("format must be a string")
-		}
-		schema.Format = format
-	}
-
-	if rawGoType, ok := raw["x-go-type"]; ok {
-		goType, ok := rawGoType.(string)
-		if !ok {
-			return nil, errors.New("x-go-type must be a string")
-		}
-		schema.GoType = goType
+	if err := applySchemaMetadata(schema, raw); err != nil {
+		return nil, err
 	}
 
 	switch kind {
 	case KindObject:
-		propertiesRaw, ok := raw["properties"]
-		if !ok {
-			return schema, nil
-		}
-		properties, ok := asMap(propertiesRaw)
-		if !ok {
-			return nil, errors.New("properties must be an object")
-		}
-		required, err := requiredNames(raw)
-		if err != nil {
+		if err := l.parseObjectProperties(schema, raw, file); err != nil {
 			return nil, err
 		}
-		for name := range required {
-			if _, exists := properties[name]; !exists {
-				return nil, fmt.Errorf("required property %q is not declared", name)
-			}
-		}
-		for _, name := range sortedKeys(properties) {
-			propertyRaw, ok := asMap(properties[name])
-			if !ok {
-				return nil, fmt.Errorf("property %q must be an object", name)
-			}
-			propertySchema, err := l.parseSchema(propertyRaw, file)
-			if err != nil {
-				return nil, fmt.Errorf("property %q: %w", name, err)
-			}
-			schema.Properties = append(schema.Properties, Property{
-				Name:     name,
-				Schema:   propertySchema,
-				Required: required[name],
-			})
-		}
 	case KindArray:
-		itemsRaw, ok := raw["items"]
-		if !ok {
-			return nil, errors.New("array items are required")
+		if err := l.parseArrayItems(schema, raw, file); err != nil {
+			return nil, err
 		}
-		items, ok := asMap(itemsRaw)
-		if !ok {
-			return nil, errors.New("array items must be an object")
-		}
-		itemSchema, err := l.parseSchema(items, file)
-		if err != nil {
-			return nil, fmt.Errorf("array items: %w", err)
-		}
-		schema.Items = itemSchema
 	}
 
 	return schema, nil
+}
+
+func (l *schemaLoader) parseRefSchema(rawRef any, file string) (*Schema, error) {
+	ref, ok := rawRef.(string)
+	if !ok {
+		return nil, errors.New("$ref must be a string")
+	}
+	targetFile, fragment, err := l.resolveRef(file, ref)
+	if err != nil {
+		return nil, err
+	}
+	refName := pointerName(fragment)
+	definition, exists := l.defs[refName]
+	if !exists {
+		return nil, fmt.Errorf("$ref %q does not point at a known $defs entry", ref)
+	}
+	if filepath.Clean(targetFile) != filepath.Clean(definition.file) {
+		return nil, fmt.Errorf("$ref %q resolves to %s but $defs.%s lives in %s", ref, l.relPath(targetFile), refName, definition.relFile)
+	}
+	if _, err := l.parseDefinition(refName); err != nil {
+		return nil, err
+	}
+	return &Schema{Kind: KindRef, RefName: refName}, nil
+}
+
+func applySchemaMetadata(schema *Schema, raw map[string]any) error {
+	if rawEnum, ok := raw["enum"]; ok {
+		if err := applyEnum(schema, rawEnum); err != nil {
+			return err
+		}
+	}
+	if rawConst, ok := raw["const"]; ok {
+		if err := applyConst(schema, rawConst); err != nil {
+			return err
+		}
+	}
+	if rawFormat, ok := raw["format"]; ok {
+		format, ok := rawFormat.(string)
+		if !ok {
+			return errors.New("format must be a string")
+		}
+		schema.Format = format
+	}
+	if rawGoType, ok := raw["x-go-type"]; ok {
+		goType, ok := rawGoType.(string)
+		if !ok {
+			return errors.New("x-go-type must be a string")
+		}
+		schema.GoType = goType
+	}
+	return nil
+}
+
+func applyEnum(schema *Schema, rawEnum any) error {
+	values, ok := rawEnum.([]any)
+	if !ok {
+		return errors.New("enum must be an array")
+	}
+	if schema.Kind != KindString {
+		return fmt.Errorf("enum requires a string type, got %q", schema.Kind)
+	}
+	seen := make(map[string]bool, len(values))
+	for _, value := range values {
+		text, ok := value.(string)
+		if !ok {
+			return errors.New("enum values must be strings")
+		}
+		if seen[text] {
+			return fmt.Errorf("duplicate enum value %q", text)
+		}
+		seen[text] = true
+		schema.Enum = append(schema.Enum, text)
+	}
+	if len(schema.Enum) == 0 {
+		return errors.New("enum must not be empty")
+	}
+	return nil
+}
+
+func applyConst(schema *Schema, rawConst any) error {
+	text, ok := rawConst.(string)
+	if !ok {
+		return errors.New("const must be a string")
+	}
+	if schema.Kind != KindString {
+		return fmt.Errorf("const requires a string type, got %q", schema.Kind)
+	}
+	schema.Const = text
+	return nil
+}
+
+func (l *schemaLoader) parseObjectProperties(schema *Schema, raw map[string]any, file string) error {
+	propertiesRaw, ok := raw["properties"]
+	if !ok {
+		return nil
+	}
+	properties, ok := asMap(propertiesRaw)
+	if !ok {
+		return errors.New("properties must be an object")
+	}
+	required, err := requiredNames(raw)
+	if err != nil {
+		return err
+	}
+	for name := range required {
+		if _, exists := properties[name]; !exists {
+			return fmt.Errorf("required property %q is not declared", name)
+		}
+	}
+	for _, name := range sortedKeys(properties) {
+		if err := l.parseObjectProperty(schema, properties[name], name, required[name], file); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (l *schemaLoader) parseObjectProperty(schema *Schema, value any, name string, required bool, file string) error {
+	propertyRaw, ok := asMap(value)
+	if !ok {
+		return fmt.Errorf("property %q must be an object", name)
+	}
+	propertySchema, err := l.parseSchema(propertyRaw, file)
+	if err != nil {
+		return fmt.Errorf("property %q: %w", name, err)
+	}
+	schema.Properties = append(schema.Properties, Property{
+		Name:     name,
+		Schema:   propertySchema,
+		Required: required,
+	})
+	return nil
+}
+
+func (l *schemaLoader) parseArrayItems(schema *Schema, raw map[string]any, file string) error {
+	itemsRaw, ok := raw["items"]
+	if !ok {
+		return errors.New("array items are required")
+	}
+	items, ok := asMap(itemsRaw)
+	if !ok {
+		return errors.New("array items must be an object")
+	}
+	itemSchema, err := l.parseSchema(items, file)
+	if err != nil {
+		return fmt.Errorf("array items: %w", err)
+	}
+	schema.Items = itemSchema
+	return nil
 }
 
 func requiredNames(raw map[string]any) (map[string]bool, error) {
@@ -456,12 +534,7 @@ func requiredNames(raw map[string]any) (map[string]bool, error) {
 func schemaKind(raw map[string]any) (SchemaKind, bool, error) {
 	rawType, ok := raw["type"]
 	if !ok {
-		switch {
-		case raw["enum"] != nil, raw["const"] != nil:
-			return KindString, false, nil
-		default:
-			return "", false, errors.New("missing type")
-		}
+		return schemaKindWithoutType(raw)
 	}
 
 	switch value := rawType.(type) {
@@ -469,33 +542,44 @@ func schemaKind(raw map[string]any) (SchemaKind, bool, error) {
 		kind, err := schemaKindName(value)
 		return kind, false, err
 	case []any:
-		var kind SchemaKind
-		nullable := false
-		for _, entry := range value {
-			name, ok := entry.(string)
-			if !ok {
-				return "", false, errors.New("type entries must be strings")
-			}
-			if name == "null" {
-				nullable = true
-				continue
-			}
-			if kind != "" {
-				return "", false, errors.New("only one non-null type is supported")
-			}
-			parsed, err := schemaKindName(name)
-			if err != nil {
-				return "", false, err
-			}
-			kind = parsed
-		}
-		if kind == "" {
-			return "", false, errors.New("type must contain a non-null entry")
-		}
-		return kind, nullable, nil
+		return schemaKindFromList(value)
 	default:
 		return "", false, errors.New("type must be a string or an array of strings")
 	}
+}
+
+func schemaKindWithoutType(raw map[string]any) (SchemaKind, bool, error) {
+	if raw["enum"] != nil || raw["const"] != nil {
+		return KindString, false, nil
+	}
+	return "", false, errors.New("missing type")
+}
+
+func schemaKindFromList(values []any) (SchemaKind, bool, error) {
+	var kind SchemaKind
+	nullable := false
+	for _, entry := range values {
+		name, ok := entry.(string)
+		if !ok {
+			return "", false, errors.New("type entries must be strings")
+		}
+		if name == "null" {
+			nullable = true
+			continue
+		}
+		if kind != "" {
+			return "", false, errors.New("only one non-null type is supported")
+		}
+		parsed, err := schemaKindName(name)
+		if err != nil {
+			return "", false, err
+		}
+		kind = parsed
+	}
+	if kind == "" {
+		return "", false, errors.New("type must contain a non-null entry")
+	}
+	return kind, nullable, nil
 }
 
 func schemaKindName(name string) (SchemaKind, error) {
@@ -586,6 +670,32 @@ func loadSpec(root string) (*Spec, error) {
 		return nil, err
 	}
 
+	document, err := readAsyncAPIDocument(root)
+	if err != nil {
+		return nil, err
+	}
+	messagesRaw, channelMessages, err := asyncAPIMessages(document)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateMessageExposure(messagesRaw, channelMessages); err != nil {
+		return nil, err
+	}
+
+	directions, err := operationDirections(document)
+	if err != nil {
+		return nil, err
+	}
+	messages, err := buildMessages(loader, filepath.Join(root, filepath.FromSlash(asyncAPIYAMLPath)), messagesRaw, channelMessages, directions)
+	if err != nil {
+		return nil, err
+	}
+
+	return newSpec(messages, buildDefinitions(loader))
+}
+
+// readAsyncAPIDocument reads, normalizes, and version-checks the AsyncAPI document.
+func readAsyncAPIDocument(root string) (map[string]any, error) {
 	asyncAPIFile := filepath.Join(root, filepath.FromSlash(asyncAPIYAMLPath))
 	rawYAML, err := os.ReadFile(asyncAPIFile)
 	if err != nil {
@@ -600,25 +710,37 @@ func loadSpec(root string) (*Spec, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse %s: %w", asyncAPIYAMLPath, err)
 	}
-	document, ok := normalized.(map[string]any)
+	normalizedDocument, ok := normalized.(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("%s: document must be an object", asyncAPIYAMLPath)
 	}
 
-	version, _ := stringValue(document["asyncapi"])
+	version, _ := stringValue(normalizedDocument["asyncapi"])
 	if !strings.HasPrefix(version, "3.") {
 		return nil, fmt.Errorf("%s: asyncapi version %q must start with 3", asyncAPIYAMLPath, version)
 	}
+	return normalizedDocument, nil
+}
 
+// asyncAPIMessages returns components.messages and channels.roomSocket.messages.
+func asyncAPIMessages(document map[string]any) (map[string]any, map[string]any, error) {
 	components, ok := asMap(document["components"])
 	if !ok {
-		return nil, errors.New("asyncapi: missing components object")
+		return nil, nil, errors.New("asyncapi: missing components object")
 	}
 	messagesRaw, ok := asMap(components["messages"])
 	if !ok || len(messagesRaw) == 0 {
-		return nil, errors.New("asyncapi: missing components.messages")
+		return nil, nil, errors.New("asyncapi: missing components.messages")
 	}
 
+	channelMessages, err := roomChannelMessages(document)
+	if err != nil {
+		return nil, nil, err
+	}
+	return messagesRaw, channelMessages, nil
+}
+
+func roomChannelMessages(document map[string]any) (map[string]any, error) {
 	channels, ok := asMap(document["channels"])
 	if !ok {
 		return nil, errors.New("asyncapi: missing channels object")
@@ -631,115 +753,149 @@ func loadSpec(root string) (*Spec, error) {
 	if !ok || len(channelMessages) == 0 {
 		return nil, errors.New("asyncapi: missing channels.roomSocket.messages")
 	}
+	return channelMessages, nil
+}
 
+// validateMessageExposure enforces a one-to-one mapping between channel messages
+// and component messages.
+func validateMessageExposure(messagesRaw, channelMessages map[string]any) error {
 	for _, wireType := range sortedKeys(channelMessages) {
 		if _, exists := messagesRaw[wireType]; !exists {
-			return nil, fmt.Errorf("asyncapi: channel message %q is missing from components.messages", wireType)
+			return fmt.Errorf("asyncapi: channel message %q is missing from components.messages", wireType)
 		}
 		ref, err := entryRef(channelMessages[wireType])
 		if err != nil {
-			return nil, fmt.Errorf("asyncapi: channels.roomSocket.messages.%s: %w", wireType, err)
+			return fmt.Errorf("asyncapi: channels.roomSocket.messages.%s: %w", wireType, err)
 		}
 		if ref != wireType {
-			return nil, fmt.Errorf("asyncapi: channel message %q references %q", wireType, ref)
+			return fmt.Errorf("asyncapi: channel message %q references %q", wireType, ref)
 		}
 	}
 	for _, wireType := range sortedKeys(messagesRaw) {
 		if _, exists := channelMessages[wireType]; !exists {
-			return nil, fmt.Errorf("asyncapi: components.messages.%s is not exposed by channels.roomSocket", wireType)
+			return fmt.Errorf("asyncapi: components.messages.%s is not exposed by channels.roomSocket", wireType)
 		}
 	}
+	return nil
+}
 
-	directions, err := operationDirections(document)
-	if err != nil {
-		return nil, err
-	}
-
+func buildMessages(loader *schemaLoader, asyncAPIFile string, messagesRaw, channelMessages map[string]any, directions map[string]Direction) ([]Message, error) {
 	var messages []Message
 	for _, wireType := range sortedKeys(channelMessages) {
-		message, ok := asMap(messagesRaw[wireType])
-		if !ok {
-			return nil, fmt.Errorf("asyncapi: components.messages.%s must be an object", wireType)
+		message, err := buildMessage(loader, asyncAPIFile, wireType, messagesRaw[wireType], directions)
+		if err != nil {
+			return nil, err
 		}
-		name, _ := stringValue(message["name"])
-		if name != wireType {
-			return nil, fmt.Errorf("asyncapi: components.messages.%s.name must be %q", wireType, wireType)
-		}
-		title, _ := stringValue(message["title"])
-		summary, _ := stringValue(message["summary"])
-		if title == "" || summary == "" {
-			return nil, fmt.Errorf("asyncapi: components.messages.%s requires title and summary", wireType)
-		}
-		payload, ok := asMap(message["payload"])
-		if !ok {
-			return nil, fmt.Errorf("asyncapi: components.messages.%s.payload must be an object", wireType)
-		}
-		payloadRef, _ := stringValue(payload["$ref"])
-		if payloadRef == "" {
-			return nil, fmt.Errorf("asyncapi: components.messages.%s.payload.$ref is required", wireType)
-		}
-
-		if _, _, err := loader.resolveRef(asyncAPIFile, payloadRef); err != nil {
-			return nil, fmt.Errorf("asyncapi: components.messages.%s.payload: %w", wireType, err)
-		}
-		_, fragment := splitRef(payloadRef)
-		defName := pointerName(fragment)
-		definition, exists := loader.defs[defName]
-		if !exists {
-			return nil, fmt.Errorf("asyncapi: components.messages.%s.payload %q does not resolve to a $defs entry", wireType, payloadRef)
-		}
-		payloadSchema, ok := loader.parsed[defName]
-		if !ok {
-			return nil, fmt.Errorf("asyncapi: $defs.%s was not parsed", defName)
-		}
-		if payloadSchema.Kind != KindObject {
-			return nil, fmt.Errorf("asyncapi: $defs.%s must be an object", defName)
-		}
-		typeProperty, ok := payloadSchema.Property("type")
-		if !ok || typeProperty.Schema.Const != wireType {
-			return nil, fmt.Errorf("asyncapi: $defs.%s.type.const must equal %q", defName, wireType)
-		}
-
-		direction, exists := directions[wireType]
-		if !exists {
-			return nil, fmt.Errorf("asyncapi: message %q is not listed by any operation", wireType)
-		}
-
-		payloadType := defName
-		if direction == DirectionSend {
-			payloadProperty, ok := payloadSchema.Property("payload")
-			if !ok || payloadProperty.Schema.Kind != KindRef {
-				return nil, fmt.Errorf("asyncapi: command %q must declare a payload $ref", wireType)
-			}
-			payloadType = payloadProperty.Schema.RefName
-			payloadDefinition, exists := loader.defs[payloadType]
-			if !exists {
-				return nil, fmt.Errorf("asyncapi: command %q payload %q is unknown", wireType, payloadType)
-			}
-			payloadRefSchema := loader.parsed[payloadDefinition.name]
-			if payloadRefSchema == nil || payloadRefSchema.Kind != KindObject {
-				return nil, fmt.Errorf("asyncapi: command %q payload %q must be an object", wireType, payloadType)
-			}
-		}
-
-		messages = append(messages, Message{
-			WireType:      wireType,
-			Title:         title,
-			Summary:       summary,
-			Direction:     direction,
-			SchemaFile:    definition.relFile,
-			SchemaPointer: "#" + fragment,
-			DefName:       defName,
-			PayloadType:   payloadType,
-		})
+		messages = append(messages, message)
 	}
-
 	for wireType := range directions {
 		if _, exists := channelMessages[wireType]; !exists {
 			return nil, fmt.Errorf("asyncapi: operation message %q is not exposed by channels.roomSocket", wireType)
 		}
 	}
+	return messages, nil
+}
 
+func buildMessage(loader *schemaLoader, asyncAPIFile, wireType string, raw any, directions map[string]Direction) (Message, error) {
+	message, ok := asMap(raw)
+	if !ok {
+		return Message{}, fmt.Errorf("asyncapi: components.messages.%s must be an object", wireType)
+	}
+	name, _ := stringValue(message["name"])
+	if name != wireType {
+		return Message{}, fmt.Errorf("asyncapi: components.messages.%s.name must be %q", wireType, wireType)
+	}
+	title, _ := stringValue(message["title"])
+	summary, _ := stringValue(message["summary"])
+	if title == "" || summary == "" {
+		return Message{}, fmt.Errorf("asyncapi: components.messages.%s requires title and summary", wireType)
+	}
+
+	defName, payloadSchema, fragment, err := resolveMessagePayload(loader, asyncAPIFile, wireType, message)
+	if err != nil {
+		return Message{}, err
+	}
+	if err := requireMessageTypeConst(payloadSchema, defName, wireType); err != nil {
+		return Message{}, err
+	}
+
+	direction, exists := directions[wireType]
+	if !exists {
+		return Message{}, fmt.Errorf("asyncapi: message %q is not listed by any operation", wireType)
+	}
+	payloadType, err := payloadTypeFor(loader, payloadSchema, defName, wireType, direction)
+	if err != nil {
+		return Message{}, err
+	}
+
+	return Message{
+		WireType:      wireType,
+		Title:         title,
+		Summary:       summary,
+		Direction:     direction,
+		SchemaFile:    loader.defs[defName].relFile,
+		SchemaPointer: "#" + fragment,
+		DefName:       defName,
+		PayloadType:   payloadType,
+	}, nil
+}
+
+func resolveMessagePayload(loader *schemaLoader, asyncAPIFile, wireType string, message map[string]any) (string, *Schema, string, error) {
+	payload, ok := asMap(message["payload"])
+	if !ok {
+		return "", nil, "", fmt.Errorf("asyncapi: components.messages.%s.payload must be an object", wireType)
+	}
+	payloadRef, _ := stringValue(payload["$ref"])
+	if payloadRef == "" {
+		return "", nil, "", fmt.Errorf("asyncapi: components.messages.%s.payload.$ref is required", wireType)
+	}
+	if _, _, err := loader.resolveRef(asyncAPIFile, payloadRef); err != nil {
+		return "", nil, "", fmt.Errorf("asyncapi: components.messages.%s.payload: %w", wireType, err)
+	}
+	_, fragment := splitRef(payloadRef)
+	defName := pointerName(fragment)
+	if _, exists := loader.defs[defName]; !exists {
+		return "", nil, "", fmt.Errorf("asyncapi: components.messages.%s.payload %q does not resolve to a $defs entry", wireType, payloadRef)
+	}
+	payloadSchema, ok := loader.parsed[defName]
+	if !ok {
+		return "", nil, "", fmt.Errorf("asyncapi: $defs.%s was not parsed", defName)
+	}
+	if payloadSchema.Kind != KindObject {
+		return "", nil, "", fmt.Errorf("asyncapi: $defs.%s must be an object", defName)
+	}
+	return defName, payloadSchema, fragment, nil
+}
+
+func requireMessageTypeConst(payloadSchema *Schema, defName, wireType string) error {
+	typeProperty, ok := payloadSchema.Property("type")
+	if !ok || typeProperty.Schema.Const != wireType {
+		return fmt.Errorf("asyncapi: $defs.%s.type.const must equal %q", defName, wireType)
+	}
+	return nil
+}
+
+func payloadTypeFor(loader *schemaLoader, payloadSchema *Schema, defName, wireType string, direction Direction) (string, error) {
+	if direction != DirectionSend {
+		return defName, nil
+	}
+	payloadProperty, ok := payloadSchema.Property("payload")
+	if !ok || payloadProperty.Schema.Kind != KindRef {
+		return "", fmt.Errorf("asyncapi: command %q must declare a payload $ref", wireType)
+	}
+	payloadType := payloadProperty.Schema.RefName
+	payloadDefinition, exists := loader.defs[payloadType]
+	if !exists {
+		return "", fmt.Errorf("asyncapi: command %q payload %q is unknown", wireType, payloadType)
+	}
+	payloadRefSchema := loader.parsed[payloadDefinition.name]
+	if payloadRefSchema == nil || payloadRefSchema.Kind != KindObject {
+		return "", fmt.Errorf("asyncapi: command %q payload %q must be an object", wireType, payloadType)
+	}
+	return payloadType, nil
+}
+
+func buildDefinitions(loader *schemaLoader) []*Definition {
 	definitions := make([]*Definition, 0, len(loader.defs))
 	for _, name := range loader.definitionNames() {
 		raw := loader.defs[name]
@@ -749,8 +905,7 @@ func loadSpec(root string) (*Spec, error) {
 			Schema: loader.parsed[name],
 		})
 	}
-
-	return newSpec(messages, definitions)
+	return definitions
 }
 
 func operationDirections(document map[string]any) (map[string]Direction, error) {
@@ -761,31 +916,38 @@ func operationDirections(document map[string]any) (map[string]Direction, error) 
 
 	directions := make(map[string]Direction, len(operations))
 	for _, operationName := range sortedKeys(operations) {
-		operation, ok := asMap(operations[operationName])
-		if !ok {
-			return nil, fmt.Errorf("asyncapi: operations.%s must be an object", operationName)
-		}
-		action, _ := stringValue(operation["action"])
-		direction := Direction(action)
-		if direction != DirectionSend && direction != DirectionReceive {
-			return nil, fmt.Errorf("asyncapi: operations.%s.action must be send or receive", operationName)
-		}
-		messages, ok := operation["messages"].([]any)
-		if !ok || len(messages) == 0 {
-			return nil, fmt.Errorf("asyncapi: operations.%s.messages must be a non-empty array", operationName)
-		}
-		for index, entry := range messages {
-			ref, err := entryRef(entry)
-			if err != nil {
-				return nil, fmt.Errorf("asyncapi: operations.%s.messages[%d]: %w", operationName, index, err)
-			}
-			if existing, exists := directions[ref]; exists {
-				return nil, fmt.Errorf("asyncapi: message %q is listed by multiple operations (%s and %s)", ref, existing, direction)
-			}
-			directions[ref] = direction
+		if err := addOperationDirections(directions, operationName, operations[operationName]); err != nil {
+			return nil, err
 		}
 	}
 	return directions, nil
+}
+
+func addOperationDirections(directions map[string]Direction, operationName string, raw any) error {
+	operation, ok := asMap(raw)
+	if !ok {
+		return fmt.Errorf("asyncapi: operations.%s must be an object", operationName)
+	}
+	action, _ := stringValue(operation["action"])
+	direction := Direction(action)
+	if direction != DirectionSend && direction != DirectionReceive {
+		return fmt.Errorf("asyncapi: operations.%s.action must be send or receive", operationName)
+	}
+	messages, ok := operation["messages"].([]any)
+	if !ok || len(messages) == 0 {
+		return fmt.Errorf("asyncapi: operations.%s.messages must be a non-empty array", operationName)
+	}
+	for index, entry := range messages {
+		ref, err := entryRef(entry)
+		if err != nil {
+			return fmt.Errorf("asyncapi: operations.%s.messages[%d]: %w", operationName, index, err)
+		}
+		if existing, exists := directions[ref]; exists {
+			return fmt.Errorf("asyncapi: message %q is listed by multiple operations (%s and %s)", ref, existing, direction)
+		}
+		directions[ref] = direction
+	}
+	return nil
 }
 
 func entryRef(value any) (string, error) {
@@ -805,42 +967,54 @@ func entryRef(value any) (string, error) {
 func normalizeValue(value any) (any, error) {
 	switch typed := value.(type) {
 	case map[string]any:
-		result := make(map[string]any, len(typed))
-		for key, entry := range typed {
-			normalized, err := normalizeValue(entry)
-			if err != nil {
-				return nil, err
-			}
-			result[key] = normalized
-		}
-		return result, nil
+		return normalizeMap(typed)
 	case map[any]any:
-		result := make(map[string]any, len(typed))
-		for key, entry := range typed {
-			text, ok := key.(string)
-			if !ok {
-				return nil, fmt.Errorf("non-string mapping key %v", key)
-			}
-			normalized, err := normalizeValue(entry)
-			if err != nil {
-				return nil, err
-			}
-			result[text] = normalized
-		}
-		return result, nil
+		return normalizeAnyMap(typed)
 	case []any:
-		result := make([]any, 0, len(typed))
-		for _, entry := range typed {
-			normalized, err := normalizeValue(entry)
-			if err != nil {
-				return nil, err
-			}
-			result = append(result, normalized)
-		}
-		return result, nil
+		return normalizeSlice(typed)
 	default:
 		return value, nil
 	}
+}
+
+func normalizeMap(values map[string]any) (any, error) {
+	result := make(map[string]any, len(values))
+	for key, entry := range values {
+		normalized, err := normalizeValue(entry)
+		if err != nil {
+			return nil, err
+		}
+		result[key] = normalized
+	}
+	return result, nil
+}
+
+func normalizeAnyMap(values map[any]any) (any, error) {
+	result := make(map[string]any, len(values))
+	for key, entry := range values {
+		text, ok := key.(string)
+		if !ok {
+			return nil, fmt.Errorf("non-string mapping key %v", key)
+		}
+		normalized, err := normalizeValue(entry)
+		if err != nil {
+			return nil, err
+		}
+		result[text] = normalized
+	}
+	return result, nil
+}
+
+func normalizeSlice(values []any) (any, error) {
+	result := make([]any, 0, len(values))
+	for _, entry := range values {
+		normalized, err := normalizeValue(entry)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, normalized)
+	}
+	return result, nil
 }
 
 func asMap(value any) (map[string]any, bool) {

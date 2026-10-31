@@ -17,6 +17,7 @@ import { useRouter } from 'next/navigation';
 const RECONNECT_INITIAL_DELAY = 1000;
 const RECONNECT_MAX_DELAY = 30000;
 const RECONNECT_MULTIPLIER = 2;
+const SERVER_EVENT_TYPE_SET: ReadonlySet<string> = new Set(SERVER_EVENT_TYPES);
 
 const emptySnapshot: RoomSnapshot = {
   deck: EMPTY_DECK, currentStory: '', reveal: false, result: null, mostAppearingVotes: [], consensus: null,
@@ -141,7 +142,7 @@ export function useRoomConnection({ roomId, userName, enabled }: UseRoomConnecti
         try {
           const data: unknown = JSON.parse(event.data);
           const frameType = typeof data === 'object' && data !== null && 'type' in data ? data.type : undefined;
-          if (typeof frameType === 'string' && !SERVER_EVENT_TYPES.some((eventType) => eventType === frameType)) {
+          if (typeof frameType === 'string' && !SERVER_EVENT_TYPE_SET.has(frameType)) {
             logger.warn('Ignoring unknown websocket frame', { type: frameType });
             return;
           }
