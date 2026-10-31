@@ -74,6 +74,48 @@ func TestServerFixturesMatchSchemas(t *testing.T) {
 	}
 }
 
+func TestRegistriesCoverFixtures(t *testing.T) {
+	clientDir := filepath.Join(protocolDir(t), "fixtures", "client")
+	serverDir := filepath.Join(protocolDir(t), "fixtures", "server")
+
+	clientFixtures := make(map[string]struct{})
+	for _, name := range jsonFiles(t, clientDir) {
+		clientFixtures[name] = struct{}{}
+	}
+
+	serverFixtures := make(map[string]struct{})
+	for _, name := range jsonFiles(t, serverDir) {
+		eventType, ok := serverEventTypeForFixture(name)
+		if !ok {
+			continue
+		}
+		serverFixtures[eventType] = struct{}{}
+	}
+
+	t.Run("client-commands", func(t *testing.T) {
+		expected := expectedClientPayloads()
+		for _, commandType := range protocol.ClientCommandTypes {
+			if _, ok := expected[commandType]; !ok {
+				t.Errorf("generated client command %q has no entry in expectedClientPayloads", commandType)
+			}
+			if _, ok := clientFixtures[commandType+".json"]; !ok {
+				t.Errorf("generated client command %q has no fixture protocol/fixtures/client/%s.json", commandType, commandType)
+			}
+		}
+	})
+
+	t.Run("server-events", func(t *testing.T) {
+		for _, eventType := range protocol.ServerEventTypes {
+			if _, ok := serverEventSchemaDefs[eventType]; !ok {
+				t.Errorf("generated server event %q has no entry in serverEventSchemaDefs", eventType)
+			}
+			if _, ok := serverFixtures[eventType]; !ok {
+				t.Errorf("generated server event %q has no valid fixture in protocol/fixtures/server", eventType)
+			}
+		}
+	})
+}
+
 func TestClientFixturesMatchSchemas(t *testing.T) {
 	compiler := compileProtocolSchemas(t)
 	clientDir := filepath.Join(protocolDir(t), "fixtures", "client")

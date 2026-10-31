@@ -194,6 +194,28 @@ func TestMapUsecases_DispatchesSupportedCommands(t *testing.T) {
 	}
 }
 
+func TestMapUsecases_CoversGeneratedCommandRegistry(t *testing.T) {
+	calls := mapUsecases(usecase.UseCasesFacade{}, "client", "room")
+
+	for _, commandType := range protocol.ClientCommandTypes {
+		t.Run(commandType, func(t *testing.T) {
+			if _, ok := calls[commandType]; !ok {
+				t.Errorf("generated client command %q has no mapUsecases handler", commandType)
+			}
+		})
+	}
+
+	for commandType := range calls {
+		if !protocol.IsClientCommandType(commandType) {
+			t.Errorf("mapUsecases handler %q is not a generated client command", commandType)
+		}
+	}
+
+	if len(calls) != len(protocol.ClientCommandTypes) {
+		t.Errorf("mapUsecases exposes %d handlers, generated client command registry has %d", len(calls), len(protocol.ClientCommandTypes))
+	}
+}
+
 func TestGuardedCommandAndExpectedRoomVersion(t *testing.T) {
 	version, ok, err := expectedRoomVersion(map[string]uint64{"expectedRoomVersion": 7})
 	if err != nil || !ok || version == nil || *version != 7 {
