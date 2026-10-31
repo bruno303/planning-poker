@@ -9,6 +9,7 @@ import (
 
 	"planning-poker/internal/infra/boundaries/hub/inmemory"
 	"planning-poker/internal/infra/bus"
+	"planning-poker/internal/protocol"
 	"planning-poker/test/integration"
 
 	"github.com/gorilla/websocket"
@@ -83,7 +84,7 @@ func TestInMemoryWebSocketConcurrentGuardedCommands(t *testing.T) {
 	consumeMessages(t, owner)
 	send(t, owner, bus.WebSocketMessage{
 		Type: "toggle-owner",
-		Payload: bus.ToggleOwnerPayload{
+		Payload: protocol.ToggleOwnerPayload{
 			TargetClientID:      otherID,
 			ExpectedRoomVersion: uint64Ptr(0),
 		},
@@ -99,7 +100,7 @@ func TestInMemoryWebSocketConcurrentGuardedCommands(t *testing.T) {
 			<-start
 			send(t, conn, bus.WebSocketMessage{
 				Type: "update-story",
-				Payload: bus.UpdateStoryPayload{
+				Payload: protocol.UpdateStoryPayload{
 					Story:               "concurrent story",
 					ExpectedRoomVersion: uint64Ptr(1),
 				},
@@ -190,7 +191,7 @@ func TestInMemoryWebSocketBroadcastAndCleanup(t *testing.T) {
 	if err := hub.WaitForClientRemoval(ctx, roomID, firstID); err != nil {
 		t.Fatalf("waiting for first client cleanup: %v", err)
 	}
-	send(t, second, bus.WebSocketMessage{Type: "update-name", Payload: bus.UpdateNamePayload{Username: "retained"}})
+	send(t, second, bus.WebSocketMessage{Type: "update-name", Payload: protocol.UpdateNamePayload{Username: "retained"}})
 	if message := receiveMessage(t, second, 2*time.Second); message["type"] != "room-state" {
 		t.Fatalf("expected retained client to receive broadcast, got %v", message["type"])
 	}

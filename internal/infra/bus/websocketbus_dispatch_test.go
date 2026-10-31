@@ -49,14 +49,14 @@ func TestMapUsecases_DispatchesSupportedCommands(t *testing.T) {
 	}{
 		{
 			name: "update-name",
-			msg:  WebSocketMessage{Type: "update-name", Payload: UpdateNamePayload{Username: "Alice"}},
+			msg:  WebSocketMessage{Type: "update-name", Payload: protocol.UpdateNamePayload{Username: "Alice"}},
 			set: func() {
 				updateName.EXPECT().Execute(gomock.Any(), usecase.UpdateNameCommand{RoomID: roomID, SenderID: clientID, Username: "Alice"}).Return(nil)
 			},
 		},
 		{
 			name: "vote",
-			msg:  WebSocketMessage{Type: "vote", Payload: VotePayload{Vote: voteValue}},
+			msg:  WebSocketMessage{Type: "vote", Payload: protocol.VotePayload{Vote: voteValue}},
 			set: func() {
 				vote.EXPECT().Execute(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, cmd usecase.VoteCommand) error {
 					if cmd.RoomID != roomID || cmd.SenderID != clientID || cmd.Vote == nil || *cmd.Vote != voteValue {
@@ -82,21 +82,21 @@ func TestMapUsecases_DispatchesSupportedCommands(t *testing.T) {
 		},
 		{
 			name: "toggle-spectator",
-			msg:  WebSocketMessage{Type: "toggle-spectator", Payload: ToggleSpectatorPayload{TargetClientID: "target-1"}},
+			msg:  WebSocketMessage{Type: "toggle-spectator", Payload: protocol.ToggleSpectatorPayload{TargetClientID: "target-1"}},
 			set: func() {
 				toggleSpectator.EXPECT().Execute(gomock.Any(), usecase.ToggleSpectatorCommand{RoomID: roomID, SenderID: clientID, TargetClientID: "target-1"}).Return(nil)
 			},
 		},
 		{
 			name: "toggle-owner",
-			msg:  WebSocketMessage{Type: "toggle-owner", Payload: ToggleOwnerPayload{TargetClientID: "target-2"}},
+			msg:  WebSocketMessage{Type: "toggle-owner", Payload: protocol.ToggleOwnerPayload{TargetClientID: "target-2"}},
 			set: func() {
 				toggleOwner.EXPECT().Execute(gomock.Any(), usecase.ToggleOwnerCommand{RoomID: roomID, SenderID: clientID, TargetClientID: "target-2"}).Return(nil)
 			},
 		},
 		{
 			name: "update-story",
-			msg:  WebSocketMessage{Type: "update-story", Payload: UpdateStoryPayload{Story: "Current story"}},
+			msg:  WebSocketMessage{Type: "update-story", Payload: protocol.UpdateStoryPayload{Story: "Current story"}},
 			set: func() {
 				updateStory.EXPECT().Execute(gomock.Any(), usecase.UpdateStoryCommand{RoomID: roomID, SenderID: clientID, Story: "Current story"}).Return(nil)
 			},
@@ -117,14 +117,14 @@ func TestMapUsecases_DispatchesSupportedCommands(t *testing.T) {
 		},
 		{
 			name: "add-story",
-			msg:  WebSocketMessage{Type: "add-story", Payload: AddStoryPayload{Story: "Story from backlog"}},
+			msg:  WebSocketMessage{Type: "add-story", Payload: protocol.AddStoryPayload{Story: "Story from backlog"}},
 			set: func() {
 				addStory.EXPECT().Execute(gomock.Any(), usecase.AddStoryCommand{RoomID: roomID, SenderID: clientID, StoryName: "Story from backlog"}).Return(nil)
 			},
 		},
 		{
 			name: "remove-story",
-			msg:  WebSocketMessage{Type: "remove-story", Payload: RemoveStoryPayload{StoryID: "story-3"}},
+			msg:  WebSocketMessage{Type: "remove-story", Payload: protocol.RemoveStoryPayload{StoryID: "story-3"}},
 			set: func() {
 				removeStory.EXPECT().Execute(gomock.Any(), usecase.RemoveStoryCommand{
 					RoomID: roomID, SenderID: clientID, StoryID: "story-3",
@@ -147,14 +147,14 @@ func TestMapUsecases_DispatchesSupportedCommands(t *testing.T) {
 		},
 		{
 			name: "select-story",
-			msg:  WebSocketMessage{Type: "select-story", Payload: SelectStoryPayload{StoryID: "story-1"}},
+			msg:  WebSocketMessage{Type: "select-story", Payload: protocol.SelectStoryPayload{StoryID: "story-1"}},
 			set: func() {
 				selectStory.EXPECT().Execute(gomock.Any(), usecase.SelectStoryCommand{RoomID: roomID, SenderID: clientID, StoryID: "story-1"}).Return(nil)
 			},
 		},
 		{
 			name: "reorder-story",
-			msg: WebSocketMessage{Type: "reorder-story", Payload: ReorderStoryPayload{
+			msg: WebSocketMessage{Type: "reorder-story", Payload: protocol.ReorderStoryPayload{
 				StoryID: "story-2", TargetIndex: 1,
 			}},
 			set: func() {
@@ -340,7 +340,7 @@ func TestWebsocketBus_Listen_DispatchesIncomingMessage(t *testing.T) {
 		close(done)
 	}()
 
-	if err := clientConn.WriteJSON(WebSocketMessage{Type: "update-name", Payload: UpdateNamePayload{Username: "Alice"}}); err != nil {
+	if err := clientConn.WriteJSON(WebSocketMessage{Type: "update-name", Payload: protocol.UpdateNamePayload{Username: "Alice"}}); err != nil {
 		t.Fatalf("failed to send websocket message: %v", err)
 	}
 	if err := clientConn.Close(); err != nil {

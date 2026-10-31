@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"planning-poker/internal/infra/bus"
+	"planning-poker/internal/protocol"
 	"planning-poker/test/integration"
 	"reflect"
 	"strings"
@@ -93,7 +94,7 @@ func TestWebSocketTShirtRoom(t *testing.T) {
 	roomState := receiveMessage(t, conn, 2*time.Second)
 	assertRoomStateWithDeck(t, roomState, 1, "t-shirt")
 
-	send(t, conn, bus.WebSocketMessage{Type: "vote", Payload: bus.VotePayload{Vote: "M"}})
+	send(t, conn, bus.WebSocketMessage{Type: "vote", Payload: protocol.VotePayload{Vote: "M"}})
 	revealed := receiveMessage(t, conn, 2*time.Second)
 	if revealed["reveal"] != true {
 		t.Fatalf("expected single t-shirt vote to auto-reveal, got %#v", revealed)
@@ -200,7 +201,7 @@ func TestWebSocketUpdateName(t *testing.T) {
 	t.Run("update name successfully", func(t *testing.T) {
 		send(t, conn, bus.WebSocketMessage{
 			Type: "update-name",
-			Payload: bus.UpdateNamePayload{
+			Payload: protocol.UpdateNamePayload{
 				Username: "Alice",
 			},
 		})
@@ -246,7 +247,7 @@ func TestWebSocketVoting(t *testing.T) {
 	t.Run("client can vote", func(t *testing.T) {
 		send(t, conn1, bus.WebSocketMessage{
 			Type: "vote",
-			Payload: bus.VotePayload{
+			Payload: protocol.VotePayload{
 				Vote: "5",
 			},
 		})
@@ -269,7 +270,7 @@ func TestWebSocketVoting(t *testing.T) {
 	t.Run("votes auto-reveal when all clients vote", func(t *testing.T) {
 		send(t, conn2, bus.WebSocketMessage{
 			Type: "vote",
-			Payload: bus.VotePayload{
+			Payload: protocol.VotePayload{
 				Vote: "8",
 			},
 		})
@@ -305,7 +306,7 @@ func TestWebSocketRevealVotes(t *testing.T) {
 		// Vote first
 		send(t, conn, bus.WebSocketMessage{
 			Type: "vote",
-			Payload: bus.VotePayload{
+			Payload: protocol.VotePayload{
 				Vote: "3",
 			},
 		})
@@ -345,7 +346,7 @@ func TestWebSocketReset(t *testing.T) {
 		// Vote and reveal
 		send(t, conn, bus.WebSocketMessage{
 			Type: "vote",
-			Payload: bus.VotePayload{
+			Payload: protocol.VotePayload{
 				Vote: "5",
 			},
 		})
@@ -393,7 +394,7 @@ func TestWebSocketToggleSpectator(t *testing.T) {
 	t.Run("owner can toggle spectator mode", func(t *testing.T) {
 		send(t, conn1, bus.WebSocketMessage{
 			Type: "toggle-spectator",
-			Payload: bus.ToggleSpectatorPayload{
+			Payload: protocol.ToggleSpectatorPayload{
 				TargetClientID:      clientID2,
 				ExpectedRoomVersion: uint64Ptr(2),
 			},
@@ -446,7 +447,7 @@ func TestWebSocketToggleOwner(t *testing.T) {
 	t.Run("owner can promote another user to owner", func(t *testing.T) {
 		send(t, conn1, bus.WebSocketMessage{
 			Type: "toggle-owner",
-			Payload: bus.ToggleOwnerPayload{
+			Payload: protocol.ToggleOwnerPayload{
 				TargetClientID:      clientID2,
 				ExpectedRoomVersion: uint64Ptr(2),
 			},
@@ -490,7 +491,7 @@ func TestWebSocketUpdateStory(t *testing.T) {
 	t.Run("owner can update current story", func(t *testing.T) {
 		send(t, conn, bus.WebSocketMessage{
 			Type: "update-story",
-			Payload: bus.UpdateStoryPayload{
+			Payload: protocol.UpdateStoryPayload{
 				Story:               "User story #123",
 				ExpectedRoomVersion: uint64Ptr(1),
 			},
@@ -520,7 +521,7 @@ func TestWebSocketVoteAgain(t *testing.T) {
 		// Vote first
 		send(t, conn, bus.WebSocketMessage{
 			Type: "vote",
-			Payload: bus.VotePayload{
+			Payload: protocol.VotePayload{
 				Vote: "5",
 			},
 		})
@@ -581,7 +582,7 @@ func TestWebSocketMultipleClients(t *testing.T) {
 func testAllClientsReceiveVote(t *testing.T, connections ...*websocket.Conn) {
 	send(t, connections[0], bus.WebSocketMessage{
 		Type:    "vote",
-		Payload: bus.VotePayload{Vote: "3"},
+		Payload: protocol.VotePayload{Vote: "3"},
 	})
 
 	for _, msg := range readMessages(t, connections...) {
@@ -598,11 +599,11 @@ func testAllClientsAutoReveal(t *testing.T, connections ...*websocket.Conn) {
 	send(t, connections[0], bus.WebSocketMessage{Type: "reset", Payload: map[string]uint64{"expectedRoomVersion": 4}})
 	consumeMessages(t, connections...)
 
-	send(t, connections[0], bus.WebSocketMessage{Type: "vote", Payload: bus.VotePayload{Vote: "3"}})
+	send(t, connections[0], bus.WebSocketMessage{Type: "vote", Payload: protocol.VotePayload{Vote: "3"}})
 	consumeMessages(t, connections...)
-	send(t, connections[1], bus.WebSocketMessage{Type: "vote", Payload: bus.VotePayload{Vote: "5"}})
+	send(t, connections[1], bus.WebSocketMessage{Type: "vote", Payload: protocol.VotePayload{Vote: "5"}})
 	consumeMessages(t, connections...)
-	send(t, connections[2], bus.WebSocketMessage{Type: "vote", Payload: bus.VotePayload{Vote: "8"}})
+	send(t, connections[2], bus.WebSocketMessage{Type: "vote", Payload: protocol.VotePayload{Vote: "8"}})
 
 	expectedResult := (3.0 + 5.0 + 8.0) / 3.0
 	for _, msg := range readMessages(t, connections...) {
@@ -723,7 +724,7 @@ func TestWebSocketDisconnection(t *testing.T) {
 		// We can verify this by sending a message
 		send(t, conn2, bus.WebSocketMessage{
 			Type: "update-name",
-			Payload: bus.UpdateNamePayload{
+			Payload: protocol.UpdateNamePayload{
 				Username: "Still Connected",
 			},
 		})
@@ -795,7 +796,7 @@ func testCommandAck(t *testing.T) {
 	send(t, conn, bus.WebSocketMessage{
 		Type:      "vote",
 		CommandID: commandID,
-		Payload:   bus.VotePayload{Vote: "5"},
+		Payload:   protocol.VotePayload{Vote: "5"},
 	})
 
 	ack := receiveUntilType(t, conn, "command-ack", commandFrameTimeout)
@@ -898,7 +899,7 @@ func testCommandDuplicate(t *testing.T) {
 	message := bus.WebSocketMessage{
 		Type:      "update-name",
 		CommandID: commandID,
-		Payload:   bus.UpdateNamePayload{Username: "Alice"},
+		Payload:   protocol.UpdateNamePayload{Username: "Alice"},
 	}
 	send(t, conn, message)
 	send(t, conn, message)
@@ -955,7 +956,7 @@ func testCommandLegacy(t *testing.T) {
 
 	send(t, conn, bus.WebSocketMessage{
 		Type:    "vote",
-		Payload: bus.VotePayload{Vote: "5"},
+		Payload: protocol.VotePayload{Vote: "5"},
 	})
 
 	// Read the very next frame: a legacy command must produce a room-state and

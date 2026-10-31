@@ -185,7 +185,7 @@ func TestWebsocketBus_Process_SendsCommandAck(t *testing.T) {
 	bus.process(context.Background(), WebSocketMessage{
 		Type:      "update-name",
 		CommandID: commandTestCommandID,
-		Payload:   UpdateNamePayload{Username: "Alice"},
+		Payload:   protocol.UpdateNamePayload{Username: "Alice"},
 	})
 
 	frame := readCommandFrame(t, clientConn)
@@ -221,7 +221,7 @@ func TestWebsocketBus_Process_SendsCommandAckWhenRoomLoadFails(t *testing.T) {
 	bus.process(context.Background(), WebSocketMessage{
 		Type:      "vote",
 		CommandID: commandTestCommandID,
-		Payload:   VotePayload{Vote: "5"},
+		Payload:   protocol.VotePayload{Vote: "5"},
 	})
 
 	frame := readCommandFrame(t, clientConn)
@@ -306,7 +306,7 @@ func TestWebsocketBus_Process_MapsDomainErrorCodes(t *testing.T) {
 			bus.process(context.Background(), WebSocketMessage{
 				Type:      "update-name",
 				CommandID: commandTestCommandID,
-				Payload:   UpdateNamePayload{Username: "Alice"},
+				Payload:   protocol.UpdateNamePayload{Username: "Alice"},
 			})
 
 			frame := readCommandFrame(t, clientConn)
@@ -342,7 +342,7 @@ func TestWebsocketBus_Process_HidesInternalErrors(t *testing.T) {
 	bus.process(context.Background(), WebSocketMessage{
 		Type:      "update-name",
 		CommandID: commandTestCommandID,
-		Payload:   UpdateNamePayload{Username: "Alice"},
+		Payload:   protocol.UpdateNamePayload{Username: "Alice"},
 	})
 
 	frame := readCommandFrame(t, clientConn)
@@ -395,7 +395,7 @@ func TestWebsocketBus_Process_InvalidCommandID(t *testing.T) {
 	bus.process(context.Background(), WebSocketMessage{
 		Type:      "update-name",
 		CommandID: "not-a-uuid",
-		Payload:   UpdateNamePayload{Username: "Alice"},
+		Payload:   protocol.UpdateNamePayload{Username: "Alice"},
 	})
 
 	frame := readCommandFrame(t, clientConn)
@@ -519,7 +519,7 @@ func TestWebsocketBus_Process_CachesCommandAck(t *testing.T) {
 	bus.process(context.Background(), WebSocketMessage{
 		Type:      "update-name",
 		CommandID: commandTestCommandID,
-		Payload:   UpdateNamePayload{Username: "Alice"},
+		Payload:   protocol.UpdateNamePayload{Username: "Alice"},
 	})
 
 	payload := readRawCommandFrame(t, clientConn)
@@ -556,7 +556,7 @@ func TestWebsocketBus_Process_ReplaysCompletedCommandOutcome(t *testing.T) {
 	message := WebSocketMessage{
 		Type:      "update-name",
 		CommandID: commandTestCommandID,
-		Payload:   UpdateNamePayload{Username: "Alice"},
+		Payload:   protocol.UpdateNamePayload{Username: "Alice"},
 	}
 
 	bus.process(context.Background(), message)
@@ -593,7 +593,7 @@ func TestWebsocketBus_Process_CommandInProgress(t *testing.T) {
 	bus.process(context.Background(), WebSocketMessage{
 		Type:      "update-name",
 		CommandID: commandTestCommandID,
-		Payload:   UpdateNamePayload{Username: "Alice"},
+		Payload:   protocol.UpdateNamePayload{Username: "Alice"},
 	})
 
 	frame := readCommandFrame(t, clientConn)
@@ -625,7 +625,7 @@ func TestWebsocketBus_Process_ClaimFailureReturnsInternalError(t *testing.T) {
 	bus.process(context.Background(), WebSocketMessage{
 		Type:      "update-name",
 		CommandID: commandTestCommandID,
-		Payload:   UpdateNamePayload{Username: "Alice"},
+		Payload:   protocol.UpdateNamePayload{Username: "Alice"},
 	})
 
 	frame := readCommandFrame(t, clientConn)
@@ -662,7 +662,7 @@ func TestWebsocketBus_Process_CompleteFailureStillSendsFrame(t *testing.T) {
 	bus.process(context.Background(), WebSocketMessage{
 		Type:      "update-name",
 		CommandID: commandTestCommandID,
-		Payload:   UpdateNamePayload{Username: "Alice"},
+		Payload:   protocol.UpdateNamePayload{Username: "Alice"},
 	})
 
 	frame := readCommandFrame(t, clientConn)
@@ -688,7 +688,7 @@ func TestWebsocketBus_Process_NilLedgerReturnsInternalError(t *testing.T) {
 	bus.process(context.Background(), WebSocketMessage{
 		Type:      "update-name",
 		CommandID: commandTestCommandID,
-		Payload:   UpdateNamePayload{Username: "Alice"},
+		Payload:   protocol.UpdateNamePayload{Username: "Alice"},
 	})
 
 	frame := readCommandFrame(t, clientConn)
@@ -718,7 +718,7 @@ func TestWebsocketBus_Process_LegacyCommandSendsNoAck(t *testing.T) {
 
 		bus.process(context.Background(), WebSocketMessage{
 			Type:    "update-name",
-			Payload: UpdateNamePayload{Username: "Alice"},
+			Payload: protocol.UpdateNamePayload{Username: "Alice"},
 		})
 
 		assertNoCommandFrame(t, clientConn)
