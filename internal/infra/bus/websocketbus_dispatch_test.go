@@ -194,18 +194,18 @@ func TestMapUsecases_DispatchesSupportedCommands(t *testing.T) {
 }
 
 func TestGuardedCommandAndExpectedRoomVersion(t *testing.T) {
-	version, ok := expectedRoomVersion(map[string]uint64{"expectedRoomVersion": 7})
-	if !ok || version == nil || *version != 7 {
-		t.Fatalf("expectedRoomVersion returned (%v, %t), want (7, true)", version, ok)
+	version, ok, err := expectedRoomVersion(map[string]uint64{"expectedRoomVersion": 7})
+	if err != nil || !ok || version == nil || *version != 7 {
+		t.Fatalf("expectedRoomVersion returned (%v, %t, %v), want (7, true, nil)", version, ok, err)
 	}
-	if _, ok := expectedRoomVersion(map[string]string{"expectedRoomVersion": "invalid"}); ok {
-		t.Fatal("expectedRoomVersion accepted an invalid revision")
+	if _, _, err := expectedRoomVersion(map[string]string{"expectedRoomVersion": "invalid"}); !errors.Is(err, ErrInvalidPayload) {
+		t.Fatalf("expectedRoomVersion accepted an invalid revision: %v", err)
 	}
-	if _, ok := expectedRoomVersion(nil); ok {
-		t.Fatal("expectedRoomVersion accepted a missing revision")
+	if version, ok, err := expectedRoomVersion(nil); err != nil || ok || version != nil {
+		t.Fatalf("expectedRoomVersion returned (%v, %t, %v) for a missing revision, want (nil, false, nil)", version, ok, err)
 	}
-	if _, ok := expectedRoomVersion(func() {}); ok {
-		t.Fatal("expectedRoomVersion accepted an unserializable payload")
+	if _, _, err := expectedRoomVersion(func() {}); !errors.Is(err, ErrInvalidPayload) {
+		t.Fatalf("expectedRoomVersion accepted an unserializable payload: %v", err)
 	}
 }
 

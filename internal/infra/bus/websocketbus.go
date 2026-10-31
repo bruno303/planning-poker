@@ -14,6 +14,7 @@ import (
 
 	"github.com/bruno303/go-toolkit/pkg/log"
 	"github.com/bruno303/go-toolkit/pkg/trace"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/samber/lo"
 )
@@ -30,8 +31,9 @@ type (
 		Socket   *websocket.Conn
 	}
 	WebSocketMessage struct {
-		Type    string `json:"type"`
-		Payload any    `json:"payload"`
+		Type      string `json:"type"`
+		CommandID string `json:"commandId,omitempty"`
+		Payload   any    `json:"payload"`
 	}
 	UpdateNamePayload struct {
 		Username string `json:"username"`
@@ -211,11 +213,57 @@ func (c *WebsocketBus) process(ctx context.Context, msg WebSocketMessage) {
 	c.logger.Debug(ctx, "Processing message for event type '%v' with payload: %v", msg.Type, msg)
 	usecaseCall, exists := c.calls[msg.Type]
 	if !exists {
+		if msg.CommandID != "" {
+			_ = c.Send(ctx, newCommandError(msg.CommandID, wireCodeUnknownCommand, "unknown command type", nil))
+			return
+		}
 		c.logger.Error(ctx, fmt.Sprintf("Unknown event type '%v' for client %v", msg.Type, c.ID), errors.New("unknown event type"))
 		return
 	}
-	err := usecaseCall(ctx, msg)
+
+	if msg.CommandID == "" {
+		c.processLegacy(ctx, usecaseCall, msg)
+		return
+	}
+
+	parsed, err := uuid.Parse(msg.CommandID)
 	if err != nil {
+		_ = c.Send(ctx, newCommandError(msg.CommandID, wireCodeInvalidCommandID, "commandId must be a UUID", nil))
+		return
+	}
+	commandID := parsed.String()
+
+	if err := usecaseCall(ctx, msg); err != nil {
+		frame := commandErrorFor(commandID, err)
+		if frame.Code == wireCodeStaleVersion {
+			if room, loadErr := c.hub.LoadRoom(ctx, c.roomID); loadErr != nil {
+				c.logger.Debug(ctx, "Failed to load room %v while reporting stale command for client %v: %v", c.roomID, c.ID, loadErr)
+			} else {
+				version := room.RoomVersion
+				frame.RoomVersion = &version
+			}
+		}
+		if frame.Code == wireCodeInternal {
+			c.logger.Error(ctx, fmt.Sprintf("Error handling event for client %v", c.ID), err)
+		} else {
+			c.logger.Debug(ctx, "Command %v failed for client %v with code %v: %v", commandID, c.ID, frame.Code, err)
+		}
+		_ = c.Send(ctx, frame)
+		return
+	}
+
+	frame := newCommandAck(commandID, nil)
+	if room, loadErr := c.hub.LoadRoom(ctx, c.roomID); loadErr != nil {
+		c.logger.Debug(ctx, "Failed to load room %v while acknowledging command for client %v: %v", c.roomID, c.ID, loadErr)
+	} else {
+		version := room.RoomVersion
+		frame.RoomVersion = &version
+	}
+	_ = c.Send(ctx, frame)
+}
+
+func (c *WebsocketBus) processLegacy(ctx context.Context, usecaseCall useCaseCall, msg WebSocketMessage) {
+	if err := usecaseCall(ctx, msg); err != nil {
 		if errors.Is(err, domain.ErrStaleRoomVersion) {
 			room, loadErr := c.hub.LoadRoom(ctx, c.roomID)
 			version := uint64(0)
@@ -226,26 +274,31 @@ func (c *WebsocketBus) process(ctx context.Context, msg WebSocketMessage) {
 			return
 		}
 		c.logger.Error(ctx, fmt.Sprintf("Error handling event for client %v", c.ID), err)
-		return
 	}
 }
 
-func expectedRoomVersion(payload any) (*uint64, bool) {
+func expectedRoomVersion(payload any) (*uint64, bool, error) {
 	data, err := json.Marshal(payload)
 	if err != nil {
-		return nil, false
+		return nil, false, ErrInvalidPayload
 	}
 	var value struct {
 		ExpectedRoomVersion *uint64 `json:"expectedRoomVersion"`
 	}
-	if json.Unmarshal(data, &value) != nil || value.ExpectedRoomVersion == nil {
-		return nil, false
+	if json.Unmarshal(data, &value) != nil {
+		return nil, false, ErrInvalidPayload
 	}
-	return value.ExpectedRoomVersion, true
+	if value.ExpectedRoomVersion == nil {
+		return nil, false, nil
+	}
+	return value.ExpectedRoomVersion, true, nil
 }
 
 func withExpectedRoomVersion(payload any, execute func(*uint64) error) error {
-	expected, _ := expectedRoomVersion(payload)
+	expected, _, err := expectedRoomVersion(payload)
+	if err != nil {
+		return err
+	}
 	return execute(expected)
 }
 
@@ -318,7 +371,7 @@ func decodePayload(payload, out any) error {
 func withPayload[T any](payload any, execute func(T) error) error {
 	var decoded T
 	if err := decodePayload(payload, &decoded); err != nil {
-		return errors.New("invalid payload")
+		return ErrInvalidPayload
 	}
 
 	return execute(decoded)
