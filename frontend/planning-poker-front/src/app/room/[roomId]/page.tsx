@@ -1,7 +1,8 @@
 'use client';
 
 import LoadingSpinner from '@/components/loadingSpinner/loadingSpinner';
-import type { ClientCommand, GuardedCommandType } from '@/components/messages/websocket';
+import { EMPTY_GUARDED_COMMANDS } from '@/components/messages/websocket';
+import type { EmptyGuardedCommandType } from '@/components/messages/websocket';
 import { useLogger } from '@/context/logger/loggerContext';
 import { useToast } from '@/context/toast/toastContext';
 import { useUnvotedReminder } from '@/hooks/useUnvotedReminder';
@@ -82,8 +83,8 @@ export default function PlanningPoker() {
   }, [roomId, router, logger]);
 
   // Guarded commands carry an empty payload here; useRoomConnection injects expectedRoomVersion.
-  const sendEmpty = (type: GuardedCommandType) =>
-    sendMessage({ type, payload: {} } as unknown as ClientCommand);
+  const sendEmpty = (type: EmptyGuardedCommandType) =>
+    sendMessage(EMPTY_GUARDED_COMMANDS[type]);
   const backHome = () => { disconnect(); sessionStorage.removeItem('clientId'); logger.setContext({ clientId: undefined, roomId: undefined }); router.push('/'); };
   const selectCard = (card: string) => { if (!snapshot.reveal) sendMessage({ type: 'vote', payload: { vote: card } }); };
   if (!valid) {

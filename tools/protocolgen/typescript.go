@@ -122,6 +122,15 @@ func emitTypeScriptUnions(builder *strings.Builder, spec *Spec) {
 	emitStringUnion(builder, "GuardedCommandType", wireTypes(spec.GuardedMessages()))
 
 	emitTypeUnion(builder, "ClientCommand", definitionNames(spec.CommandMessages()))
+
+	emptyGuarded := emptyGuardedMessages(spec)
+	emitStringUnion(builder, "EmptyGuardedCommandType", wireTypes(emptyGuarded))
+	builder.WriteString("\nexport const EMPTY_GUARDED_COMMANDS: { readonly [K in EmptyGuardedCommandType]: Extract<ClientCommand, { type: K }> } = {\n")
+	for _, wireType := range wireTypes(emptyGuarded) {
+		fmt.Fprintf(builder, "  %s: { type: %s, payload: {} },\n", singleQuote(wireType), singleQuote(wireType))
+	}
+	builder.WriteString("};\n")
+
 	emitTypeUnion(builder, "ServerEvent", definitionNames(spec.EventMessages()))
 
 	builder.WriteString("\nexport const GUARDED_COMMAND_TYPES: readonly GuardedCommandType[] = [\n")
@@ -361,6 +370,30 @@ func scanTypeScriptUsage(spec *Spec, schema *Schema, usage *typeScriptUsage, vis
 			scanTypeScriptUsage(spec, definition.Schema, usage, visited)
 		}
 	}
+}
+
+// emptyGuardedMessages returns guarded commands whose payload has no required properties.
+func emptyGuardedMessages(spec *Spec) []Message {
+	var empty []Message
+	for _, message := range spec.GuardedMessages() {
+		definition, ok := spec.Definition(message.PayloadType)
+		if !ok || definition.Schema.Kind != KindObject {
+			continue
+		}
+		if !hasRequiredProperty(definition.Schema) {
+			empty = append(empty, message)
+		}
+	}
+	return empty
+}
+
+func hasRequiredProperty(schema *Schema) bool {
+	for _, property := range schema.Properties {
+		if property.Required {
+			return true
+		}
+	}
+	return false
 }
 
 func wireTypes(messages []Message) []string {

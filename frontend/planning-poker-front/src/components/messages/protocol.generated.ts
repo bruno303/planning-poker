@@ -295,6 +295,23 @@ export type ClientCommand =
   | VoteCommand
   | VoteAgainCommand;
 
+export type EmptyGuardedCommandType =
+  | 'advance-story'
+  | 'prev-story'
+  | 'reset'
+  | 'reveal-votes'
+  | 'toggle-backlog-mode'
+  | 'vote-again';
+
+export const EMPTY_GUARDED_COMMANDS: { readonly [K in EmptyGuardedCommandType]: Extract<ClientCommand, { type: K }> } = {
+  'advance-story': { type: 'advance-story', payload: {} },
+  'prev-story': { type: 'prev-story', payload: {} },
+  'reset': { type: 'reset', payload: {} },
+  'reveal-votes': { type: 'reveal-votes', payload: {} },
+  'toggle-backlog-mode': { type: 'toggle-backlog-mode', payload: {} },
+  'vote-again': { type: 'vote-again', payload: {} },
+};
+
 export type ServerEvent =
   | CommandAck
   | CommandError

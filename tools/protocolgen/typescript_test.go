@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"testing"
@@ -47,6 +48,9 @@ func TestEmitTypeScript(t *testing.T) {
 		{name: "server event union", pattern: `^export type ServerEventType =$`},
 		{name: "guarded command union", pattern: `^export type GuardedCommandType =$`},
 		{name: "command frame union", pattern: `^export type ClientCommand =$`},
+		{name: "empty guarded union", pattern: `^export type EmptyGuardedCommandType =$`},
+		{name: "empty guarded map", pattern: `^export const EMPTY_GUARDED_COMMANDS: \{ readonly \[K in EmptyGuardedCommandType\]: Extract<ClientCommand, \{ type: K \}> \} = \{$`},
+		{name: "empty guarded entry", pattern: `^  'advance-story': \{ type: 'advance-story', payload: \{\} \},$`},
 		{name: "event frame union", pattern: `^export type ServerEvent =$`},
 		{name: "guarded list", pattern: `^export const GUARDED_COMMAND_TYPES: readonly GuardedCommandType\[\] = \[$`},
 		{name: "server event list", pattern: `^export const SERVER_EVENT_TYPES: readonly ServerEventType\[\] = \[$`},
@@ -123,8 +127,9 @@ func TestEmitTypeScriptUnions(t *testing.T) {
 	}
 	generated := string(output)
 
-	if got := strings.Count(generated, "  | '"); got != 33 {
-		t.Fatalf("wire type unions contain %d entries, want 33 (15 commands + 6 events + 12 guarded)", got)
+	// 15 commands + 6 events + 12 guarded + 6 empty guarded = 39 wire type members.
+	if got := strings.Count(generated, "  | '"); got != 39 {
+		t.Fatalf("wire type unions contain %d entries, want 39 (15 commands + 6 events + 12 guarded + 6 empty guarded)", got)
 	}
 
 	guarded := between(t, generated, "export type GuardedCommandType =", ";")
@@ -136,6 +141,33 @@ func TestEmitTypeScriptUnions(t *testing.T) {
 	for _, wireType := range []string{"vote-again", "reset", "reorder-story"} {
 		if !strings.Contains(guarded, "'"+wireType+"'") {
 			t.Errorf("guarded union is missing %q", wireType)
+		}
+	}
+
+	emptyGuarded := between(t, generated, "export type EmptyGuardedCommandType =", ";")
+	emptyWireTypes := []string{"advance-story", "prev-story", "reset", "reveal-votes", "toggle-backlog-mode", "vote-again"}
+	if got := strings.Count(emptyGuarded, "  | '"); got != len(emptyWireTypes) {
+		t.Fatalf("empty guarded union has %d entries, want %d", got, len(emptyWireTypes))
+	}
+	for _, wireType := range emptyWireTypes {
+		if !strings.Contains(emptyGuarded, "'"+wireType+"'") {
+			t.Errorf("empty guarded union is missing %q", wireType)
+		}
+	}
+	for _, wireType := range []string{"toggle-owner", "toggle-spectator", "update-story", "remove-story", "select-story", "reorder-story"} {
+		if strings.Contains(emptyGuarded, "'"+wireType+"'") {
+			t.Errorf("empty guarded union unexpectedly contains %q", wireType)
+		}
+	}
+
+	emptyCommands := between(t, generated, "export const EMPTY_GUARDED_COMMANDS", "};")
+	if got := strings.Count(emptyCommands, "payload: {}"); got != len(emptyWireTypes) {
+		t.Fatalf("EMPTY_GUARDED_COMMANDS has %d entries, want %d", got, len(emptyWireTypes))
+	}
+	for _, wireType := range emptyWireTypes {
+		entry := fmt.Sprintf("  '%s': { type: '%s', payload: {} },", wireType, wireType)
+		if !strings.Contains(emptyCommands, entry) {
+			t.Errorf("EMPTY_GUARDED_COMMANDS is missing %q", entry)
 		}
 	}
 
