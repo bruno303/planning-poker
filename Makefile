@@ -118,6 +118,13 @@ lint:
 generate:
 	go generate ./...
 
+.PHONY: protocol protocol-check
+protocol:
+	go run ./tools/protocolgen
+
+protocol-check:
+	go run ./tools/protocolgen --check
+
 .PHONY: clean
 clean:
 	rm -rf bin

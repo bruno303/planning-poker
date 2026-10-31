@@ -1,0 +1,220 @@
+asyncapi: 3.0.0
+id: urn:planning-poker:websocket-protocol
+info:
+  title: Planning Poker WebSocket Protocol
+  version: 1.0.0
+  description: |
+    Wire contract for the planning-poker realtime room socket. Clients send
+    command frames and receive room events over a single WebSocket connection.
+    The transport envelope is {"type": string, "commandId"?: uuid, "payload": object}
+    for commands, and {"type": string, ...} for events.
+defaultContentType: application/json
+
+channels:
+  roomSocket:
+    address: /planning/{roomID}/ws
+    messages:
+      room-state:
+        $ref: '#/components/messages/room-state'
+      update-client-id:
+        $ref: '#/components/messages/update-client-id'
+      kicked:
+        $ref: '#/components/messages/kicked'
+      stale-command:
+        $ref: '#/components/messages/stale-command'
+      command-ack:
+        $ref: '#/components/messages/command-ack'
+      command-error:
+        $ref: '#/components/messages/command-error'
+      vote:
+        $ref: '#/components/messages/vote'
+      update-name:
+        $ref: '#/components/messages/update-name'
+      reset:
+        $ref: '#/components/messages/reset'
+      reveal-votes:
+        $ref: '#/components/messages/reveal-votes'
+      toggle-spectator:
+        $ref: '#/components/messages/toggle-spectator'
+      toggle-owner:
+        $ref: '#/components/messages/toggle-owner'
+      update-story:
+        $ref: '#/components/messages/update-story'
+      vote-again:
+        $ref: '#/components/messages/vote-again'
+      toggle-backlog-mode:
+        $ref: '#/components/messages/toggle-backlog-mode'
+      add-story:
+        $ref: '#/components/messages/add-story'
+      remove-story:
+        $ref: '#/components/messages/remove-story'
+      advance-story:
+        $ref: '#/components/messages/advance-story'
+      prev-story:
+        $ref: '#/components/messages/prev-story'
+      select-story:
+        $ref: '#/components/messages/select-story'
+      reorder-story:
+        $ref: '#/components/messages/reorder-story'
+
+operations:
+  sendCommand:
+    action: send
+    channel:
+      $ref: '#/channels/roomSocket'
+    messages:
+      - $ref: '#/components/messages/vote'
+      - $ref: '#/components/messages/update-name'
+      - $ref: '#/components/messages/reset'
+      - $ref: '#/components/messages/reveal-votes'
+      - $ref: '#/components/messages/toggle-spectator'
+      - $ref: '#/components/messages/toggle-owner'
+      - $ref: '#/components/messages/update-story'
+      - $ref: '#/components/messages/vote-again'
+      - $ref: '#/components/messages/toggle-backlog-mode'
+      - $ref: '#/components/messages/add-story'
+      - $ref: '#/components/messages/remove-story'
+      - $ref: '#/components/messages/advance-story'
+      - $ref: '#/components/messages/prev-story'
+      - $ref: '#/components/messages/select-story'
+      - $ref: '#/components/messages/reorder-story'
+  receiveEvent:
+    action: receive
+    channel:
+      $ref: '#/channels/roomSocket'
+    messages:
+      - $ref: '#/components/messages/room-state'
+      - $ref: '#/components/messages/update-client-id'
+      - $ref: '#/components/messages/kicked'
+      - $ref: '#/components/messages/stale-command'
+      - $ref: '#/components/messages/command-ack'
+      - $ref: '#/components/messages/command-error'
+
+components:
+  messages:
+    room-state:
+      name: room-state
+      title: Room state
+      summary: Full room snapshot broadcast after every mutation.
+      payload:
+        $ref: 'schemas/events.schema.json#/$defs/RoomState'
+    update-client-id:
+      name: update-client-id
+      title: Update client id
+      summary: Server-assigned client identity sent after the socket connects.
+      payload:
+        $ref: 'schemas/events.schema.json#/$defs/UpdateClientID'
+    kicked:
+      name: kicked
+      title: Kicked
+      summary: The client was removed from the room by an owner.
+      payload:
+        $ref: 'schemas/events.schema.json#/$defs/Kicked'
+    stale-command:
+      name: stale-command
+      title: Stale command
+      summary: The command was rejected because the room version changed.
+      payload:
+        $ref: 'schemas/events.schema.json#/$defs/StaleCommand'
+    command-ack:
+      name: command-ack
+      title: Command acknowledged
+      summary: Successful command outcome correlated by commandId.
+      payload:
+        $ref: 'schemas/events.schema.json#/$defs/CommandAck'
+    command-error:
+      name: command-error
+      title: Command failed
+      summary: Failed command outcome correlated by commandId.
+      payload:
+        $ref: 'schemas/events.schema.json#/$defs/CommandError'
+    vote:
+      name: vote
+      title: Vote
+      summary: Cast the current client vote.
+      payload:
+        $ref: 'schemas/commands.schema.json#/$defs/VoteCommand'
+    update-name:
+      name: update-name
+      title: Update name
+      summary: Change the current client display name.
+      payload:
+        $ref: 'schemas/commands.schema.json#/$defs/UpdateNameCommand'
+    reset:
+      name: reset
+      title: Reset
+      summary: Clear votes and results for the room.
+      payload:
+        $ref: 'schemas/commands.schema.json#/$defs/ResetCommand'
+    reveal-votes:
+      name: reveal-votes
+      title: Reveal votes
+      summary: Reveal the current votes.
+      payload:
+        $ref: 'schemas/commands.schema.json#/$defs/RevealVotesCommand'
+    toggle-spectator:
+      name: toggle-spectator
+      title: Toggle spectator
+      summary: Toggle spectator mode for a client.
+      payload:
+        $ref: 'schemas/commands.schema.json#/$defs/ToggleSpectatorCommand'
+    toggle-owner:
+      name: toggle-owner
+      title: Toggle owner
+      summary: Toggle the owner role for a client.
+      payload:
+        $ref: 'schemas/commands.schema.json#/$defs/ToggleOwnerCommand'
+    update-story:
+      name: update-story
+      title: Update story
+      summary: Change the story currently being estimated.
+      payload:
+        $ref: 'schemas/commands.schema.json#/$defs/UpdateStoryCommand'
+    vote-again:
+      name: vote-again
+      title: Vote again
+      summary: Start a new voting round.
+      payload:
+        $ref: 'schemas/commands.schema.json#/$defs/VoteAgainCommand'
+    toggle-backlog-mode:
+      name: toggle-backlog-mode
+      title: Toggle backlog mode
+      summary: Toggle backlog mode for the room.
+      payload:
+        $ref: 'schemas/commands.schema.json#/$defs/ToggleBacklogModeCommand'
+    add-story:
+      name: add-story
+      title: Add story
+      summary: Append a story to the backlog.
+      payload:
+        $ref: 'schemas/commands.schema.json#/$defs/AddStoryCommand'
+    remove-story:
+      name: remove-story
+      title: Remove story
+      summary: Remove a story from the backlog.
+      payload:
+        $ref: 'schemas/commands.schema.json#/$defs/RemoveStoryCommand'
+    advance-story:
+      name: advance-story
+      title: Advance story
+      summary: Move to the next backlog story.
+      payload:
+        $ref: 'schemas/commands.schema.json#/$defs/AdvanceStoryCommand'
+    prev-story:
+      name: prev-story
+      title: Previous story
+      summary: Move to the previous backlog story.
+      payload:
+        $ref: 'schemas/commands.schema.json#/$defs/PrevStoryCommand'
+    select-story:
+      name: select-story
+      title: Select story
+      summary: Select a backlog story.
+      payload:
+        $ref: 'schemas/commands.schema.json#/$defs/SelectStoryCommand'
+    reorder-story:
+      name: reorder-story
+      title: Reorder story
+      summary: Move a backlog story to another index.
+      payload:
+        $ref: 'schemas/commands.schema.json#/$defs/ReorderStoryCommand'

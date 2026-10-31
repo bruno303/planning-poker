@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://planning-poker.local/protocol/schemas/events.schema.json",
+  "title": "Server event payloads",
+  "$defs": {
+    "RoomState": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "room-state"
+        },
+        "deck": {
+          "$ref": "shared.schema.json#/$defs/DeckDescriptor"
+        },
+        "currentStory": {
+          "type": "string"
+        },
+        "reveal": {
+          "type": "boolean"
+        },
+        "mostAppearingVotes": {
+          "type": ["array", "null"],
+          "items": {
+            "type": "string"
+          }
+        },
+        "participants": {
+          "type": "array",
+          "items": {
+            "$ref": "shared.schema.json#/$defs/Participant"
+          }
+        },
+        "roomVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "x-go-type": "uint64"
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "result": {
+          "type": "number",
+          "x-go-type": "float32"
+        },
+        "consensus": {
+          "$ref": "shared.schema.json#/$defs/ConsensusLevel"
+        },
+        "lowestVote": {
+          "type": "string"
+        },
+        "highestVote": {
+          "type": "string"
+        },
+        "voteRange": {
+          "type": "integer"
+        },
+        "voteSpread": {
+          "type": "integer"
+        },
+        "specialVoteCount": {
+          "type": "integer"
+        },
+        "backlogMode": {
+          "type": "boolean"
+        },
+        "stories": {
+          "type": ["array", "null"],
+          "items": {
+            "$ref": "shared.schema.json#/$defs/Story"
+          }
+        },
+        "currentStoryIndex": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "deck",
+        "currentStory",
+        "reveal",
+        "mostAppearingVotes",
+        "participants",
+        "roomVersion"
+      ]
+    },
+    "UpdateClientID": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "update-client-id"
+        },
+        "clientId": {
+          "type": "string"
+        }
+      },
+      "required": ["type", "clientId"]
+    },
+    "Kicked": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "kicked"
+        }
+      },
+      "required": ["type"]
+    },
+    "StaleCommand": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "stale-command"
+        },
+        "roomVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "x-go-type": "uint64"
+        }
+      },
+      "required": ["type", "roomVersion"]
+    },
+    "CommandAck": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "command-ack"
+        },
+        "commandId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "roomVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "x-go-type": "uint64"
+        }
+      },
+      "required": ["type", "commandId"]
+    },
+    "CommandError": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "command-error"
+        },
+        "commandId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "code": {
+          "$ref": "#/$defs/CommandErrorCode"
+        },
+        "message": {
+          "type": "string"
+        },
+        "roomVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "x-go-type": "uint64"
+        }
+      },
+      "required": ["type", "commandId", "code", "message"]
+    },
+    "CommandErrorCode": {
+      "type": "string",
+      "enum": [
+        "validation",
+        "forbidden",
+        "not_found",
+        "conflict",
+        "stale_version",
+        "invalid_payload",
+        "unknown_command",
+        "invalid_command_id",
+        "command_in_progress",
+        "internal"
+      ]
+    }
+  }
+}
