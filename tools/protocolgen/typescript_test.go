@@ -119,6 +119,10 @@ func TestEmitTypeScript(t *testing.T) {
 	}
 }
 
+// emptyGuardedWireTypes are the command types whose payload is empty, which
+// makes them members of both the guarded and the empty guarded unions.
+var emptyGuardedWireTypes = []string{"advance-story", "prev-story", "reset", "reveal-votes", "toggle-backlog-mode", "vote-again"}
+
 func TestEmitTypeScriptUnions(t *testing.T) {
 	spec := loadSampleSpec(t)
 	output, err := emitTypeScript(spec)
@@ -132,6 +136,15 @@ func TestEmitTypeScriptUnions(t *testing.T) {
 		t.Fatalf("wire type unions contain %d entries, want 39 (15 commands + 6 events + 12 guarded + 6 empty guarded)", got)
 	}
 
+	assertGuardedUnion(t, generated)
+	assertEmptyGuardedUnion(t, generated)
+	assertEmptyGuardedCommands(t, generated)
+	assertServerEventUnion(t, generated)
+	assertClientCommandUnion(t, generated)
+}
+
+func assertGuardedUnion(t *testing.T, generated string) {
+	t.Helper()
 	guarded := between(t, generated, "export type GuardedCommandType =", ";")
 	for _, wireType := range []string{"vote", "update-name", "add-story"} {
 		if strings.Contains(guarded, "'"+wireType+"'") {
@@ -143,13 +156,15 @@ func TestEmitTypeScriptUnions(t *testing.T) {
 			t.Errorf("guarded union is missing %q", wireType)
 		}
 	}
+}
 
+func assertEmptyGuardedUnion(t *testing.T, generated string) {
+	t.Helper()
 	emptyGuarded := between(t, generated, "export type EmptyGuardedCommandType =", ";")
-	emptyWireTypes := []string{"advance-story", "prev-story", "reset", "reveal-votes", "toggle-backlog-mode", "vote-again"}
-	if got := strings.Count(emptyGuarded, "  | '"); got != len(emptyWireTypes) {
-		t.Fatalf("empty guarded union has %d entries, want %d", got, len(emptyWireTypes))
+	if got := strings.Count(emptyGuarded, "  | '"); got != len(emptyGuardedWireTypes) {
+		t.Fatalf("empty guarded union has %d entries, want %d", got, len(emptyGuardedWireTypes))
 	}
-	for _, wireType := range emptyWireTypes {
+	for _, wireType := range emptyGuardedWireTypes {
 		if !strings.Contains(emptyGuarded, "'"+wireType+"'") {
 			t.Errorf("empty guarded union is missing %q", wireType)
 		}
@@ -159,23 +174,32 @@ func TestEmitTypeScriptUnions(t *testing.T) {
 			t.Errorf("empty guarded union unexpectedly contains %q", wireType)
 		}
 	}
+}
 
+func assertEmptyGuardedCommands(t *testing.T, generated string) {
+	t.Helper()
 	emptyCommands := between(t, generated, "export const EMPTY_GUARDED_COMMANDS", "};")
-	if got := strings.Count(emptyCommands, "payload: {}"); got != len(emptyWireTypes) {
-		t.Fatalf("EMPTY_GUARDED_COMMANDS has %d entries, want %d", got, len(emptyWireTypes))
+	if got := strings.Count(emptyCommands, "payload: {}"); got != len(emptyGuardedWireTypes) {
+		t.Fatalf("EMPTY_GUARDED_COMMANDS has %d entries, want %d", got, len(emptyGuardedWireTypes))
 	}
-	for _, wireType := range emptyWireTypes {
+	for _, wireType := range emptyGuardedWireTypes {
 		entry := fmt.Sprintf("  '%s': { type: '%s', payload: {} },", wireType, wireType)
 		if !strings.Contains(emptyCommands, entry) {
 			t.Errorf("EMPTY_GUARDED_COMMANDS is missing %q", entry)
 		}
 	}
+}
 
+func assertServerEventUnion(t *testing.T, generated string) {
+	t.Helper()
 	events := between(t, generated, "export type ServerEventType =", ";")
 	if got := strings.Count(events, "  | '"); got != 6 {
 		t.Fatalf("server event union has %d entries, want 6", got)
 	}
+}
 
+func assertClientCommandUnion(t *testing.T, generated string) {
+	t.Helper()
 	commands := between(t, generated, "export type ClientCommandType =", ";")
 	if got := strings.Count(commands, "  | '"); got != 15 {
 		t.Fatalf("client command union has %d entries, want 15", got)
