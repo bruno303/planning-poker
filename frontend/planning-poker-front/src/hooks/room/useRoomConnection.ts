@@ -2,8 +2,10 @@
 
 import {
   UpdateNamePayload,
-  WebSocketMessage,
-  isRoomState,
+  type ClientCommand,
+  isGuardedCommand,
+  isServerEvent,
+  SERVER_EVENT_TYPES,
 } from '@/components/messages/websocket';
 import { useLogger } from '@/context/logger/loggerContext';
 import { useRoom } from '@/context/room/roomContext';
@@ -38,10 +40,6 @@ function getErrorMessage(error: unknown): string | undefined {
   return undefined;
 }
 
-function isRecordWithType(value: unknown, type: string): value is { type: string; clientId?: unknown } {
-  return typeof value === 'object' && value !== null && 'type' in value && value.type === type;
-}
-
 export type UseRoomConnectionOptions = {
   roomId: string;
   userName: string;
@@ -63,7 +61,7 @@ export function useRoomConnection({ roomId, userName, enabled }: UseRoomConnecti
   const roomVersionRef = useRef(snapshot.roomVersion);
   const roomIdRef = useRef(roomId);
   const userNameRef = useRef(userName);
-  const sendMessageRef = useRef<(message: WebSocketMessage) => void>(() => undefined);
+  const sendMessageRef = useRef<(message: ClientCommand) => void>(() => undefined);
 
   clientIdRef.current = clientId;
   roomVersionRef.current = snapshot.roomVersion;
@@ -98,20 +96,20 @@ export function useRoomConnection({ roomId, userName, enabled }: UseRoomConnecti
     setIsConnected(false);
   }, [cancelReconnect, connected, socket]);
 
-  const sendMessage = useCallback(<T,>(message: WebSocketMessage<T>) => {
+  const sendMessage = useCallback((message: ClientCommand) => {
     const activeSocket = socket.current;
     if (activeSocket?.readyState !== WebSocket.OPEN) {
       pushError('Connection is not ready. Please wait and try again.');
       return;
     }
-    const guardedCommands = new Set(['reset', 'reveal-votes', 'toggle-spectator', 'toggle-owner', 'update-story', 'vote-again', 'toggle-backlog-mode', 'remove-story', 'select-story', 'reorder-story', 'advance-story', 'prev-story']);
-    if (guardedCommands.has(message.type) && roomVersionRef.current === null) {
+    const guarded = isGuardedCommand(message.type);
+    if (guarded && roomVersionRef.current === null) {
       pushError('Room state is still loading. Please wait and try again.');
       return;
     }
     try {
-      const payload = guardedCommands.has(message.type)
-        ? { ...(message.payload as Record<string, unknown>), expectedRoomVersion: roomVersionRef.current }
+      const payload = guarded
+        ? { ...(message.payload as unknown as Record<string, unknown>), expectedRoomVersion: roomVersionRef.current }
         : message.payload;
       activeSocket.send(JSON.stringify({ ...message, payload }));
     } catch (error: unknown) {
@@ -142,30 +140,52 @@ export function useRoomConnection({ roomId, userName, enabled }: UseRoomConnecti
         if (disposed || socket.current !== ws) return;
         try {
           const data: unknown = JSON.parse(event.data);
-          if (isRoomState(data)) {
-            const nextSnapshot = normalizeRoomState(data);
-            roomVersionRef.current = nextSnapshot.roomVersion;
-            setSnapshot(nextSnapshot);
-          } else if (isRecordWithType(data, 'stale-command')) {
-            pushError('Room changed; review and try again.');
-          } else if (isRecordWithType(data, 'update-client-id')) {
-            if (typeof data.clientId !== 'string') throw new TypeError('Invalid client ID from websocket');
-            clientIdRef.current = data.clientId;
-            setClientId(data.clientId);
-            window.planning_poker = { clientID: data.clientId };
-            sessionStorage.setItem('clientId', data.clientId);
-            logger.setContext({ clientId: data.clientId });
-            const payload: UpdateNamePayload = { username: userNameRef.current };
-            sendMessageRef.current({ type: 'update-name', payload });
-          } else if (isRecordWithType(data, 'kicked')) {
-            logger.info('Kicked from room');
-            disconnect();
-            sessionStorage.removeItem('clientId');
-            logger.setContext({ clientId: undefined, roomId: undefined });
-            pushError('You have been kicked from the room');
-            router.push('/');
-          } else {
+          const frameType = typeof data === 'object' && data !== null && 'type' in data ? data.type : undefined;
+          if (typeof frameType === 'string' && !SERVER_EVENT_TYPES.some((eventType) => eventType === frameType)) {
+            logger.warn('Ignoring unknown websocket frame', { type: frameType });
+            return;
+          }
+          if (!isServerEvent(data)) {
             throw new Error('Invalid message from websocket');
+          }
+          switch (data.type) {
+            case 'room-state': {
+              const nextSnapshot = normalizeRoomState(data);
+              roomVersionRef.current = nextSnapshot.roomVersion;
+              setSnapshot(nextSnapshot);
+              break;
+            }
+            case 'stale-command': {
+              pushError('Room changed; review and try again.');
+              break;
+            }
+            case 'update-client-id': {
+              clientIdRef.current = data.clientId;
+              setClientId(data.clientId);
+              window.planning_poker = { clientID: data.clientId };
+              sessionStorage.setItem('clientId', data.clientId);
+              logger.setContext({ clientId: data.clientId });
+              const payload: UpdateNamePayload = { username: userNameRef.current };
+              sendMessageRef.current({ type: 'update-name', payload });
+              break;
+            }
+            case 'kicked': {
+              logger.info('Kicked from room');
+              disconnect();
+              sessionStorage.removeItem('clientId');
+              logger.setContext({ clientId: undefined, roomId: undefined });
+              pushError('You have been kicked from the room');
+              router.push('/');
+              break;
+            }
+            case 'command-ack': {
+              logger.info('Command acknowledged', { commandId: data.commandId, roomVersion: data.roomVersion });
+              break;
+            }
+            case 'command-error': {
+              logger.info('Command failed', { commandId: data.commandId, code: data.code, message: data.message, roomVersion: data.roomVersion });
+              break;
+            }
           }
         } catch (error: unknown) {
           const detail = getErrorMessage(error);

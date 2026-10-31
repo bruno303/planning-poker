@@ -1,12 +1,11 @@
 'use client';
 
 import LoadingSpinner from '@/components/loadingSpinner/loadingSpinner';
-import type { AddStoryPayload, RemoveStoryPayload, ReorderStoryPayload, SelectStoryPayload, ToggleOwnerPayload, ToggleSpectatorPayload, UpdateStoryPayload, VotePayload, WebSocketMessageType } from '@/components/messages/websocket';
+import type { ClientCommand, GuardedCommandType } from '@/components/messages/websocket';
 import { useLogger } from '@/context/logger/loggerContext';
 import { useToast } from '@/context/toast/toastContext';
 import { useUnvotedReminder } from '@/hooks/useUnvotedReminder';
 import { useRoomConnection } from '@/hooks/room/useRoomConnection';
-import { type Card } from '@/hooks/room/roomState';
 import { useEffect, useRef, useState } from 'react';
 import Header from './page.header';
 import gridStyles from './page.module.css';
@@ -82,9 +81,11 @@ export default function PlanningPoker() {
     };
   }, [roomId, router, logger]);
 
-  const sendNull = (type: WebSocketMessageType) => sendMessage<null>({ type, payload: null });
+  // Guarded commands carry an empty payload here; useRoomConnection injects expectedRoomVersion.
+  const sendEmpty = (type: GuardedCommandType) =>
+    sendMessage({ type, payload: {} } as unknown as ClientCommand);
   const backHome = () => { disconnect(); sessionStorage.removeItem('clientId'); logger.setContext({ clientId: undefined, roomId: undefined }); router.push('/'); };
-  const selectCard = (card: Card) => { if (!snapshot.reveal) sendMessage<VotePayload>({ type: 'vote', payload: { vote: card } }); };
+  const selectCard = (card: string) => { if (!snapshot.reveal) sendMessage({ type: 'vote', payload: { vote: card } }); };
   if (!valid) {
     return <LoadingSpinner />;
   }
@@ -111,13 +112,13 @@ export default function PlanningPoker() {
               currentStoryIndex={snapshot.currentStoryIndex}
               snapshotIdentity={snapshotIdentity}
               amIAdmin={admin}
-              onUpdateStory={(story) => sendMessage<UpdateStoryPayload>({ type: 'update-story', payload: { story } })}
-              onRemoveStory={(storyId) => sendMessage<RemoveStoryPayload>({ type: 'remove-story', payload: { storyId } })}
-              onAddStory={(story) => sendMessage<AddStoryPayload>({ type: 'add-story', payload: { story } })}
-              onSelectStory={(storyId) => sendMessage<SelectStoryPayload>({ type: 'select-story', payload: { storyId } })}
-              onReorderStory={(storyId, targetIndex) => sendMessage<ReorderStoryPayload>({ type: 'reorder-story', payload: { storyId, targetIndex } })}
-              onPreviousStory={() => sendNull('prev-story')}
-              onNextStory={() => sendNull('advance-story')}
+              onUpdateStory={(story) => sendMessage({ type: 'update-story', payload: { story } })}
+              onRemoveStory={(storyId) => sendMessage({ type: 'remove-story', payload: { storyId } })}
+              onAddStory={(story) => sendMessage({ type: 'add-story', payload: { story } })}
+              onSelectStory={(storyId) => sendMessage({ type: 'select-story', payload: { storyId } })}
+              onReorderStory={(storyId, targetIndex) => sendMessage({ type: 'reorder-story', payload: { storyId, targetIndex } })}
+              onPreviousStory={() => sendEmpty('prev-story')}
+              onNextStory={() => sendEmpty('advance-story')}
             />
           </div>
           <div className={gridStyles.grid}>
@@ -126,17 +127,17 @@ export default function PlanningPoker() {
               clientId={clientId}
               userName={userName}
               amIAdmin={admin}
-              onSelectCard={selectCard}
-              onReveal={() => sendNull('reveal-votes')}
-              onVoteAgain={() => sendNull('vote-again')}
-              onToggleBacklog={() => sendNull('toggle-backlog-mode')}
+              onSelectCard={(card) => { if (card !== null) selectCard(card); }}
+              onReveal={() => sendEmpty('reveal-votes')}
+              onVoteAgain={() => sendEmpty('vote-again')}
+              onToggleBacklog={() => sendEmpty('toggle-backlog-mode')}
             />
             <div style={styles.card}>
               <RoomParticipantsPanel
                 snapshot={snapshot}
                 amIAdmin={admin}
-                onToggleSpectator={(id) => sendMessage<ToggleSpectatorPayload>({ type: 'toggle-spectator', payload: { targetClientId: id } })}
-                onToggleAdmin={(id) => sendMessage<ToggleOwnerPayload>({ type: 'toggle-owner', payload: { targetClientId: id } })}
+                onToggleSpectator={(id) => sendMessage({ type: 'toggle-spectator', payload: { targetClientId: id } })}
+                onToggleAdmin={(id) => sendMessage({ type: 'toggle-owner', payload: { targetClientId: id } })}
                 onCopied={() => pushSuccess('Participant ID copied!')}
               />
               <RoomResultsSummary snapshot={snapshot} />

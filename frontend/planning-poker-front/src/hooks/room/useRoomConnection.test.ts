@@ -51,7 +51,7 @@ describe('useRoomConnection', () => {
       participants: [],
     }) }));
 
-    act(() => result.current.sendMessage({ type: 'reveal-votes', payload: null }));
+    act(() => result.current.sendMessage({ type: 'reveal-votes', payload: {} }));
     expect(JSON.parse(socket.sent[0])).toEqual({ type: 'update-name', payload: { username: 'Ada' } });
     expect(JSON.parse(socket.sent[1])).toEqual({ type: 'reveal-votes', payload: { expectedRoomVersion: 7 } });
   });
@@ -89,7 +89,7 @@ describe('useRoomConnection', () => {
     const secondSocket = socketState.current!;
     expect(result.current.clientId).toBe('');
     expect(result.current.snapshot.currentStory).toBe('');
-    act(() => result.current.sendMessage({ type: 'reveal-votes', payload: null }));
+    act(() => result.current.sendMessage({ type: 'reveal-votes', payload: {} }));
     expect(secondSocket.sent).toHaveLength(0);
     expect(pushError).toHaveBeenCalledWith('Room state is still loading. Please wait and try again.');
     unmount();
