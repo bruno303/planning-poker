@@ -1,10 +1,12 @@
 package bus
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -31,7 +33,7 @@ type decodedCommandFrame struct {
 	RoomVersion *uint64 `json:"roomVersion"`
 }
 
-func newCommandTestBus(t *testing.T, hub domain.Hub, calls map[string]useCaseCall) (*WebsocketBus, *websocket.Conn) {
+func newCommandTestBus(t *testing.T, hub domain.Hub, calls map[string]useCaseCall, ledger CommandLedger) (*WebsocketBus, *websocket.Conn) {
 	t.Helper()
 
 	serverConn, clientConn := websocketPair(t)
@@ -41,6 +43,7 @@ func newCommandTestBus(t *testing.T, hub domain.Hub, calls map[string]useCaseCal
 		serverConn,
 		hub,
 		usecase.UseCasesFacade{},
+		ledger,
 		WebSocketConfig{WriteTimeout: time.Second, ReadTimeout: time.Second, PingInterval: time.Hour},
 	)
 	bus.calls = calls
@@ -51,6 +54,77 @@ func newCommandTestBus(t *testing.T, hub domain.Hub, calls map[string]useCaseCal
 	})
 
 	return bus, clientConn
+}
+
+type fakeCommandLedger struct {
+	mu          sync.Mutex
+	outcomes    map[string][]byte
+	pending     map[string]bool
+	claimErr    error
+	completeErr error
+	claims      int
+	completes   int
+	lastOutcome []byte
+}
+
+func newFakeCommandLedger() *fakeCommandLedger {
+	return &fakeCommandLedger{
+		outcomes: map[string][]byte{},
+		pending:  map[string]bool{},
+	}
+}
+
+func (f *fakeCommandLedger) key(roomID, clientID, commandID string) string {
+	return roomID + ":" + clientID + ":" + commandID
+}
+
+func (f *fakeCommandLedger) Claim(_ context.Context, roomID, clientID, commandID string) ([]byte, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.claims++
+	if f.claimErr != nil {
+		return nil, false, f.claimErr
+	}
+
+	key := f.key(roomID, clientID, commandID)
+	if outcome, ok := f.outcomes[key]; ok {
+		return outcome, true, nil
+	}
+	if f.pending[key] {
+		return nil, false, ErrCommandInProgress
+	}
+
+	f.pending[key] = true
+	return nil, false, nil
+}
+
+func (f *fakeCommandLedger) Complete(_ context.Context, roomID, clientID, commandID string, outcome []byte) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.completes++
+	if f.completeErr != nil {
+		return f.completeErr
+	}
+
+	key := f.key(roomID, clientID, commandID)
+	delete(f.pending, key)
+	f.outcomes[key] = outcome
+	f.lastOutcome = outcome
+	return nil
+}
+
+func (f *fakeCommandLedger) claimCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.claims
+}
+
+func (f *fakeCommandLedger) completeCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.completes
 }
 
 func readCommandFrame(t *testing.T, conn *websocket.Conn) decodedCommandFrame {
@@ -105,7 +179,7 @@ func TestWebsocketBus_Process_SendsCommandAck(t *testing.T) {
 		usecase.UseCasesFacade{UpdateName: updateName},
 		commandTestClientID,
 		commandTestRoomID,
-	))
+	), newFakeCommandLedger())
 
 	bus.process(context.Background(), WebSocketMessage{
 		Type:      "update-name",
@@ -141,7 +215,7 @@ func TestWebsocketBus_Process_SendsCommandAckWhenRoomLoadFails(t *testing.T) {
 		usecase.UseCasesFacade{Vote: vote},
 		commandTestClientID,
 		commandTestRoomID,
-	))
+	), newFakeCommandLedger())
 
 	bus.process(context.Background(), WebSocketMessage{
 		Type:      "vote",
@@ -175,7 +249,7 @@ func TestWebsocketBus_Process_SendsCommandErrorForStaleVersion(t *testing.T) {
 		usecase.UseCasesFacade{Reset: reset},
 		commandTestClientID,
 		commandTestRoomID,
-	))
+	), newFakeCommandLedger())
 
 	bus.process(context.Background(), WebSocketMessage{
 		Type:      "reset",
@@ -226,7 +300,7 @@ func TestWebsocketBus_Process_MapsDomainErrorCodes(t *testing.T) {
 				usecase.UseCasesFacade{UpdateName: updateName},
 				commandTestClientID,
 				commandTestRoomID,
-			))
+			), newFakeCommandLedger())
 
 			bus.process(context.Background(), WebSocketMessage{
 				Type:      "update-name",
@@ -262,7 +336,7 @@ func TestWebsocketBus_Process_HidesInternalErrors(t *testing.T) {
 		usecase.UseCasesFacade{UpdateName: updateName},
 		commandTestClientID,
 		commandTestRoomID,
-	))
+	), newFakeCommandLedger())
 
 	bus.process(context.Background(), WebSocketMessage{
 		Type:      "update-name",
@@ -284,7 +358,7 @@ func TestWebsocketBus_Process_HidesInternalErrors(t *testing.T) {
 
 func TestWebsocketBus_Process_UnknownCommandWithCommandID(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	bus, clientConn := newCommandTestBus(t, domain.NewMockHub(ctrl), map[string]useCaseCall{})
+	bus, clientConn := newCommandTestBus(t, domain.NewMockHub(ctrl), map[string]useCaseCall{}, newFakeCommandLedger())
 
 	bus.process(context.Background(), WebSocketMessage{
 		Type:      "does-not-exist",
@@ -315,7 +389,7 @@ func TestWebsocketBus_Process_InvalidCommandID(t *testing.T) {
 		usecase.UseCasesFacade{UpdateName: updateName},
 		commandTestClientID,
 		commandTestRoomID,
-	))
+	), newFakeCommandLedger())
 
 	bus.process(context.Background(), WebSocketMessage{
 		Type:      "update-name",
@@ -348,7 +422,7 @@ func TestWebsocketBus_Process_InvalidPayload(t *testing.T) {
 			usecase.UseCasesFacade{UpdateName: updateName},
 			commandTestClientID,
 			commandTestRoomID,
-		))
+		), newFakeCommandLedger())
 
 		bus.process(context.Background(), WebSocketMessage{
 			Type:      "update-name",
@@ -368,7 +442,7 @@ func TestWebsocketBus_Process_InvalidPayload(t *testing.T) {
 			usecase.UseCasesFacade{Reset: reset},
 			commandTestClientID,
 			commandTestRoomID,
-		))
+		), newFakeCommandLedger())
 
 		bus.process(context.Background(), WebSocketMessage{
 			Type:      "reset",
@@ -398,17 +472,248 @@ func assertInvalidPayloadFrame(t *testing.T, conn *websocket.Conn) {
 	}
 }
 
+func readRawCommandFrame(t *testing.T, conn *websocket.Conn) []byte {
+	t.Helper()
+
+	if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("failed to set read deadline: %v", err)
+	}
+
+	_, payload, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("failed to read raw command frame: %v", err)
+	}
+
+	return payload
+}
+
+func decodeCommandFrame(t *testing.T, payload []byte) decodedCommandFrame {
+	t.Helper()
+
+	var frame decodedCommandFrame
+	if err := json.Unmarshal(payload, &frame); err != nil {
+		t.Fatalf("failed to decode command frame %s: %v", payload, err)
+	}
+
+	return frame
+}
+
+func TestWebsocketBus_Process_CachesCommandAck(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	roomVersion := uint64(12)
+
+	hub := domain.NewMockHub(ctrl)
+	hub.EXPECT().LoadRoom(gomock.Any(), commandTestRoomID).Return(&entity.Room{RoomVersion: roomVersion}, nil)
+
+	updateName := usecase.NewMockUseCase[usecase.UpdateNameCommand](ctrl)
+	updateName.EXPECT().Execute(gomock.Any(), gomock.Any()).Return(nil)
+
+	ledger := newFakeCommandLedger()
+	bus, clientConn := newCommandTestBus(t, hub, mapUsecases(
+		usecase.UseCasesFacade{UpdateName: updateName},
+		commandTestClientID,
+		commandTestRoomID,
+	), ledger)
+
+	bus.process(context.Background(), WebSocketMessage{
+		Type:      "update-name",
+		CommandID: commandTestCommandID,
+		Payload:   UpdateNamePayload{Username: "Alice"},
+	})
+
+	payload := readRawCommandFrame(t, clientConn)
+	frame := decodeCommandFrame(t, payload)
+	if frame.Type != commandAckType {
+		t.Fatalf("expected frame type %q, got %q", commandAckType, frame.Type)
+	}
+
+	if ledger.completeCount() != 1 {
+		t.Fatalf("expected the outcome to be stored once, got %d", ledger.completeCount())
+	}
+	if !bytes.Equal(ledger.lastOutcome, payload) {
+		t.Fatalf("expected stored outcome %s to match the sent frame %s", ledger.lastOutcome, payload)
+	}
+}
+
+func TestWebsocketBus_Process_ReplaysCompletedCommandOutcome(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	roomVersion := uint64(12)
+
+	hub := domain.NewMockHub(ctrl)
+	hub.EXPECT().LoadRoom(gomock.Any(), commandTestRoomID).Return(&entity.Room{RoomVersion: roomVersion}, nil)
+
+	updateName := usecase.NewMockUseCase[usecase.UpdateNameCommand](ctrl)
+	updateName.EXPECT().Execute(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+
+	ledger := newFakeCommandLedger()
+	bus, clientConn := newCommandTestBus(t, hub, mapUsecases(
+		usecase.UseCasesFacade{UpdateName: updateName},
+		commandTestClientID,
+		commandTestRoomID,
+	), ledger)
+
+	message := WebSocketMessage{
+		Type:      "update-name",
+		CommandID: commandTestCommandID,
+		Payload:   UpdateNamePayload{Username: "Alice"},
+	}
+
+	bus.process(context.Background(), message)
+	first := readRawCommandFrame(t, clientConn)
+
+	bus.process(context.Background(), message)
+	second := readRawCommandFrame(t, clientConn)
+
+	if !bytes.Equal(first, second) {
+		t.Fatalf("expected the duplicate command to replay %s, got %s", first, second)
+	}
+	if ledger.claimCount() != 2 {
+		t.Fatalf("expected two claims, got %d", ledger.claimCount())
+	}
+	if ledger.completeCount() != 1 {
+		t.Fatalf("expected the outcome to be stored once, got %d", ledger.completeCount())
+	}
+}
+
+func TestWebsocketBus_Process_CommandInProgress(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	updateName := usecase.NewMockUseCase[usecase.UpdateNameCommand](ctrl)
+	updateName.EXPECT().Execute(gomock.Any(), gomock.Any()).Times(0)
+
+	ledger := newFakeCommandLedger()
+	ledger.pending[ledger.key(commandTestRoomID, commandTestClientID, commandTestCommandID)] = true
+
+	bus, clientConn := newCommandTestBus(t, domain.NewMockHub(ctrl), mapUsecases(
+		usecase.UseCasesFacade{UpdateName: updateName},
+		commandTestClientID,
+		commandTestRoomID,
+	), ledger)
+
+	bus.process(context.Background(), WebSocketMessage{
+		Type:      "update-name",
+		CommandID: commandTestCommandID,
+		Payload:   UpdateNamePayload{Username: "Alice"},
+	})
+
+	frame := readCommandFrame(t, clientConn)
+	if frame.Type != commandErrorType {
+		t.Fatalf("expected frame type %q, got %q", commandErrorType, frame.Type)
+	}
+	if frame.Code != wireCodeCommandInProgress {
+		t.Fatalf("expected code %q, got %q", wireCodeCommandInProgress, frame.Code)
+	}
+	if frame.Message != "command is already being processed" {
+		t.Fatalf("expected message %q, got %q", "command is already being processed", frame.Message)
+	}
+}
+
+func TestWebsocketBus_Process_ClaimFailureReturnsInternalError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	updateName := usecase.NewMockUseCase[usecase.UpdateNameCommand](ctrl)
+	updateName.EXPECT().Execute(gomock.Any(), gomock.Any()).Times(0)
+
+	ledger := newFakeCommandLedger()
+	ledger.claimErr = errors.New("redis unavailable")
+
+	bus, clientConn := newCommandTestBus(t, domain.NewMockHub(ctrl), mapUsecases(
+		usecase.UseCasesFacade{UpdateName: updateName},
+		commandTestClientID,
+		commandTestRoomID,
+	), ledger)
+
+	bus.process(context.Background(), WebSocketMessage{
+		Type:      "update-name",
+		CommandID: commandTestCommandID,
+		Payload:   UpdateNamePayload{Username: "Alice"},
+	})
+
+	frame := readCommandFrame(t, clientConn)
+	if frame.Type != commandErrorType {
+		t.Fatalf("expected frame type %q, got %q", commandErrorType, frame.Type)
+	}
+	if frame.Code != wireCodeInternal {
+		t.Fatalf("expected code %q, got %q", wireCodeInternal, frame.Code)
+	}
+	if frame.Message != "internal error" {
+		t.Fatalf("expected message %q, got %q", "internal error", frame.Message)
+	}
+}
+
+func TestWebsocketBus_Process_CompleteFailureStillSendsFrame(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	roomVersion := uint64(3)
+
+	hub := domain.NewMockHub(ctrl)
+	hub.EXPECT().LoadRoom(gomock.Any(), commandTestRoomID).Return(&entity.Room{RoomVersion: roomVersion}, nil)
+
+	updateName := usecase.NewMockUseCase[usecase.UpdateNameCommand](ctrl)
+	updateName.EXPECT().Execute(gomock.Any(), gomock.Any()).Return(nil)
+
+	ledger := newFakeCommandLedger()
+	ledger.completeErr = errors.New("redis unavailable")
+
+	bus, clientConn := newCommandTestBus(t, hub, mapUsecases(
+		usecase.UseCasesFacade{UpdateName: updateName},
+		commandTestClientID,
+		commandTestRoomID,
+	), ledger)
+
+	bus.process(context.Background(), WebSocketMessage{
+		Type:      "update-name",
+		CommandID: commandTestCommandID,
+		Payload:   UpdateNamePayload{Username: "Alice"},
+	})
+
+	frame := readCommandFrame(t, clientConn)
+	if frame.Type != commandAckType {
+		t.Fatalf("expected frame type %q, got %q", commandAckType, frame.Type)
+	}
+	if ledger.completeCount() != 1 {
+		t.Fatalf("expected one completion attempt, got %d", ledger.completeCount())
+	}
+}
+
+func TestWebsocketBus_Process_NilLedgerReturnsInternalError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	updateName := usecase.NewMockUseCase[usecase.UpdateNameCommand](ctrl)
+	updateName.EXPECT().Execute(gomock.Any(), gomock.Any()).Times(0)
+
+	bus, clientConn := newCommandTestBus(t, domain.NewMockHub(ctrl), mapUsecases(
+		usecase.UseCasesFacade{UpdateName: updateName},
+		commandTestClientID,
+		commandTestRoomID,
+	), nil)
+
+	bus.process(context.Background(), WebSocketMessage{
+		Type:      "update-name",
+		CommandID: commandTestCommandID,
+		Payload:   UpdateNamePayload{Username: "Alice"},
+	})
+
+	frame := readCommandFrame(t, clientConn)
+	if frame.Type != commandErrorType {
+		t.Fatalf("expected frame type %q, got %q", commandErrorType, frame.Type)
+	}
+	if frame.Code != wireCodeInternal {
+		t.Fatalf("expected code %q, got %q", wireCodeInternal, frame.Code)
+	}
+	if frame.Message != "internal error" {
+		t.Fatalf("expected message %q, got %q", "internal error", frame.Message)
+	}
+}
+
 func TestWebsocketBus_Process_LegacyCommandSendsNoAck(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		updateName := usecase.NewMockUseCase[usecase.UpdateNameCommand](ctrl)
 		updateName.EXPECT().Execute(gomock.Any(), gomock.Any()).Return(nil)
 
+		ledger := newFakeCommandLedger()
 		bus, clientConn := newCommandTestBus(t, domain.NewMockHub(ctrl), mapUsecases(
 			usecase.UseCasesFacade{UpdateName: updateName},
 			commandTestClientID,
 			commandTestRoomID,
-		))
+		), ledger)
 
 		bus.process(context.Background(), WebSocketMessage{
 			Type:    "update-name",
@@ -416,6 +721,9 @@ func TestWebsocketBus_Process_LegacyCommandSendsNoAck(t *testing.T) {
 		})
 
 		assertNoCommandFrame(t, clientConn)
+		if ledger.claimCount() != 0 {
+			t.Fatalf("expected legacy commands to bypass the ledger, got %d claims", ledger.claimCount())
+		}
 	})
 
 	t.Run("stale version", func(t *testing.T) {
@@ -432,7 +740,7 @@ func TestWebsocketBus_Process_LegacyCommandSendsNoAck(t *testing.T) {
 			usecase.UseCasesFacade{Reset: reset},
 			commandTestClientID,
 			commandTestRoomID,
-		))
+		), newFakeCommandLedger())
 
 		bus.process(context.Background(), WebSocketMessage{
 			Type:    "reset",

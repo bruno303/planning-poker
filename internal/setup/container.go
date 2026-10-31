@@ -7,6 +7,8 @@ import (
 	"planning-poker/internal/application/planningpoker/usecase"
 	"planning-poker/internal/config"
 	"planning-poker/internal/domain"
+	"planning-poker/internal/infra/boundaries/commandledger/inmemory"
+	commandledgerredis "planning-poker/internal/infra/boundaries/commandledger/redis"
 	"planning-poker/internal/infra/boundaries/http"
 	"planning-poker/internal/infra/boundaries/http/middleware"
 	"planning-poker/internal/infra/boundaries/hub/redis"
@@ -28,6 +30,7 @@ type (
 		Hub                 domain.Hub
 		AdminHub            domain.AdminHub
 		LockManager         lock.LockManager
+		CommandLedger       bus.CommandLedger
 	}
 	ApplicationContainer struct {
 		PlanningPokerMetric metric.PlanningPokerMetric
@@ -57,9 +60,10 @@ func NewContainerWithDependencies(
 	lockManager lock.LockManager,
 ) *Container {
 	infra := &InfraContainer{
-		Hub:         hub,
-		AdminHub:    adminHub,
-		LockManager: lockManager,
+		Hub:           hub,
+		AdminHub:      adminHub,
+		LockManager:   lockManager,
+		CommandLedger: inmemory.New(bus.CommandPendingTTL, bus.CommandResultTTL),
 	}
 	return newContainer(cfg, infra)
 }
@@ -90,10 +94,11 @@ func newInfraContainer(ctx context.Context, cfg *config.Config) *InfraContainer 
 	lockManager := infralock.NewRedisLockManager(redisClient)
 
 	return &InfraContainer{
-		RedisClient: redisClient,
-		Hub:         hub,
-		AdminHub:    hub,
-		LockManager: lockManager,
+		RedisClient:   redisClient,
+		Hub:           hub,
+		AdminHub:      hub,
+		LockManager:   lockManager,
+		CommandLedger: commandledgerredis.New(redisClient, bus.CommandPendingTTL, bus.CommandResultTTL),
 	}
 }
 
@@ -196,7 +201,7 @@ func newUsecases(hub domain.Hub, lockManager lock.LockManager, metric metric.Pla
 }
 
 func newWebsocketBusFactory(cfg *config.Config, infra *InfraContainer, app *ApplicationContainer) *bus.WebSocketBusFactory {
-	return bus.NewWebSocketBusFactory(infra.Hub, app.Usecases, bus.WebSocketConfig{
+	return bus.NewWebSocketBusFactory(infra.Hub, app.Usecases, infra.CommandLedger, bus.WebSocketConfig{
 		WriteTimeout: cfg.API.PlanningPoker.WebsocketWriteTimeout,
 		ReadTimeout:  cfg.API.PlanningPoker.WebsocketReadTimeout,
 		PingInterval: cfg.API.PlanningPoker.WebsocketPingInterval,
