@@ -19,6 +19,13 @@ func assertJSONResponse(t *testing.T, w *httptest.ResponseRecorder, wantStatus i
 		t.Errorf("response Content-Type = %v, want application/json", contentType)
 	}
 
+	if wantBody == "" {
+		if w.Body.Len() != 0 {
+			t.Errorf("response body = %q, want empty body", w.Body.String())
+		}
+		return
+	}
+
 	var got, want any
 	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
 		t.Fatalf("failed to unmarshal response body: %v", err)
@@ -113,7 +120,7 @@ func TestSendJsonResponse(t *testing.T) {
 			name:       "should send JSON response with nil",
 			statusCode: http.StatusNoContent,
 			response:   nil,
-			wantBody:   `null`,
+			wantBody:   ``,
 			wantStatus: http.StatusNoContent,
 		},
 	}
