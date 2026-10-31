@@ -240,11 +240,7 @@ func (c *WebsocketBus) process(ctx context.Context, msg WebSocketMessage) {
 	c.logger.Debug(ctx, "Processing message for event type '%v' with payload: %v", msg.Type, msg)
 	usecaseCall, exists := c.calls[msg.Type]
 	if !exists {
-		if msg.CommandID != "" {
-			_ = c.Send(ctx, newCommandError(msg.CommandID, wireCodeUnknownCommand, "unknown command type", nil))
-			return
-		}
-		c.logger.Error(ctx, fmt.Sprintf("Unknown event type '%v' for client %v", msg.Type, c.ID), errors.New("unknown event type"))
+		c.processUnknown(ctx, msg)
 		return
 	}
 
@@ -253,6 +249,18 @@ func (c *WebsocketBus) process(ctx context.Context, msg WebSocketMessage) {
 		return
 	}
 
+	c.processCommand(ctx, usecaseCall, msg)
+}
+
+func (c *WebsocketBus) processUnknown(ctx context.Context, msg WebSocketMessage) {
+	if msg.CommandID != "" {
+		_ = c.Send(ctx, newCommandError(msg.CommandID, wireCodeUnknownCommand, "unknown command type", nil))
+		return
+	}
+	c.logger.Error(ctx, fmt.Sprintf("Unknown event type '%v' for client %v", msg.Type, c.ID), errors.New("unknown event type"))
+}
+
+func (c *WebsocketBus) processCommand(ctx context.Context, usecaseCall useCaseCall, msg WebSocketMessage) {
 	parsed, err := uuid.Parse(msg.CommandID)
 	if err != nil {
 		_ = c.Send(ctx, newCommandError(msg.CommandID, wireCodeInvalidCommandID, "commandId must be a UUID", nil))
@@ -268,13 +276,7 @@ func (c *WebsocketBus) process(ctx context.Context, msg WebSocketMessage) {
 
 	outcome, found, err := c.ledger.Claim(ctx, c.roomID, c.ID, commandID)
 	if err != nil {
-		if errors.Is(err, ErrCommandInProgress) {
-			c.logger.Debug(ctx, "Command %v for client %v is already being processed", commandID, c.ID)
-			_ = c.Send(ctx, newCommandError(commandID, wireCodeCommandInProgress, "command is already being processed", nil))
-			return
-		}
-		c.logger.Error(ctx, fmt.Sprintf("Failed to claim command %v for client %v", commandID, c.ID), err)
-		_ = c.Send(ctx, newCommandError(commandID, wireCodeInternal, "internal error", nil))
+		c.handleClaimError(ctx, commandID, err)
 		return
 	}
 
@@ -285,32 +287,59 @@ func (c *WebsocketBus) process(ctx context.Context, msg WebSocketMessage) {
 	}
 
 	if err := usecaseCall(ctx, msg); err != nil {
-		frame := commandErrorFor(commandID, err)
-		if frame.Code == wireCodeStaleVersion {
-			if room, loadErr := c.hub.LoadRoom(ctx, c.roomID); loadErr != nil {
-				c.logger.Debug(ctx, "Failed to load room %v while reporting stale command for client %v: %v", c.roomID, c.ID, loadErr)
-			} else {
-				version := room.RoomVersion
-				frame.RoomVersion = &version
-			}
-		}
-		if frame.Code == wireCodeInternal {
-			c.logger.Error(ctx, fmt.Sprintf("Error handling event for client %v", c.ID), err)
-		} else {
-			c.logger.Debug(ctx, "Command %v failed for client %v with code %v: %v", commandID, c.ID, frame.Code, err)
-		}
-		c.finishCommand(ctx, commandID, frame)
+		c.finishError(ctx, commandID, err)
 		return
 	}
 
-	frame := newCommandAck(commandID, nil)
-	if room, loadErr := c.hub.LoadRoom(ctx, c.roomID); loadErr != nil {
-		c.logger.Debug(ctx, "Failed to load room %v while acknowledging command for client %v: %v", c.roomID, c.ID, loadErr)
+	c.finishAck(ctx, commandID)
+}
+
+func (c *WebsocketBus) handleClaimError(ctx context.Context, commandID string, err error) {
+	if errors.Is(err, ErrCommandInProgress) {
+		c.logger.Debug(ctx, "Command %v for client %v is already being processed", commandID, c.ID)
+		_ = c.Send(ctx, newCommandError(commandID, wireCodeCommandInProgress, "command is already being processed", nil))
+		return
+	}
+	c.logger.Error(ctx, fmt.Sprintf("Failed to claim command %v for client %v", commandID, c.ID), err)
+	_ = c.Send(ctx, newCommandError(commandID, wireCodeInternal, "internal error", nil))
+}
+
+func (c *WebsocketBus) finishError(ctx context.Context, commandID string, err error) {
+	frame := commandErrorFor(commandID, err)
+	if frame.Code == wireCodeStaleVersion {
+		version, loadErr := c.roomVersion(ctx)
+		if loadErr != nil {
+			c.logger.Debug(ctx, "Failed to load room %v while reporting stale command for client %v: %v", c.roomID, c.ID, loadErr)
+		} else {
+			frame.RoomVersion = version
+		}
+	}
+	if frame.Code == wireCodeInternal {
+		c.logger.Error(ctx, fmt.Sprintf("Error handling event for client %v", c.ID), err)
 	} else {
-		version := room.RoomVersion
-		frame.RoomVersion = &version
+		c.logger.Debug(ctx, "Command %v failed for client %v with code %v: %v", commandID, c.ID, frame.Code, err)
 	}
 	c.finishCommand(ctx, commandID, frame)
+}
+
+func (c *WebsocketBus) finishAck(ctx context.Context, commandID string) {
+	frame := newCommandAck(commandID, nil)
+	version, err := c.roomVersion(ctx)
+	if err != nil {
+		c.logger.Debug(ctx, "Failed to load room %v while acknowledging command for client %v: %v", c.roomID, c.ID, err)
+	} else {
+		frame.RoomVersion = version
+	}
+	c.finishCommand(ctx, commandID, frame)
+}
+
+func (c *WebsocketBus) roomVersion(ctx context.Context) (*uint64, error) {
+	room, err := c.hub.LoadRoom(ctx, c.roomID)
+	if err != nil {
+		return nil, err
+	}
+	version := room.RoomVersion
+	return &version, nil
 }
 
 // finishCommand stores the encoded frame as the command outcome and writes those
