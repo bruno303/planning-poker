@@ -15,17 +15,109 @@ A full-stack Planning Poker application for agile teams, built with Go (backend)
 
 ```
 planning-poker/
-├── cmd/api/                # Go backend entrypoint
-├── internal/               # Go backend logic
-│   └── planningpoker/      # Core planning poker logic
+├── cmd/api/                    # Go backend entrypoint
+├── internal/
+│   ├── domain/                 # Aggregate, ports, domain errors
+│   ├── application/            # Use cases, lock and metric contracts
+│   ├── infra/                  # HTTP, WebSocket bus, Redis adapters
+│   ├── config/                 # Configuration loading
+│   └── setup/                  # Dependency wiring
+├── protocol/                   # AsyncAPI 3 + JSON Schema contract
+├── tools/protocolgen/          # Go/TypeScript code generator
 ├── frontend/
-│   └── planning-poker-front/ # Next.js frontend app
-├── Dockerfile              # Backend Dockerfile
-├── docker-compose.yml      # Multi-service orchestration
-├── Makefile                # Common dev commands
-├── example.env             # Example environment variables
-└── README.md
+│   └── planning-poker-front/   # Next.js frontend app
+├── test/integration/           # Backend integration tests
+├── Dockerfile                  # Backend Dockerfile
+├── docker-compose.yml          # Multi-service orchestration
+├── Makefile                    # Common dev commands
+└── example.env                 # Example environment variables
 ```
+
+## Architecture
+
+The backend is a layered Go service (`infra` adapters → `application` use cases → `domain`
+aggregate and ports) and the client is a Next.js app. REST creates and joins rooms and serves
+admin and health endpoints; the room page keeps a WebSocket for commands and live `room-state`
+broadcasts. Redis holds room snapshots, fans updates out across instances, provides the
+per-room locks, and stores the command-idempotency ledger. The WebSocket wire contract is
+generated from `protocol/` (AsyncAPI 3 + JSON Schema) into Go and TypeScript.
+
+```mermaid
+flowchart TB
+  subgraph Browser["Browser · Next.js 15 / React 19"]
+    Pages["Join and Room pages"]
+    Conn["useRoomConnection<br/>reconnect + room-version guard"]
+    TSProto["protocol.generated.ts<br/>types + runtime guards"]
+    Pages --> Conn
+    Conn --> TSProto
+  end
+
+  subgraph API["Go API · cmd/api"]
+    Router["gorilla/mux<br/>CORS · logging · OpenTelemetry"]
+    subgraph Boundaries["internal/infra/boundaries"]
+      REST["REST handlers<br/>rooms · decks · admin · health"]
+      WSAPI["WebSocket upgrade<br/>/planning/{roomID}/ws"]
+    end
+    subgraph Messaging["internal/infra/bus"]
+      WSBus["WebsocketBus<br/>per-client read/write loop"]
+      Ledger["Command ledger<br/>idempotency by commandId"]
+    end
+    subgraph Application["internal/application"]
+      UseCases["UseCasesFacade<br/>19 use cases + tracing decorators"]
+      LockMgr["LockManager"]
+      Metric["PlanningPokerMetric"]
+    end
+    subgraph Domain["internal/domain"]
+      RoomAgg["Room aggregate<br/>clients · votes · stories · deck"]
+      Ports["Hub · Bus · AdminHub ports"]
+    end
+    subgraph Adapters["internal/infra adapters"]
+      RedisHub["Redis hub<br/>snapshots + pub/sub"]
+      InMemory["In-memory hub / ledger<br/>tests"]
+    end
+    Router --> REST
+    Router --> WSAPI
+    WSAPI --> WSBus
+    REST --> UseCases
+    WSBus --> UseCases
+    WSBus --> Ledger
+    UseCases --> RoomAgg
+    UseCases --> LockMgr
+    UseCases --> Metric
+    UseCases --> Ports
+    Ports --> RedisHub
+    Ports -. "tests" .-> InMemory
+  end
+
+  subgraph Redis["Redis"]
+    Snap[("room snapshots")]
+    PubSub[("pub/sub fan-out")]
+    Locks[("distributed locks")]
+    Outcomes[("command outcomes")]
+  end
+
+  subgraph Contract["protocol/ · single source of truth"]
+    Spec["asyncapi.yaml<br/>+ JSON Schema payloads"]
+    Gen["tools/protocolgen"]
+    GoProto["internal/protocol<br/>Go wire types"]
+    Spec --> Gen
+    Gen --> GoProto
+    Gen --> TSProto
+  end
+
+  Conn -- "REST: create / join / decks" --> REST
+  Conn -- "WebSocket commands" --> WSAPI
+  WSBus -- "room-state · ack · error" --> Conn
+  RedisHub --> Snap
+  RedisHub --> PubSub
+  LockMgr --> Locks
+  Ledger --> Outcomes
+  GoProto -. "wire DTOs" .-> UseCases
+  GoProto -. "wire DTOs" .-> WSBus
+```
+
+The `protocol/` subgraph is the schema-first pipeline: edit the AsyncAPI document or its JSON
+Schema files, run `make protocol`, and commit the regenerated Go and TypeScript artifacts.
 
 ## Prerequisites
 
