@@ -2,13 +2,21 @@ package http_test
 
 import (
 	"fmt"
+	"net"
 	"planning-poker/internal/infra/bus"
 	"planning-poker/test/integration"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+)
+
+const (
+	commandFrameTimeout = 2 * time.Second
+	quietFrameTimeout   = 300 * time.Millisecond
 )
 
 func TestWebSocketConnection(t *testing.T) {
@@ -764,6 +772,225 @@ func TestWebSocketDisconnection(t *testing.T) {
 	})
 }
 
+func TestWebSocketCommandProtocol(t *testing.T) {
+	t.Run("command-ack", testCommandAck)
+	t.Run("command-error/stale", testCommandErrorStale)
+	t.Run("command-error/unknown", testCommandErrorUnknown)
+	t.Run("command-error/forbidden", testCommandErrorForbidden)
+	t.Run("duplicate", testCommandDuplicate)
+	t.Run("legacy", testCommandLegacy)
+}
+
+func testCommandAck(t *testing.T) {
+	ts := integration.NewTestServer(t)
+	defer ts.Close()
+
+	roomID := createRoom(t, ts)
+	conn := connectWebSocket(t, ts, roomID)
+	defer closeAndWait(conn)
+
+	_ = getClientID(t, conn)
+
+	commandID := uuid.NewString()
+	send(t, conn, bus.WebSocketMessage{
+		Type:      "vote",
+		CommandID: commandID,
+		Payload:   bus.VotePayload{Vote: "5"},
+	})
+
+	ack := receiveUntilType(t, conn, "command-ack", commandFrameTimeout)
+	assertCommandFrameID(t, ack, commandID)
+	version, ok := ack["roomVersion"].(float64)
+	if !ok || version <= 0 {
+		t.Fatalf("expected positive roomVersion in command-ack, got %#v", ack["roomVersion"])
+	}
+}
+
+func testCommandErrorStale(t *testing.T) {
+	ts := integration.NewTestServer(t)
+	defer ts.Close()
+
+	roomID := createRoom(t, ts)
+	conn := connectWebSocket(t, ts, roomID)
+	defer closeAndWait(conn)
+
+	_ = getClientID(t, conn)
+
+	commandID := uuid.NewString()
+	send(t, conn, bus.WebSocketMessage{
+		Type:      "reset",
+		CommandID: commandID,
+		Payload:   map[string]uint64{"expectedRoomVersion": 0},
+	})
+
+	frame := receiveUntilType(t, conn, "command-error", commandFrameTimeout)
+	assertCommandFrameID(t, frame, commandID)
+	assertCommandError(t, frame, "stale_version", "stale room version")
+	version, ok := frame["roomVersion"].(float64)
+	if !ok || version == 0 {
+		t.Fatalf("expected non-zero roomVersion in stale command-error, got %#v", frame["roomVersion"])
+	}
+}
+
+func testCommandErrorUnknown(t *testing.T) {
+	ts := integration.NewTestServer(t)
+	defer ts.Close()
+
+	roomID := createRoom(t, ts)
+	conn := connectWebSocket(t, ts, roomID)
+	defer closeAndWait(conn)
+
+	_ = getClientID(t, conn)
+
+	commandID := uuid.NewString()
+	send(t, conn, bus.WebSocketMessage{
+		Type:      "does-not-exist",
+		CommandID: commandID,
+	})
+
+	frame := receiveUntilType(t, conn, "command-error", commandFrameTimeout)
+	assertCommandFrameID(t, frame, commandID)
+	assertCommandError(t, frame, "unknown_command", "unknown command type")
+}
+
+func testCommandErrorForbidden(t *testing.T) {
+	ts := integration.NewTestServer(t)
+	defer ts.Close()
+
+	roomID := createRoom(t, ts)
+	owner := connectWebSocket(t, ts, roomID)
+	defer closeAndWait(owner)
+	_ = getClientID(t, owner)
+
+	guest := connectWebSocket(t, ts, roomID)
+	defer closeAndWait(guest)
+	_ = getClientID(t, guest)
+
+	// Drain the room-state broadcast caused by the guest joining.
+	join := receiveMessage(t, owner, commandFrameTimeout)
+	if join["type"] != "room-state" {
+		t.Fatalf("expected room-state join broadcast, got '%v'", join["type"])
+	}
+
+	commandID := uuid.NewString()
+	send(t, guest, bus.WebSocketMessage{
+		Type:      "reveal-votes",
+		CommandID: commandID,
+		Payload:   map[string]any{},
+	})
+
+	frame := receiveUntilType(t, guest, "command-error", commandFrameTimeout)
+	assertCommandFrameID(t, frame, commandID)
+	assertCommandError(t, frame, "forbidden", "only the room owner can toggle reveal")
+}
+
+func testCommandDuplicate(t *testing.T) {
+	ts := integration.NewTestServer(t)
+	defer ts.Close()
+
+	roomID := createRoom(t, ts)
+	conn := connectWebSocket(t, ts, roomID)
+	defer closeAndWait(conn)
+
+	_ = getClientID(t, conn)
+
+	commandID := uuid.NewString()
+	message := bus.WebSocketMessage{
+		Type:      "update-name",
+		CommandID: commandID,
+		Payload:   bus.UpdateNamePayload{Username: "Alice"},
+	}
+	send(t, conn, message)
+	send(t, conn, message)
+
+	// The ack and the room-state broadcast are not ordered, so collect one
+	// room-state and both acks before asserting.
+	var acks []map[string]any
+	roomStates := 0
+	deadline := time.Now().Add(commandFrameTimeout)
+	for len(acks) < 2 || roomStates < 1 {
+		if !time.Now().Before(deadline) {
+			t.Fatalf(
+				"timed out after %s waiting for the duplicate outcome: got %d command-ack and %d room-state",
+				commandFrameTimeout, len(acks), roomStates,
+			)
+		}
+
+		frame := receiveMessage(t, conn, time.Until(deadline))
+		switch frame["type"] {
+		case "command-ack":
+			acks = append(acks, frame)
+		case "room-state":
+			roomStates++
+			if roomStates > 1 {
+				t.Fatalf("expected exactly one room-state for the duplicate command, got %d", roomStates)
+			}
+		default:
+			t.Fatalf("unexpected frame type '%v' while awaiting the duplicate outcome", frame["type"])
+		}
+	}
+
+	for _, ack := range acks {
+		assertCommandFrameID(t, ack, commandID)
+		if ack["roomVersion"] == nil {
+			t.Fatalf("expected roomVersion on replayed command-ack, got %#v", ack)
+		}
+	}
+	if !reflect.DeepEqual(acks[0], acks[1]) {
+		t.Fatalf("expected the replayed command-ack to be identical, got %#v and %#v", acks[0], acks[1])
+	}
+
+	expectNoMessage(t, conn, quietFrameTimeout)
+}
+
+func testCommandLegacy(t *testing.T) {
+	ts := integration.NewTestServer(t)
+	defer ts.Close()
+
+	roomID := createRoom(t, ts)
+	conn := connectWebSocket(t, ts, roomID)
+	defer closeAndWait(conn)
+
+	_ = getClientID(t, conn)
+
+	send(t, conn, bus.WebSocketMessage{
+		Type:    "vote",
+		Payload: bus.VotePayload{Vote: "5"},
+	})
+
+	// Read the very next frame: a legacy command must produce a room-state and
+	// no command-ack/command-error, so a spurious ack fails here instead of
+	// being silently discarded.
+	frame := receiveMessage(t, conn, commandFrameTimeout)
+	if frame["type"] != "room-state" {
+		t.Fatalf("expected legacy vote to produce a room-state, got frame type '%v' in %#v", frame["type"], frame)
+	}
+	if frame["reveal"] != true {
+		t.Fatalf("expected legacy vote to be applied, got %#v", frame)
+	}
+
+	expectNoMessage(t, conn, quietFrameTimeout)
+}
+
+func assertCommandFrameID(t *testing.T, frame map[string]any, wantCommandID string) {
+	t.Helper()
+
+	if frame["commandId"] != wantCommandID {
+		t.Fatalf("expected commandId %q, got %#v in %#v", wantCommandID, frame["commandId"], frame)
+	}
+}
+
+func assertCommandError(t *testing.T, frame map[string]any, wantCode, wantMessage string) {
+	t.Helper()
+
+	if frame["code"] != wantCode {
+		t.Fatalf("expected code %q, got %#v in %#v", wantCode, frame["code"], frame)
+	}
+	if frame["message"] != wantMessage {
+		t.Fatalf("expected message %q, got %#v in %#v", wantMessage, frame["message"], frame)
+	}
+}
+
 func send(t *testing.T, conn *websocket.Conn, msg bus.WebSocketMessage) {
 	t.Helper()
 
@@ -830,6 +1057,53 @@ func receiveMessage(t *testing.T, conn *websocket.Conn, timeout time.Duration) m
 	}
 
 	return msg
+}
+
+// receiveUntilType reads frames until one matches wantType, discarding the
+// others. Every read has a deadline so a missing frame fails instead of hanging.
+func receiveUntilType(t *testing.T, conn *websocket.Conn, wantType string, timeout time.Duration) map[string]any {
+	t.Helper()
+
+	deadline := time.Now().Add(timeout)
+	seen := make([]string, 0, 4)
+	for {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			t.Fatalf("timed out after %s waiting for %q; saw frame types %v", timeout, wantType, seen)
+		}
+
+		_ = conn.SetReadDeadline(time.Now().Add(remaining))
+
+		var msg map[string]any
+		if err := conn.ReadJSON(&msg); err != nil {
+			t.Fatalf("failed waiting %s for %q; saw frame types %v: %v", timeout, wantType, seen, err)
+		}
+
+		frameType, _ := msg["type"].(string)
+		if frameType == wantType {
+			return msg
+		}
+		seen = append(seen, frameType)
+	}
+}
+
+// expectNoMessage asserts that no frame arrives within timeout. The read is
+// expected to time out, which leaves the connection unusable for further reads.
+func expectNoMessage(t *testing.T, conn *websocket.Conn, timeout time.Duration) {
+	t.Helper()
+
+	_ = conn.SetReadDeadline(time.Now().Add(timeout))
+
+	var msg map[string]any
+	err := conn.ReadJSON(&msg)
+	if err == nil {
+		t.Fatalf("expected no message within %s, got frame type '%v'", timeout, msg["type"])
+	}
+
+	netErr, ok := err.(net.Error)
+	if !ok || !netErr.Timeout() {
+		t.Fatalf("expected read to time out within %s, got %v", timeout, err)
+	}
 }
 
 func sendMessage(t *testing.T, conn *websocket.Conn, msg map[string]any) {
