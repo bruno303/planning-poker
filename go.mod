@@ -14,6 +14,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/redis/go-redis/v9 v9.17.3
 	github.com/samber/lo v1.51.0
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux v0.63.0
 	go.uber.org/mock v0.6.0

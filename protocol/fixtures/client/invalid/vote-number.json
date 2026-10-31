@@ -1,0 +1,7 @@
+{
+  "type": "vote",
+  "commandId": "2c143899-150a-4afc-9c59-c6c564fd9039",
+  "payload": {
+    "vote": 5
+  }
+}

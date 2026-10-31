@@ -1,0 +1,15 @@
+{
+  "type": "room-state",
+  "deck": {
+    "id": "fibonacci",
+    "name": "Fibonacci",
+    "kind": "numeric",
+    "cards": ["0", "1", "2", "3", "5", "8", "13", "21", "34", "55", "89", "?", "☕"]
+  },
+  "currentStory": "",
+  "reveal": false,
+  "mostAppearingVotes": [],
+  "participants": [],
+  "roomVersion": 2,
+  "startedAt": "yesterday"
+}

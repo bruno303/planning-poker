@@ -1,0 +1,51 @@
+{
+  "type": "room-state",
+  "deck": {
+    "id": "fibonacci",
+    "name": "Fibonacci",
+    "kind": "numeric",
+    "cards": ["0", "1", "2", "3", "5", "8", "13", "21", "34", "55", "89", "?", "☕"]
+  },
+  "currentStory": "Estimate the checkout flow",
+  "reveal": true,
+  "mostAppearingVotes": ["5", "8"],
+  "participants": [
+    {
+      "id": "client-ada",
+      "name": "Ada",
+      "vote": "5",
+      "hasVoted": true,
+      "votedAt": "2026-09-03T12:01:00.250Z",
+      "isSpectator": false,
+      "isOwner": true
+    },
+    {
+      "id": "client-grace",
+      "name": "Grace",
+      "vote": null,
+      "hasVoted": false,
+      "isSpectator": true,
+      "isOwner": false
+    }
+  ],
+  "roomVersion": 7,
+  "startedAt": "2026-09-03T12:00:00Z",
+  "result": 6.5,
+  "consensus": "Medium",
+  "lowestVote": "5",
+  "highestVote": "8",
+  "voteRange": 3,
+  "voteSpread": 2,
+  "specialVoteCount": 0,
+  "backlogMode": true,
+  "stories": [
+    {
+      "id": "story-1",
+      "name": "Estimate the checkout flow",
+      "result": 6.5,
+      "mostAppearingVotes": ["5", "8"],
+      "voted": true
+    }
+  ],
+  "currentStoryIndex": 0
+}
