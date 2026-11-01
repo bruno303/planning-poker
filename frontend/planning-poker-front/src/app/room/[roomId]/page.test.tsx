@@ -361,7 +361,7 @@ describe('room page', () => {
      act(() => ws.onmessage?.({ data: JSON.stringify(roomState({ reveal: true, result: 5.5, consensus: 'High', lowestVote: '3', highestVote: '8', voteRange: 5, voteSpread: 2, specialVoteCount: 1, mostAppearingVotes: ['5'] })) }));
      expect(screen.getByText('Results Summary')).toBeTruthy();
      expect(screen.getByText('Consensus: High')).toBeTruthy();
-    act(() => ws.onmessage?.({ data: JSON.stringify({ type: 'stale-command' }) }));
+    act(() => ws.onmessage?.({ data: JSON.stringify({ type: 'stale-command', roomVersion: 4 }) }));
     act(() => ws.onmessage?.({ data: '{bad json' }));
     expect(pushError).toHaveBeenCalledWith('Room changed; review and try again.');
     expect(pushError).toHaveBeenCalledWith(expect.stringContaining('Error while handling websocket message'));

@@ -1,0 +1,6 @@
+{
+  "type": "command-error",
+  "commandId": "abf14ee6-ff93-4dfb-9e61-24f8942bea9a",
+  "code": "teapot",
+  "message": "unknown command failure"
+}

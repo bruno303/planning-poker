@@ -14,6 +14,7 @@ import (
 	"planning-poker/internal/domain"
 	"planning-poker/internal/domain/domainerror"
 	"planning-poker/internal/domain/entity"
+	"planning-poker/internal/protocol"
 
 	"github.com/gorilla/websocket"
 	"go.uber.org/mock/gomock"
@@ -26,11 +27,11 @@ const (
 )
 
 type decodedCommandFrame struct {
-	Type        string  `json:"type"`
-	CommandID   string  `json:"commandId"`
-	Code        string  `json:"code"`
-	Message     string  `json:"message"`
-	RoomVersion *uint64 `json:"roomVersion"`
+	Type        string                    `json:"type"`
+	CommandID   string                    `json:"commandId"`
+	Code        protocol.CommandErrorCode `json:"code"`
+	Message     string                    `json:"message"`
+	RoomVersion *uint64                   `json:"roomVersion"`
 }
 
 func newCommandTestBus(t *testing.T, hub domain.Hub, calls map[string]useCaseCall, ledger CommandLedger) (*WebsocketBus, *websocket.Conn) {
@@ -184,12 +185,12 @@ func TestWebsocketBus_Process_SendsCommandAck(t *testing.T) {
 	bus.process(context.Background(), WebSocketMessage{
 		Type:      "update-name",
 		CommandID: commandTestCommandID,
-		Payload:   UpdateNamePayload{Username: "Alice"},
+		Payload:   protocol.UpdateNamePayload{Username: "Alice"},
 	})
 
 	frame := readCommandFrame(t, clientConn)
-	if frame.Type != commandAckType {
-		t.Fatalf("expected frame type %q, got %q", commandAckType, frame.Type)
+	if frame.Type != protocol.MessageTypeCommandAck {
+		t.Fatalf("expected frame type %q, got %q", protocol.MessageTypeCommandAck, frame.Type)
 	}
 	if frame.CommandID != commandTestCommandID {
 		t.Fatalf("expected commandId %q, got %q", commandTestCommandID, frame.CommandID)
@@ -220,12 +221,12 @@ func TestWebsocketBus_Process_SendsCommandAckWhenRoomLoadFails(t *testing.T) {
 	bus.process(context.Background(), WebSocketMessage{
 		Type:      "vote",
 		CommandID: commandTestCommandID,
-		Payload:   VotePayload{Vote: "5"},
+		Payload:   protocol.VotePayload{Vote: "5"},
 	})
 
 	frame := readCommandFrame(t, clientConn)
-	if frame.Type != commandAckType {
-		t.Fatalf("expected frame type %q, got %q", commandAckType, frame.Type)
+	if frame.Type != protocol.MessageTypeCommandAck {
+		t.Fatalf("expected frame type %q, got %q", protocol.MessageTypeCommandAck, frame.Type)
 	}
 	if frame.CommandID != commandTestCommandID {
 		t.Fatalf("expected commandId %q, got %q", commandTestCommandID, frame.CommandID)
@@ -258,14 +259,14 @@ func TestWebsocketBus_Process_SendsCommandErrorForStaleVersion(t *testing.T) {
 	})
 
 	frame := readCommandFrame(t, clientConn)
-	if frame.Type != commandErrorType {
-		t.Fatalf("expected frame type %q, got %q", commandErrorType, frame.Type)
+	if frame.Type != protocol.MessageTypeCommandError {
+		t.Fatalf("expected frame type %q, got %q", protocol.MessageTypeCommandError, frame.Type)
 	}
 	if frame.CommandID != commandTestCommandID {
 		t.Fatalf("expected commandId %q, got %q", commandTestCommandID, frame.CommandID)
 	}
-	if frame.Code != wireCodeStaleVersion {
-		t.Fatalf("expected code %q, got %q", wireCodeStaleVersion, frame.Code)
+	if frame.Code != protocol.CommandErrorCodeStaleVersion {
+		t.Fatalf("expected code %q, got %q", protocol.CommandErrorCodeStaleVersion, frame.Code)
 	}
 	if frame.Message != "stale room version" {
 		t.Fatalf("expected stale message, got %q", frame.Message)
@@ -279,13 +280,13 @@ func TestWebsocketBus_Process_MapsDomainErrorCodes(t *testing.T) {
 	tests := []struct {
 		name     string
 		code     domainerror.Code
-		wantCode string
+		wantCode protocol.CommandErrorCode
 		message  string
 	}{
-		{name: "forbidden", code: domainerror.CodeForbidden, wantCode: wireCodeForbidden, message: "only the room owner can reset voting"},
-		{name: "not_found", code: domainerror.CodeNotFound, wantCode: wireCodeNotFound, message: "room not found"},
-		{name: "validation", code: domainerror.CodeValidation, wantCode: wireCodeValidation, message: "story ID cannot be empty"},
-		{name: "conflict", code: domainerror.CodeConflict, wantCode: wireCodeConflict, message: "story story-1 is already the current story"},
+		{name: "forbidden", code: domainerror.CodeForbidden, wantCode: protocol.CommandErrorCodeForbidden, message: "only the room owner can reset voting"},
+		{name: "not_found", code: domainerror.CodeNotFound, wantCode: protocol.CommandErrorCodeNotFound, message: "room not found"},
+		{name: "validation", code: domainerror.CodeValidation, wantCode: protocol.CommandErrorCodeValidation, message: "story ID cannot be empty"},
+		{name: "conflict", code: domainerror.CodeConflict, wantCode: protocol.CommandErrorCodeConflict, message: "story story-1 is already the current story"},
 	}
 
 	for _, tt := range tests {
@@ -305,12 +306,12 @@ func TestWebsocketBus_Process_MapsDomainErrorCodes(t *testing.T) {
 			bus.process(context.Background(), WebSocketMessage{
 				Type:      "update-name",
 				CommandID: commandTestCommandID,
-				Payload:   UpdateNamePayload{Username: "Alice"},
+				Payload:   protocol.UpdateNamePayload{Username: "Alice"},
 			})
 
 			frame := readCommandFrame(t, clientConn)
-			if frame.Type != commandErrorType {
-				t.Fatalf("expected frame type %q, got %q", commandErrorType, frame.Type)
+			if frame.Type != protocol.MessageTypeCommandError {
+				t.Fatalf("expected frame type %q, got %q", protocol.MessageTypeCommandError, frame.Type)
 			}
 			if frame.Code != tt.wantCode {
 				t.Fatalf("expected code %q, got %q", tt.wantCode, frame.Code)
@@ -322,6 +323,40 @@ func TestWebsocketBus_Process_MapsDomainErrorCodes(t *testing.T) {
 				t.Fatalf("expected no roomVersion for code %q, got %d", tt.wantCode, *frame.RoomVersion)
 			}
 		})
+	}
+}
+
+func TestWebsocketBus_Process_HidesUnmappedDomainErrorCode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	hub := domain.NewMockHub(ctrl)
+
+	updateName := usecase.NewMockUseCase[usecase.UpdateNameCommand](ctrl)
+	updateName.EXPECT().Execute(gomock.Any(), gomock.Any()).Return(domainerror.Newf(domainerror.Code("unmapped"), "should never leave the process"))
+
+	bus, clientConn := newCommandTestBus(t, hub, mapUsecases(
+		usecase.UseCasesFacade{UpdateName: updateName},
+		commandTestClientID,
+		commandTestRoomID,
+	), newFakeCommandLedger())
+
+	bus.process(context.Background(), WebSocketMessage{
+		Type:      "update-name",
+		CommandID: commandTestCommandID,
+		Payload:   protocol.UpdateNamePayload{Username: "Alice"},
+	})
+
+	frame := readCommandFrame(t, clientConn)
+	if frame.Type != protocol.MessageTypeCommandError {
+		t.Fatalf("expected frame type %q, got %q", protocol.MessageTypeCommandError, frame.Type)
+	}
+	if frame.Code != protocol.CommandErrorCodeInternal {
+		t.Fatalf("expected code %q, got %q", protocol.CommandErrorCodeInternal, frame.Code)
+	}
+	if frame.Message != "internal error" {
+		t.Fatalf("expected message %q, got %q", "internal error", frame.Message)
+	}
+	if frame.RoomVersion != nil {
+		t.Fatalf("expected no roomVersion for internal error, got %d", *frame.RoomVersion)
 	}
 }
 
@@ -341,15 +376,15 @@ func TestWebsocketBus_Process_HidesInternalErrors(t *testing.T) {
 	bus.process(context.Background(), WebSocketMessage{
 		Type:      "update-name",
 		CommandID: commandTestCommandID,
-		Payload:   UpdateNamePayload{Username: "Alice"},
+		Payload:   protocol.UpdateNamePayload{Username: "Alice"},
 	})
 
 	frame := readCommandFrame(t, clientConn)
-	if frame.Type != commandErrorType {
-		t.Fatalf("expected frame type %q, got %q", commandErrorType, frame.Type)
+	if frame.Type != protocol.MessageTypeCommandError {
+		t.Fatalf("expected frame type %q, got %q", protocol.MessageTypeCommandError, frame.Type)
 	}
-	if frame.Code != wireCodeInternal {
-		t.Fatalf("expected code %q, got %q", wireCodeInternal, frame.Code)
+	if frame.Code != protocol.CommandErrorCodeInternal {
+		t.Fatalf("expected code %q, got %q", protocol.CommandErrorCodeInternal, frame.Code)
 	}
 	if frame.Message != "internal error" {
 		t.Fatalf("expected message %q, got %q", "internal error", frame.Message)
@@ -366,14 +401,14 @@ func TestWebsocketBus_Process_UnknownCommandWithCommandID(t *testing.T) {
 	})
 
 	frame := readCommandFrame(t, clientConn)
-	if frame.Type != commandErrorType {
-		t.Fatalf("expected frame type %q, got %q", commandErrorType, frame.Type)
+	if frame.Type != protocol.MessageTypeCommandError {
+		t.Fatalf("expected frame type %q, got %q", protocol.MessageTypeCommandError, frame.Type)
 	}
 	if frame.CommandID != commandTestCommandID {
 		t.Fatalf("expected commandId %q, got %q", commandTestCommandID, frame.CommandID)
 	}
-	if frame.Code != wireCodeUnknownCommand {
-		t.Fatalf("expected code %q, got %q", wireCodeUnknownCommand, frame.Code)
+	if frame.Code != protocol.CommandErrorCodeUnknownCommand {
+		t.Fatalf("expected code %q, got %q", protocol.CommandErrorCodeUnknownCommand, frame.Code)
 	}
 	if frame.Message != "unknown command type" {
 		t.Fatalf("expected message %q, got %q", "unknown command type", frame.Message)
@@ -394,18 +429,18 @@ func TestWebsocketBus_Process_InvalidCommandID(t *testing.T) {
 	bus.process(context.Background(), WebSocketMessage{
 		Type:      "update-name",
 		CommandID: "not-a-uuid",
-		Payload:   UpdateNamePayload{Username: "Alice"},
+		Payload:   protocol.UpdateNamePayload{Username: "Alice"},
 	})
 
 	frame := readCommandFrame(t, clientConn)
-	if frame.Type != commandErrorType {
-		t.Fatalf("expected frame type %q, got %q", commandErrorType, frame.Type)
+	if frame.Type != protocol.MessageTypeCommandError {
+		t.Fatalf("expected frame type %q, got %q", protocol.MessageTypeCommandError, frame.Type)
 	}
 	if frame.CommandID != "not-a-uuid" {
 		t.Fatalf("expected commandId %q, got %q", "not-a-uuid", frame.CommandID)
 	}
-	if frame.Code != wireCodeInvalidCommandID {
-		t.Fatalf("expected code %q, got %q", wireCodeInvalidCommandID, frame.Code)
+	if frame.Code != protocol.CommandErrorCodeInvalidCommandID {
+		t.Fatalf("expected code %q, got %q", protocol.CommandErrorCodeInvalidCommandID, frame.Code)
 	}
 	if frame.Message != "commandId must be a UUID" {
 		t.Fatalf("expected message %q, got %q", "commandId must be a UUID", frame.Message)
@@ -458,14 +493,14 @@ func assertInvalidPayloadFrame(t *testing.T, conn *websocket.Conn) {
 	t.Helper()
 
 	frame := readCommandFrame(t, conn)
-	if frame.Type != commandErrorType {
-		t.Fatalf("expected frame type %q, got %q", commandErrorType, frame.Type)
+	if frame.Type != protocol.MessageTypeCommandError {
+		t.Fatalf("expected frame type %q, got %q", protocol.MessageTypeCommandError, frame.Type)
 	}
 	if frame.CommandID != commandTestCommandID {
 		t.Fatalf("expected commandId %q, got %q", commandTestCommandID, frame.CommandID)
 	}
-	if frame.Code != wireCodeInvalidPayload {
-		t.Fatalf("expected code %q, got %q", wireCodeInvalidPayload, frame.Code)
+	if frame.Code != protocol.CommandErrorCodeInvalidPayload {
+		t.Fatalf("expected code %q, got %q", protocol.CommandErrorCodeInvalidPayload, frame.Code)
 	}
 	if frame.Message != "invalid payload" {
 		t.Fatalf("expected message %q, got %q", "invalid payload", frame.Message)
@@ -518,13 +553,13 @@ func TestWebsocketBus_Process_CachesCommandAck(t *testing.T) {
 	bus.process(context.Background(), WebSocketMessage{
 		Type:      "update-name",
 		CommandID: commandTestCommandID,
-		Payload:   UpdateNamePayload{Username: "Alice"},
+		Payload:   protocol.UpdateNamePayload{Username: "Alice"},
 	})
 
 	payload := readRawCommandFrame(t, clientConn)
 	frame := decodeCommandFrame(t, payload)
-	if frame.Type != commandAckType {
-		t.Fatalf("expected frame type %q, got %q", commandAckType, frame.Type)
+	if frame.Type != protocol.MessageTypeCommandAck {
+		t.Fatalf("expected frame type %q, got %q", protocol.MessageTypeCommandAck, frame.Type)
 	}
 
 	if ledger.completeCount() != 1 {
@@ -555,7 +590,7 @@ func TestWebsocketBus_Process_ReplaysCompletedCommandOutcome(t *testing.T) {
 	message := WebSocketMessage{
 		Type:      "update-name",
 		CommandID: commandTestCommandID,
-		Payload:   UpdateNamePayload{Username: "Alice"},
+		Payload:   protocol.UpdateNamePayload{Username: "Alice"},
 	}
 
 	bus.process(context.Background(), message)
@@ -592,15 +627,15 @@ func TestWebsocketBus_Process_CommandInProgress(t *testing.T) {
 	bus.process(context.Background(), WebSocketMessage{
 		Type:      "update-name",
 		CommandID: commandTestCommandID,
-		Payload:   UpdateNamePayload{Username: "Alice"},
+		Payload:   protocol.UpdateNamePayload{Username: "Alice"},
 	})
 
 	frame := readCommandFrame(t, clientConn)
-	if frame.Type != commandErrorType {
-		t.Fatalf("expected frame type %q, got %q", commandErrorType, frame.Type)
+	if frame.Type != protocol.MessageTypeCommandError {
+		t.Fatalf("expected frame type %q, got %q", protocol.MessageTypeCommandError, frame.Type)
 	}
-	if frame.Code != wireCodeCommandInProgress {
-		t.Fatalf("expected code %q, got %q", wireCodeCommandInProgress, frame.Code)
+	if frame.Code != protocol.CommandErrorCodeCommandInProgress {
+		t.Fatalf("expected code %q, got %q", protocol.CommandErrorCodeCommandInProgress, frame.Code)
 	}
 	if frame.Message != "command is already being processed" {
 		t.Fatalf("expected message %q, got %q", "command is already being processed", frame.Message)
@@ -624,15 +659,15 @@ func TestWebsocketBus_Process_ClaimFailureReturnsInternalError(t *testing.T) {
 	bus.process(context.Background(), WebSocketMessage{
 		Type:      "update-name",
 		CommandID: commandTestCommandID,
-		Payload:   UpdateNamePayload{Username: "Alice"},
+		Payload:   protocol.UpdateNamePayload{Username: "Alice"},
 	})
 
 	frame := readCommandFrame(t, clientConn)
-	if frame.Type != commandErrorType {
-		t.Fatalf("expected frame type %q, got %q", commandErrorType, frame.Type)
+	if frame.Type != protocol.MessageTypeCommandError {
+		t.Fatalf("expected frame type %q, got %q", protocol.MessageTypeCommandError, frame.Type)
 	}
-	if frame.Code != wireCodeInternal {
-		t.Fatalf("expected code %q, got %q", wireCodeInternal, frame.Code)
+	if frame.Code != protocol.CommandErrorCodeInternal {
+		t.Fatalf("expected code %q, got %q", protocol.CommandErrorCodeInternal, frame.Code)
 	}
 	if frame.Message != "internal error" {
 		t.Fatalf("expected message %q, got %q", "internal error", frame.Message)
@@ -661,12 +696,12 @@ func TestWebsocketBus_Process_CompleteFailureStillSendsFrame(t *testing.T) {
 	bus.process(context.Background(), WebSocketMessage{
 		Type:      "update-name",
 		CommandID: commandTestCommandID,
-		Payload:   UpdateNamePayload{Username: "Alice"},
+		Payload:   protocol.UpdateNamePayload{Username: "Alice"},
 	})
 
 	frame := readCommandFrame(t, clientConn)
-	if frame.Type != commandAckType {
-		t.Fatalf("expected frame type %q, got %q", commandAckType, frame.Type)
+	if frame.Type != protocol.MessageTypeCommandAck {
+		t.Fatalf("expected frame type %q, got %q", protocol.MessageTypeCommandAck, frame.Type)
 	}
 	if ledger.completeCount() != 1 {
 		t.Fatalf("expected one completion attempt, got %d", ledger.completeCount())
@@ -687,15 +722,15 @@ func TestWebsocketBus_Process_NilLedgerReturnsInternalError(t *testing.T) {
 	bus.process(context.Background(), WebSocketMessage{
 		Type:      "update-name",
 		CommandID: commandTestCommandID,
-		Payload:   UpdateNamePayload{Username: "Alice"},
+		Payload:   protocol.UpdateNamePayload{Username: "Alice"},
 	})
 
 	frame := readCommandFrame(t, clientConn)
-	if frame.Type != commandErrorType {
-		t.Fatalf("expected frame type %q, got %q", commandErrorType, frame.Type)
+	if frame.Type != protocol.MessageTypeCommandError {
+		t.Fatalf("expected frame type %q, got %q", protocol.MessageTypeCommandError, frame.Type)
 	}
-	if frame.Code != wireCodeInternal {
-		t.Fatalf("expected code %q, got %q", wireCodeInternal, frame.Code)
+	if frame.Code != protocol.CommandErrorCodeInternal {
+		t.Fatalf("expected code %q, got %q", protocol.CommandErrorCodeInternal, frame.Code)
 	}
 	if frame.Message != "internal error" {
 		t.Fatalf("expected message %q, got %q", "internal error", frame.Message)
@@ -717,7 +752,7 @@ func TestWebsocketBus_Process_LegacyCommandSendsNoAck(t *testing.T) {
 
 		bus.process(context.Background(), WebSocketMessage{
 			Type:    "update-name",
-			Payload: UpdateNamePayload{Username: "Alice"},
+			Payload: protocol.UpdateNamePayload{Username: "Alice"},
 		})
 
 		assertNoCommandFrame(t, clientConn)

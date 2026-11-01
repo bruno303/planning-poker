@@ -1,0 +1,9 @@
+{
+  "type": "reorder-story",
+  "commandId": "79fe299f-45d9-455a-b82d-ccebbabfc522",
+  "payload": {
+    "storyId": "story-2",
+    "targetIndex": "2",
+    "expectedRoomVersion": 12
+  }
+}

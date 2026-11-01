@@ -38,6 +38,10 @@ describe('useRoomConnection', () => {
     connected.current = false;
     pushError.mockReset();
     pushSuccess.mockReset();
+    logger.info.mockReset();
+    logger.warn.mockReset();
+    logger.error.mockReset();
+    logger.setContext.mockReset();
     router.push.mockReset();
     delete window.planning_poker;
   });
@@ -51,7 +55,7 @@ describe('useRoomConnection', () => {
       participants: [],
     }) }));
 
-    act(() => result.current.sendMessage({ type: 'reveal-votes', payload: null }));
+    act(() => result.current.sendMessage({ type: 'reveal-votes', payload: {} }));
     expect(JSON.parse(socket.sent[0])).toEqual({ type: 'update-name', payload: { username: 'Ada' } });
     expect(JSON.parse(socket.sent[1])).toEqual({ type: 'reveal-votes', payload: { expectedRoomVersion: 7 } });
   });
@@ -75,6 +79,46 @@ describe('useRoomConnection', () => {
     expect(result.current.snapshot.result).toBeNull();
   });
 
+  it('ignores unknown frames with a warning instead of an error toast', () => {
+    renderHook(() => useRoomConnection({ roomId: 'room', userName: 'Ada', enabled: true }));
+    const socket = socketState.current!;
+    act(() => socket.onmessage?.({ data: JSON.stringify({ type: 'future-event', roomVersion: 7 }) }));
+
+    expect(logger.warn).toHaveBeenCalledWith('Ignoring unknown websocket frame', { type: 'future-event' });
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(pushError).not.toHaveBeenCalled();
+  });
+
+  it('accepts command-ack and command-error frames without an error toast', () => {
+    renderHook(() => useRoomConnection({ roomId: 'room', userName: 'Ada', enabled: true }));
+    const socket = socketState.current!;
+    act(() => socket.onmessage?.({ data: JSON.stringify({
+      type: 'command-ack', commandId: '55a42caf-36f9-4c80-8a34-514cf4a4e253', roomVersion: 7,
+    }) }));
+    // The server echoes the raw client commandId for invalid_command_id, so a non-UUID value is a contract-valid frame.
+    act(() => socket.onmessage?.({ data: JSON.stringify({
+      type: 'command-error', commandId: 'not-a-uuid', code: 'invalid_command_id', message: 'commandId must be a UUID',
+    }) }));
+
+    expect(logger.info).toHaveBeenCalledWith('Command acknowledged', {
+      commandId: '55a42caf-36f9-4c80-8a34-514cf4a4e253', roomVersion: 7,
+    });
+    expect(logger.info).toHaveBeenCalledWith('Command failed', {
+      commandId: 'not-a-uuid', code: 'invalid_command_id', message: 'commandId must be a UUID', roomVersion: undefined,
+    });
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(pushError).not.toHaveBeenCalled();
+  });
+
+  it('raises the error toast for a known frame with an invalid body', () => {
+    renderHook(() => useRoomConnection({ roomId: 'room', userName: 'Ada', enabled: true }));
+    const socket = socketState.current!;
+    act(() => socket.onmessage?.({ data: JSON.stringify({ type: 'stale-command' }) }));
+
+    expect(logger.warn).not.toHaveBeenCalled();
+    expect(pushError).toHaveBeenCalledWith('Error while handling websocket message: Invalid message from websocket');
+  });
+
   it('ignores callbacks from a replaced socket and cleans up on unmount', () => {
     const { result, rerender, unmount } = renderHook(({ roomId }) => useRoomConnection({ roomId, userName: 'Ada', enabled: true }), {
       initialProps: { roomId: 'one' },
@@ -89,7 +133,7 @@ describe('useRoomConnection', () => {
     const secondSocket = socketState.current!;
     expect(result.current.clientId).toBe('');
     expect(result.current.snapshot.currentStory).toBe('');
-    act(() => result.current.sendMessage({ type: 'reveal-votes', payload: null }));
+    act(() => result.current.sendMessage({ type: 'reveal-votes', payload: {} }));
     expect(secondSocket.sent).toHaveLength(0);
     expect(pushError).toHaveBeenCalledWith('Room state is still loading. Please wait and try again.');
     unmount();

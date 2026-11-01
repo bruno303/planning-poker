@@ -1,0 +1,8 @@
+{
+  "type": "toggle-spectator",
+  "commandId": "9a5b6541-64a8-453d-bac9-7c116f29650d",
+  "payload": {
+    "targetClientId": "client-grace",
+    "expectedRoomVersion": 12
+  }
+}
