@@ -20,6 +20,20 @@ func TestAddAndValues(t *testing.T) {
 	}
 }
 
+func TestValuesReturnsDefensiveCopy(t *testing.T) {
+	client1 := newTestClient("1", "Alice")
+	client2 := newTestClient("2", "Bob")
+	cc := New(client1, client2)
+
+	values := cc.Values()
+	values[0] = newTestClient("3", "Charlie")
+
+	got := cc.Values()
+	if len(got) != 2 || got[0] != client1 || got[1] != client2 {
+		t.Errorf("mutating Values result changed collection order or contents: got %v", got)
+	}
+}
+
 func TestRemove(t *testing.T) {
 	client1 := newTestClient("1", "Alice")
 	client2 := newTestClient("2", "Bob")

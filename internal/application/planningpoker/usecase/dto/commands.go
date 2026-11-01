@@ -108,6 +108,7 @@ func mapStories(stories []entity.Story) []Story {
 }
 
 func MapToParticipants(clients []*entity.Client) []Participant {
+	clients = slices.Clone(clients)
 	slices.SortFunc(clients, func(a, b *entity.Client) int {
 		return strings.Compare(a.Name, b.Name)
 	})

@@ -1,6 +1,8 @@
 package clientcollection
 
 import (
+	"slices"
+
 	"planning-poker/internal/domain/entity"
 )
 
@@ -27,8 +29,9 @@ func (cc *InMemoryClientCollection) Remove(clientID string) {
 	}
 }
 
+// Values returns a copy so callers cannot change the collection's order.
 func (cc *InMemoryClientCollection) Values() []*entity.Client {
-	return cc.clients
+	return slices.Clone(cc.clients)
 }
 
 func (cc *InMemoryClientCollection) Count() int {
