@@ -351,6 +351,153 @@ func TestApplyConstErrors(t *testing.T) {
 	}
 }
 
+func float64Pointer(value float64) *float64 {
+	return &value
+}
+
+func TestApplySchemaMetadataNumericBounds(t *testing.T) {
+	schema := &Schema{Kind: KindInteger, GoType: "uint64"}
+	if err := applySchemaMetadata(schema, map[string]any{"minimum": float64(0), "maximum": float64(10)}); err != nil {
+		t.Fatalf("applySchemaMetadata: %v", err)
+	}
+	if schema.Minimum == nil || *schema.Minimum != 0 {
+		t.Fatalf("schema minimum = %v, want 0", schema.Minimum)
+	}
+	if schema.Maximum == nil || *schema.Maximum != 10 {
+		t.Fatalf("schema maximum = %v, want 10", schema.Maximum)
+	}
+
+	tests := []struct {
+		name    string
+		raw     map[string]any
+		wantErr string
+	}{
+		{name: "minimum not a number", raw: map[string]any{"minimum": "0"}, wantErr: "minimum must be a number"},
+		{name: "maximum not a number", raw: map[string]any{"maximum": "0"}, wantErr: "maximum must be a number"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if err := applySchemaMetadata(&Schema{Kind: KindInteger}, test.raw); err == nil || !strings.Contains(err.Error(), test.wantErr) {
+				t.Fatalf("applySchemaMetadata error = %v, want %q", err, test.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateNumericConstraints(t *testing.T) {
+	tests := []struct {
+		name    string
+		schema  *Schema
+		wantErr string
+	}{
+		{name: "uint64 minimum zero", schema: &Schema{Kind: KindInteger, GoType: "uint64", Minimum: float64Pointer(0)}},
+		{name: "no bounds", schema: &Schema{Kind: KindInteger, GoType: "uint64"}},
+		{name: "uint64 minimum one", schema: &Schema{Kind: KindInteger, GoType: "uint64", Minimum: float64Pointer(1)}, wantErr: "minimum 1 is not supported"},
+		{name: "uint64 minimum negative", schema: &Schema{Kind: KindInteger, GoType: "uint64", Minimum: float64Pointer(-1)}, wantErr: "minimum -1 is not supported"},
+		{name: "number minimum zero", schema: &Schema{Kind: KindNumber, Minimum: float64Pointer(0)}, wantErr: "minimum is only supported on integer fields"},
+		{name: "integer without go type", schema: &Schema{Kind: KindInteger, Minimum: float64Pointer(0)}, wantErr: "minimum requires x-go-type uint64"},
+		{name: "integer with other go type", schema: &Schema{Kind: KindInteger, GoType: "int64", Minimum: float64Pointer(0)}, wantErr: "minimum requires x-go-type uint64"},
+		{name: "maximum", schema: &Schema{Kind: KindInteger, GoType: "uint64", Maximum: float64Pointer(10)}, wantErr: "maximum is not supported"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := validateNumericConstraints(test.schema, nil, "protocol/schemas/test.schema.json")
+			if test.wantErr == "" {
+				if err != nil {
+					t.Fatalf("validateNumericConstraints error = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+				t.Fatalf("validateNumericConstraints error = %v, want %q", err, test.wantErr)
+			}
+		})
+	}
+}
+
+func TestParseSchemaRejectsUnsupportedKeywords(t *testing.T) {
+	loader, _ := sampleLoader(t)
+	file := filepath.Join(loader.root, filepath.FromSlash(schemaDirectory), "commands.schema.json")
+
+	tests := []struct {
+		name    string
+		raw     map[string]any
+		wantErr string
+	}{
+		{name: "minLength", raw: map[string]any{"type": "string", "minLength": 1}, wantErr: `unsupported JSON Schema keyword "minLength"`},
+		{name: "additionalProperties", raw: map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}, wantErr: `unsupported JSON Schema keyword "additionalProperties"`},
+		{name: "allOf", raw: map[string]any{"type": "object", "allOf": []any{}}, wantErr: `unsupported JSON Schema keyword "allOf"`},
+		{name: "nested property keyword", raw: map[string]any{
+			"type":       "object",
+			"properties": map[string]any{"value": map[string]any{"type": "string", "pattern": "^a$"}},
+		}, wantErr: `unsupported JSON Schema keyword "pattern"`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := loader.parseSchema(test.raw, file); err == nil || !strings.Contains(err.Error(), test.wantErr) {
+				t.Fatalf("parseSchema error = %v, want %q", err, test.wantErr)
+			}
+		})
+	}
+
+	annotations := map[string]any{
+		"type":        "string",
+		"title":       "Title",
+		"description": "Description",
+		"examples":    []any{"a"},
+		"default":     "a",
+		"$comment":    "comment",
+		"deprecated":  false,
+		"readOnly":    true,
+		"writeOnly":   false,
+		"x-custom":    "value",
+	}
+	if _, err := loader.parseSchema(annotations, file); err != nil {
+		t.Fatalf("parseSchema rejected annotation keywords: %v", err)
+	}
+}
+
+func TestLoadSpecRejectsNumericConstraintsWithContext(t *testing.T) {
+	tests := []struct {
+		name       string
+		definition string
+		wantErr    string
+	}{
+		{
+			name:       "minimum not zero",
+			definition: `{"type": "integer", "x-go-type": "uint64", "minimum": 1}`,
+			wantErr:    "minimum 1 is not supported",
+		},
+		{
+			name:       "minimum on number",
+			definition: `{"type": "number", "minimum": 0}`,
+			wantErr:    "minimum is only supported on integer fields",
+		},
+		{
+			name:       "maximum",
+			definition: `{"type": "integer", "x-go-type": "uint64", "maximum": 0}`,
+			wantErr:    "maximum is not supported",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := tempRepo(t)
+			extra := `{"$defs": {"Bad": ` + test.definition + `}}`
+			if err := os.WriteFile(filepath.Join(root, "protocol", "schemas", "extra.schema.json"), []byte(extra), 0o644); err != nil {
+				t.Fatalf("write extra schema: %v", err)
+			}
+
+			_, err := loadSpec(root)
+			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+				t.Fatalf("loadSpec error = %v, want %q", err, test.wantErr)
+			}
+			if !strings.Contains(err.Error(), "protocol/schemas/extra.schema.json") || !strings.Contains(err.Error(), "$defs.Bad") {
+				t.Fatalf("loadSpec error = %v, want schema file and $defs context", err)
+			}
+		})
+	}
+}
+
 func TestParseObjectAndArrayErrors(t *testing.T) {
 	loader, _ := sampleLoader(t)
 	file := filepath.Join(loader.root, filepath.FromSlash(schemaDirectory), "commands.schema.json")

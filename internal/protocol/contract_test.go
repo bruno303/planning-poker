@@ -29,6 +29,7 @@ var serverEventSchemaDefs = map[string]string{
 // invalidClientCommandTypes maps invalid client fixtures to the command they
 // target. Valid fixtures are named after their command type.
 var invalidClientCommandTypes = map[string]string{
+	"advance-story-negative-expected-room-version.json": protocol.MessageTypeAdvanceStory,
 	"vote-number.json":                    protocol.MessageTypeVote,
 	"reorder-target-index-string.json":    protocol.MessageTypeReorderStory,
 	"toggle-spectator-target-number.json": protocol.MessageTypeToggleSpectator,

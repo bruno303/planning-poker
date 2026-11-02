@@ -69,6 +69,8 @@ type Schema struct {
 	Const      string
 	Format     string
 	GoType     string
+	Minimum    *float64
+	Maximum    *float64
 	Properties []Property
 	Items      *Schema
 	RefName    string
@@ -339,6 +341,9 @@ func (l *schemaLoader) parseSchema(raw map[string]any, file string) (*Schema, er
 	if rawRef, ok := raw["$ref"]; ok {
 		return l.parseRefSchema(rawRef, file)
 	}
+	if err := rejectUnsupportedKeywords(raw, file); err != nil {
+		return nil, err
+	}
 
 	kind, nullable, err := schemaKind(raw)
 	if err != nil {
@@ -347,6 +352,9 @@ func (l *schemaLoader) parseSchema(raw map[string]any, file string) (*Schema, er
 	schema := &Schema{Kind: kind, Nullable: nullable}
 
 	if err := applySchemaMetadata(schema, raw); err != nil {
+		return nil, err
+	}
+	if err := validateNumericConstraints(schema, raw, file); err != nil {
 		return nil, err
 	}
 
@@ -411,6 +419,84 @@ func applySchemaMetadata(schema *Schema, raw map[string]any) error {
 			return errors.New("x-go-type must be a string")
 		}
 		schema.GoType = goType
+	}
+	if err := applyNumericConstraint(&schema.Minimum, "minimum", raw); err != nil {
+		return err
+	}
+	if err := applyNumericConstraint(&schema.Maximum, "maximum", raw); err != nil {
+		return err
+	}
+	return nil
+}
+
+func applyNumericConstraint(target **float64, keyword string, raw map[string]any) error {
+	rawValue, ok := raw[keyword]
+	if !ok {
+		return nil
+	}
+	value, ok := rawValue.(float64)
+	if !ok {
+		return fmt.Errorf("%s must be a number", keyword)
+	}
+	*target = &value
+	return nil
+}
+
+// unsupportedKeywords are JSON Schema assertions the generator does not model.
+// Rejecting them keeps schema, Go, and TypeScript validation in agreement.
+var unsupportedKeywords = []string{
+	"minLength",
+	"maxLength",
+	"pattern",
+	"minItems",
+	"maxItems",
+	"uniqueItems",
+	"multipleOf",
+	"exclusiveMinimum",
+	"exclusiveMaximum",
+	"minProperties",
+	"maxProperties",
+	"additionalProperties",
+	"patternProperties",
+	"allOf",
+	"anyOf",
+	"oneOf",
+	"not",
+	"if",
+	"then",
+	"else",
+	"contains",
+	"propertyNames",
+	"dependentRequired",
+	"dependentSchemas",
+}
+
+func rejectUnsupportedKeywords(raw map[string]any, file string) error {
+	for _, keyword := range unsupportedKeywords {
+		if _, ok := raw[keyword]; ok {
+			return fmt.Errorf("unsupported JSON Schema keyword %q", keyword)
+		}
+	}
+	return nil
+}
+
+// validateNumericConstraints accepts only bounds the generated Go types enforce:
+// uint64 integers with a minimum of zero. No Go type enforces an upper bound.
+func validateNumericConstraints(schema *Schema, raw map[string]any, file string) error {
+	if schema.Maximum != nil {
+		return errors.New("maximum is not supported: no Go type enforces an upper bound")
+	}
+	if schema.Minimum == nil {
+		return nil
+	}
+	if schema.Kind != KindInteger {
+		return fmt.Errorf("minimum is only supported on integer fields, got type %q", schema.Kind)
+	}
+	if schema.GoType != "uint64" {
+		return fmt.Errorf("minimum requires x-go-type uint64, got %q", schema.GoType)
+	}
+	if *schema.Minimum != 0 {
+		return fmt.Errorf("minimum %s is not supported: uint64 only enforces a zero lower bound", strconv.FormatFloat(*schema.Minimum, 'g', -1, 64))
 	}
 	return nil
 }

@@ -388,7 +388,7 @@ export function isAdvanceStoryPayload(value: unknown): value is AdvanceStoryPayl
   }
 
   return (
-    (!('expectedRoomVersion' in value) || isInteger(value.expectedRoomVersion))
+    (!('expectedRoomVersion' in value) || isInteger(value.expectedRoomVersion) && value.expectedRoomVersion >= 0)
   );
 }
 
@@ -399,7 +399,7 @@ export function isCommandAck(value: unknown): value is CommandAck {
 
   return (
     isUUID(value.commandId) &&
-    (!('roomVersion' in value) || isInteger(value.roomVersion)) &&
+    (!('roomVersion' in value) || isInteger(value.roomVersion) && value.roomVersion >= 0) &&
     value.type === 'command-ack'
   );
 }
@@ -413,7 +413,7 @@ export function isCommandError(value: unknown): value is CommandError {
     isCommandErrorCode(value.code) &&
     typeof value.commandId === 'string' &&
     typeof value.message === 'string' &&
-    (!('roomVersion' in value) || isInteger(value.roomVersion)) &&
+    (!('roomVersion' in value) || isInteger(value.roomVersion) && value.roomVersion >= 0) &&
     value.type === 'command-error'
   );
 }
@@ -487,7 +487,7 @@ export function isPrevStoryPayload(value: unknown): value is PrevStoryPayload {
   }
 
   return (
-    (!('expectedRoomVersion' in value) || isInteger(value.expectedRoomVersion))
+    (!('expectedRoomVersion' in value) || isInteger(value.expectedRoomVersion) && value.expectedRoomVersion >= 0)
   );
 }
 
@@ -509,7 +509,7 @@ export function isRemoveStoryPayload(value: unknown): value is RemoveStoryPayloa
   }
 
   return (
-    (!('expectedRoomVersion' in value) || isInteger(value.expectedRoomVersion)) &&
+    (!('expectedRoomVersion' in value) || isInteger(value.expectedRoomVersion) && value.expectedRoomVersion >= 0) &&
     typeof value.storyId === 'string'
   );
 }
@@ -532,7 +532,7 @@ export function isReorderStoryPayload(value: unknown): value is ReorderStoryPayl
   }
 
   return (
-    (!('expectedRoomVersion' in value) || isInteger(value.expectedRoomVersion)) &&
+    (!('expectedRoomVersion' in value) || isInteger(value.expectedRoomVersion) && value.expectedRoomVersion >= 0) &&
     typeof value.storyId === 'string' &&
     isInteger(value.targetIndex)
   );
@@ -556,7 +556,7 @@ export function isResetPayload(value: unknown): value is ResetPayload {
   }
 
   return (
-    (!('expectedRoomVersion' in value) || isInteger(value.expectedRoomVersion))
+    (!('expectedRoomVersion' in value) || isInteger(value.expectedRoomVersion) && value.expectedRoomVersion >= 0)
   );
 }
 
@@ -578,7 +578,7 @@ export function isRevealVotesPayload(value: unknown): value is RevealVotesPayloa
   }
 
   return (
-    (!('expectedRoomVersion' in value) || isInteger(value.expectedRoomVersion))
+    (!('expectedRoomVersion' in value) || isInteger(value.expectedRoomVersion) && value.expectedRoomVersion >= 0)
   );
 }
 
@@ -599,7 +599,7 @@ export function isRoomState(value: unknown): value is RoomState {
     Array.isArray(value.participants) && value.participants.every((item) => isParticipant(item)) &&
     (!('result' in value) || typeof value.result === 'number') &&
     typeof value.reveal === 'boolean' &&
-    isInteger(value.roomVersion) &&
+    isInteger(value.roomVersion) && value.roomVersion >= 0 &&
     (!('specialVoteCount' in value) || isInteger(value.specialVoteCount)) &&
     (!('startedAt' in value) || isRFC3339Timestamp(value.startedAt)) &&
     (!('stories' in value) || (value.stories === null || (Array.isArray(value.stories) && value.stories.every((item) => isStory(item))))) &&
@@ -627,7 +627,7 @@ export function isSelectStoryPayload(value: unknown): value is SelectStoryPayloa
   }
 
   return (
-    (!('expectedRoomVersion' in value) || isInteger(value.expectedRoomVersion)) &&
+    (!('expectedRoomVersion' in value) || isInteger(value.expectedRoomVersion) && value.expectedRoomVersion >= 0) &&
     typeof value.storyId === 'string'
   );
 }
@@ -638,7 +638,7 @@ export function isStaleCommand(value: unknown): value is StaleCommand {
   }
 
   return (
-    isInteger(value.roomVersion) &&
+    isInteger(value.roomVersion) && value.roomVersion >= 0 &&
     value.type === 'stale-command'
   );
 }
@@ -675,7 +675,7 @@ export function isToggleBacklogModePayload(value: unknown): value is ToggleBackl
   }
 
   return (
-    (!('expectedRoomVersion' in value) || isInteger(value.expectedRoomVersion))
+    (!('expectedRoomVersion' in value) || isInteger(value.expectedRoomVersion) && value.expectedRoomVersion >= 0)
   );
 }
 
@@ -697,7 +697,7 @@ export function isToggleOwnerPayload(value: unknown): value is ToggleOwnerPayloa
   }
 
   return (
-    (!('expectedRoomVersion' in value) || isInteger(value.expectedRoomVersion)) &&
+    (!('expectedRoomVersion' in value) || isInteger(value.expectedRoomVersion) && value.expectedRoomVersion >= 0) &&
     typeof value.targetClientId === 'string'
   );
 }
@@ -720,7 +720,7 @@ export function isToggleSpectatorPayload(value: unknown): value is ToggleSpectat
   }
 
   return (
-    (!('expectedRoomVersion' in value) || isInteger(value.expectedRoomVersion)) &&
+    (!('expectedRoomVersion' in value) || isInteger(value.expectedRoomVersion) && value.expectedRoomVersion >= 0) &&
     typeof value.targetClientId === 'string'
   );
 }
@@ -776,7 +776,7 @@ export function isUpdateStoryPayload(value: unknown): value is UpdateStoryPayloa
   }
 
   return (
-    (!('expectedRoomVersion' in value) || isInteger(value.expectedRoomVersion)) &&
+    (!('expectedRoomVersion' in value) || isInteger(value.expectedRoomVersion) && value.expectedRoomVersion >= 0) &&
     typeof value.story === 'string'
   );
 }
@@ -799,7 +799,7 @@ export function isVoteAgainPayload(value: unknown): value is VoteAgainPayload {
   }
 
   return (
-    (!('expectedRoomVersion' in value) || isInteger(value.expectedRoomVersion))
+    (!('expectedRoomVersion' in value) || isInteger(value.expectedRoomVersion) && value.expectedRoomVersion >= 0)
   );
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -272,9 +273,9 @@ func tsNonNullCheck(spec *Spec, schema *Schema, accessor string) (string, error)
 	case KindString:
 		return tsStringCheck(schema, accessor), nil
 	case KindInteger:
-		return fmt.Sprintf("isInteger(%s)", accessor), nil
+		return tsNumericCheck(schema, fmt.Sprintf("isInteger(%s)", accessor), accessor), nil
 	case KindNumber:
-		return fmt.Sprintf("typeof %s === 'number'", accessor), nil
+		return tsNumericCheck(schema, fmt.Sprintf("typeof %s === 'number'", accessor), accessor), nil
 	case KindBoolean:
 		return fmt.Sprintf("typeof %s === 'boolean'", accessor), nil
 	case KindArray:
@@ -282,6 +283,14 @@ func tsNonNullCheck(spec *Spec, schema *Schema, accessor string) (string, error)
 	default:
 		return "", fmt.Errorf("unsupported type %q", schema.Kind)
 	}
+}
+
+func tsNumericCheck(schema *Schema, check, accessor string) string {
+	if schema.Minimum == nil {
+		return check
+	}
+	bound := strconv.FormatFloat(*schema.Minimum, 'g', -1, 64)
+	return fmt.Sprintf("%s && %s >= %s", check, accessor, bound)
 }
 
 func tsRefCheck(spec *Spec, refName, accessor string) (string, error) {
