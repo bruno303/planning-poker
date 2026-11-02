@@ -74,90 +74,109 @@ var (
 var wireStartedAt = time.Date(2026, time.October, 1, 9, 30, 0, 0, time.UTC)
 
 func TestSerializeRoomWireContract(t *testing.T) {
-	t.Run("revealed backlog room exposes the full key set", func(t *testing.T) {
-		room := newRevealedBacklogRoom(t)
+	t.Run("revealed backlog room exposes the full key set", testRevealedBacklogRoomSerializeWireContract)
+	t.Run("mostAppearingVotes is null or an empty array", testMostAppearingVotesSerializeWireContract)
+}
 
-		decoded := decodeSerializedRoomWire(t, room)
+func testRevealedBacklogRoomSerializeWireContract(t *testing.T) {
+	room := newRevealedBacklogRoom(t)
 
-		assertKeySet(t, "serialized room", decoded, serializedRoomWireKeys)
-		assertJSONNumber(t, decoded, "roomVersion")
+	decoded := decodeSerializedRoomWire(t, room)
 
-		if got := decoded["id"]; got != "room-wire" {
-			t.Errorf("key %q = %#v, want %q", "id", got, "room-wire")
-		}
-		if got := decoded["reveal"]; got != true {
-			t.Errorf("key %q = %#v, want true", "reveal", got)
-		}
-		if got := decoded["backlogMode"]; got != true {
-			t.Errorf("key %q = %#v, want true", "backlogMode", got)
-		}
+	assertKeySet(t, "serialized room", decoded, serializedRoomWireKeys)
+	assertJSONNumber(t, decoded, "roomVersion")
+	assertWireValue(t, decoded, "id", "room-wire")
+	assertWireValue(t, decoded, "reveal", true)
+	assertWireValue(t, decoded, "backlogMode", true)
 
-		clients := objectList(t, decoded, "clients")
-		if len(clients) != 3 {
-			t.Fatalf("key %q has %d entries, want 3", "clients", len(clients))
-		}
-
-		clientKeys := map[string][]string{
-			"Alice": votedClientWireKeys,
-			"Bob":   votedClientWireKeys,
-			"Carol": pendingClientWireKeys,
-		}
-		for _, client := range clients {
-			name, _ := client["name"].(string)
-			want, ok := clientKeys[name]
-			if !ok {
-				t.Fatalf("unexpected client %#v", client)
-			}
-			assertKeySet(t, "serialized client "+name, client, want)
-		}
-
-		stories := objectList(t, decoded, "stories")
-		if len(stories) != 1 {
-			t.Fatalf("key %q has %d entries, want 1", "stories", len(stories))
-		}
-		assertKeySet(t, "serialized story", stories[0], estimatedStoryWireKeys)
-		if got := stories[0]["voted"]; got != true {
-			t.Errorf("story key %q = %#v, want true", "voted", got)
-		}
+	assertSerializedClientWireKeys(t, decoded, 3, map[string][]string{
+		"Alice": votedClientWireKeys,
+		"Bob":   votedClientWireKeys,
+		"Carol": pendingClientWireKeys,
 	})
 
-	t.Run("mostAppearingVotes is null or an empty array", func(t *testing.T) {
-		cases := []struct {
-			name          string
-			build         func(t *testing.T) *entity.Room
-			wantNull      bool
-			wantStoryKeys []string
-		}{
-			{
-				name:          "hidden round keeps null",
-				build:         newPendingBacklogRoom,
-				wantNull:      true,
-				wantStoryKeys: pendingStoryWireKeys,
-			},
-			{
-				name:          "revealed round without countable votes uses an empty array",
-				build:         newRevealedEmptyBacklogRoom,
-				wantNull:      false,
-				wantStoryKeys: pendingStoryWireKeys,
-			},
+	story := assertSerializedStoryWireKeys(t, decoded, estimatedStoryWireKeys)
+	assertWireValue(t, story, "voted", true)
+}
+
+func testMostAppearingVotesSerializeWireContract(t *testing.T) {
+	cases := []struct {
+		name          string
+		build         func(t *testing.T) *entity.Room
+		wantNull      bool
+		wantStoryKeys []string
+	}{
+		{
+			name:          "hidden round keeps null",
+			build:         newPendingBacklogRoom,
+			wantNull:      true,
+			wantStoryKeys: pendingStoryWireKeys,
+		},
+		{
+			name:          "revealed round without countable votes uses an empty array",
+			build:         newRevealedEmptyBacklogRoom,
+			wantNull:      false,
+			wantStoryKeys: pendingStoryWireKeys,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			decoded := decodeSerializedRoomWire(t, tc.build(t))
+
+			assertKeyPresent(t, decoded, "mostAppearingVotes")
+			assertVotesValue(t, decoded, "mostAppearingVotes", tc.wantNull)
+			assertSerializedStoryVotesWire(t, decoded, tc.wantStoryKeys, tc.wantNull)
+		})
+	}
+}
+
+func assertWireValue(t *testing.T, object map[string]any, key string, want any) {
+	t.Helper()
+
+	if got := object[key]; got != want {
+		t.Errorf("key %q = %#v, want %#v", key, got, want)
+	}
+}
+
+func assertSerializedClientWireKeys(t *testing.T, object map[string]any, wantCount int, wantKeys map[string][]string) {
+	t.Helper()
+
+	clients := objectList(t, object, "clients")
+	if len(clients) != wantCount {
+		t.Fatalf("key %q has %d entries, want %d", "clients", len(clients), wantCount)
+	}
+
+	for _, client := range clients {
+		name, _ := client["name"].(string)
+		keys, ok := wantKeys[name]
+		if !ok {
+			t.Fatalf("unexpected client %#v", client)
 		}
+		assertKeySet(t, "serialized client "+name, client, keys)
+	}
+}
 
-		for _, tc := range cases {
-			t.Run(tc.name, func(t *testing.T) {
-				decoded := decodeSerializedRoomWire(t, tc.build(t))
+func assertSerializedStoryWireKeys(t *testing.T, object map[string]any, wantKeys []string) map[string]any {
+	t.Helper()
 
-				assertKeyPresent(t, decoded, "mostAppearingVotes")
-				assertVotesValue(t, decoded, "mostAppearingVotes", tc.wantNull)
+	stories := objectList(t, object, "stories")
+	if len(stories) != 1 {
+		t.Fatalf("key %q has %d entries, want 1", "stories", len(stories))
+	}
+	assertKeySet(t, "serialized story", stories[0], wantKeys)
+	return stories[0]
+}
 
-				stories := objectList(t, decoded, "stories")
-				if len(stories) != 1 {
-					t.Fatalf("key %q has %d entries, want 1", "stories", len(stories))
-				}
-				assertKeySet(t, "serialized story", stories[0], tc.wantStoryKeys)
-				assertVotesValue(t, stories[0], "mostAppearingVotes", tc.wantNull)
-			})
-		}
-	})
+func assertSerializedStoryVotesWire(t *testing.T, object map[string]any, wantKeys []string, wantNull bool) {
+	t.Helper()
+
+	stories := objectList(t, object, "stories")
+	if len(stories) != 1 {
+		t.Fatalf("key %q has %d entries, want 1", "stories", len(stories))
+	}
+	assertKeySet(t, "serialized story", stories[0], wantKeys)
+	assertVotesValue(t, stories[0], "mostAppearingVotes", wantNull)
 }
 
 // newRevealedBacklogRoom builds an owner, a voter and a spectator on a backlog

@@ -35,7 +35,7 @@ type (
 		CurrentStoryIndex  int
 		RoomVersion        RoomVersion
 
-		events []Event
+		events []EventNamer
 	}
 )
 
@@ -88,18 +88,18 @@ func (r *Room) StartedAt() time.Time {
 
 // PullEvents drains and returns the domain events buffered since the last
 // pull. The returned slice is a copy owned by the caller.
-func (r *Room) PullEvents() []Event {
+func (r *Room) PullEvents() []EventNamer {
 	if len(r.events) == 0 {
 		return nil
 	}
 
-	events := make([]Event, len(r.events))
+	events := make([]EventNamer, len(r.events))
 	copy(events, r.events)
 	r.events = nil
 
 	return events
 }
 
-func (r *Room) recordEvent(event Event) {
+func (r *Room) recordEvent(event EventNamer) {
 	r.events = append(r.events, event)
 }

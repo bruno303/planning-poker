@@ -2,8 +2,9 @@ package entity
 
 import "time"
 
-// Event is a domain event recorded on a room aggregate.
-type Event interface {
+// EventNamer is a domain event recorded on a room aggregate. The -er suffix
+// follows Go's single-method interface naming convention.
+type EventNamer interface {
 	Name() string
 }
 

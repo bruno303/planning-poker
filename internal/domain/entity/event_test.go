@@ -65,7 +65,7 @@ func newEventTestRoom(clients ...*Client) *Room {
 }
 
 // eventsOf type-filters buffered events by their concrete value type.
-func eventsOf[T Event](events []Event) []T {
+func eventsOf[T EventNamer](events []EventNamer) []T {
 	matched := make([]T, 0, len(events))
 	for _, event := range events {
 		if typed, ok := event.(T); ok {
@@ -140,32 +140,37 @@ func TestRoomVoteEmitsVoteCast(t *testing.T) {
 				t.Fatalf("Vote() error = %v", err)
 			}
 
-			events := room.PullEvents()
-			casts := eventsOf[VoteCast](events)
-
-			if !test.wantEvent {
-				if len(events) != 0 {
-					t.Fatalf("events = %v, want none", events)
-				}
-				return
-			}
-
-			if len(casts) != 1 {
-				t.Fatalf("VoteCast events = %d, want 1", len(casts))
-			}
-			cast := casts[0]
-			if cast.RoomID != room.ID {
-				t.Errorf("RoomID = %q, want %q", cast.RoomID, room.ID)
-			}
-			if cast.ClientID != cid("client1") {
-				t.Errorf("ClientID = %q, want client1", cast.ClientID)
-			}
-			if cast.Vote != Vote("5") {
-				t.Errorf("Vote = %q, want 5", cast.Vote)
-			}
-			assertOccurredAtUTC(t, cast.OccurredAt)
+			assertVoteCastRecorded(t, room, room.PullEvents(), test.wantEvent)
 		})
 	}
+}
+
+func assertVoteCastRecorded(t *testing.T, room *Room, events []EventNamer, wantEvent bool) {
+	t.Helper()
+
+	if !wantEvent {
+		if len(events) != 0 {
+			t.Fatalf("events = %v, want none", events)
+		}
+		return
+	}
+
+	casts := eventsOf[VoteCast](events)
+	if len(casts) != 1 {
+		t.Fatalf("VoteCast events = %d, want 1", len(casts))
+	}
+
+	cast := casts[0]
+	if cast.RoomID != room.ID {
+		t.Errorf("RoomID = %q, want %q", cast.RoomID, room.ID)
+	}
+	if cast.ClientID != cid("client1") {
+		t.Errorf("ClientID = %q, want client1", cast.ClientID)
+	}
+	if cast.Vote != Vote("5") {
+		t.Errorf("Vote = %q, want 5", cast.Vote)
+	}
+	assertOccurredAtUTC(t, cast.OccurredAt)
 }
 
 func TestRoomRevealEmitsVotesRevealed(t *testing.T) {
@@ -334,7 +339,7 @@ func TestRoomPullEventsReturnsCopy(t *testing.T) {
 func TestEventNames(t *testing.T) {
 	tests := []struct {
 		name  string
-		event Event
+		event EventNamer
 		want  string
 	}{
 		{name: "vote cast", event: VoteCast{}, want: "vote-cast"},
