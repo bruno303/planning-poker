@@ -84,7 +84,7 @@ func mapClients(clients entity.ClientCollection) []GetAllRoomsStateClient {
 
 	for i, client := range clients.Values() {
 		r := GetAllRoomsStateClient{
-			ID:          client.ID,
+			ID:          string(client.ID),
 			Name:        client.Name,
 			IsSpectator: client.IsSpectator,
 			IsOwner:     client.IsOwner,

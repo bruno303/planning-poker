@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bruno303/go-toolkit/pkg/log"
-
 	"planning-poker/internal/domain/entity"
 )
 
@@ -49,29 +47,32 @@ type (
 	}
 )
 
-func (sc SerializedClient) Client(room *entity.Room) *entity.Client {
+func (sc SerializedClient) Client() *entity.Client {
+	var currentVote *entity.Vote
+	if sc.CurrentVote != nil {
+		currentVote = entity.VotePtr(*sc.CurrentVote)
+	}
+
 	client := &entity.Client{
-		ID:          sc.ID,
+		ID:          entity.ClientID(sc.ID),
 		Name:        sc.Name,
-		CurrentVote: sc.CurrentVote,
+		CurrentVote: currentVote,
 		HasVoted:    sc.HasVoted,
 		VotedAt:     entity.OptionalUTCTimePtr(sc.VotedAt),
 		IsSpectator: sc.IsSpectator,
 		IsOwner:     sc.IsOwner,
 	}
 
-	return client.
-		WithRoom(room).
-		WithLogger(log.NewLogger("planningpoker.client"))
+	return client
 }
 
 func SerializeRoom(room *entity.Room) ([]byte, error) {
 	clients := make([]SerializedClient, 0, room.Clients.Count())
 	room.Clients.ForEach(func(client *entity.Client) {
 		clients = append(clients, SerializedClient{
-			ID:          client.ID,
+			ID:          string(client.ID),
 			Name:        client.Name,
-			CurrentVote: client.CurrentVote,
+			CurrentVote: client.CurrentVote.Ptr(),
 			HasVoted:    client.HasVoted,
 			VotedAt:     entity.OptionalUTCTimePtr(client.VotedAt),
 			IsSpectator: client.IsSpectator,
@@ -97,7 +98,7 @@ func SerializeRoom(room *entity.Room) ([]byte, error) {
 		BacklogMode:        room.BacklogMode,
 		Stories:            serializeStories(room.Stories),
 		CurrentStoryIndex:  room.CurrentStoryIndex,
-		RoomVersion:        room.RoomVersion,
+		RoomVersion:        room.RoomVersion.Uint64(),
 	}
 
 	return json.Marshal(serialized)
@@ -107,7 +108,7 @@ func serializeStories(stories []entity.Story) []SerializedStory {
 	result := make([]SerializedStory, len(stories))
 	for i, s := range stories {
 		result[i] = SerializedStory{
-			ID:                 s.ID,
+			ID:                 string(s.ID),
 			Name:               s.Name,
 			Result:             s.Result,
 			MostAppearingVotes: s.MostAppearingVotes,
@@ -146,10 +147,10 @@ func DeserializeRoom(data []byte, clientCollection entity.ClientCollection) (*en
 	room.BacklogMode = serialized.BacklogMode
 	room.Stories = stories
 	room.CurrentStoryIndex = serialized.CurrentStoryIndex
-	room.RoomVersion = serialized.RoomVersion
+	room.RoomVersion = entity.RoomVersion(serialized.RoomVersion)
 
 	for _, sc := range serialized.Clients {
-		client := sc.Client(room)
+		client := sc.Client()
 		room.Clients.Add(client)
 	}
 	return room, nil
@@ -162,7 +163,7 @@ func deserializeStories(stories []SerializedStory) ([]entity.Story, error) {
 			return nil, fmt.Errorf("story at index %d is missing an ID", i)
 		}
 		result[i] = entity.Story{
-			ID:                 s.ID,
+			ID:                 entity.StoryID(s.ID),
 			Name:               s.Name,
 			Result:             s.Result,
 			MostAppearingVotes: s.MostAppearingVotes,

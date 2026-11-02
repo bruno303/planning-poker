@@ -39,7 +39,7 @@ func TestUpdateNameUseCase_Execute_Success(t *testing.T) {
 		Clients: clientcollection.New(),
 	}
 
-	room.NewClient(senderID)
+	room.NewClient(entity.ClientID(senderID))
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
 	mockHub.EXPECT().SaveRoom(ctx, room).Return(nil)
@@ -74,7 +74,7 @@ func TestUpdateNameUseCase_Execute_SaveRoomError(t *testing.T) {
 		Clients: clientcollection.New(),
 	}
 
-	room.NewClient(senderID)
+	room.NewClient(entity.ClientID(senderID))
 	expectedError := errors.New("failed to save room")
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)
@@ -139,7 +139,7 @@ func TestUpdateNameUseCase_Execute_BroadcastError(t *testing.T) {
 		Clients: clientcollection.New(),
 	}
 
-	room.NewClient(senderID)
+	room.NewClient(entity.ClientID(senderID))
 	expectedError := errors.New("broadcast failed")
 
 	mockHub.EXPECT().LoadRoom(ctx, roomID).Return(room, nil)

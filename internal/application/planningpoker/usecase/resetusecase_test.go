@@ -41,7 +41,7 @@ func TestResetUseCase_Execute_Success(t *testing.T) {
 		Clients: clientcollection.New(),
 	}
 
-	client := room.NewClient(clientID)
+	client := room.NewClient(entity.ClientID(clientID))
 	client.IsOwner = true
 
 	mockLockManager.EXPECT().
@@ -82,7 +82,7 @@ func TestResetUseCase_Execute_SaveRoomError(t *testing.T) {
 		Clients: clientcollection.New(),
 	}
 
-	client := room.NewClient(senderID)
+	client := room.NewClient(entity.ClientID(senderID))
 	client.IsOwner = true
 	expectedError := errors.New("failed to save room")
 
@@ -160,7 +160,7 @@ func TestResetUseCase_Execute_BroadcastError(t *testing.T) {
 		Clients: clientcollection.New(),
 	}
 
-	client := room.NewClient(clientID)
+	client := room.NewClient(entity.ClientID(clientID))
 	client.IsOwner = true
 	expectedError := errors.New("broadcast failed")
 

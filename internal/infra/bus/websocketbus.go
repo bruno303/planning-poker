@@ -307,7 +307,7 @@ func (c *WebsocketBus) roomVersion(ctx context.Context) (*uint64, error) {
 	if err != nil {
 		return nil, err
 	}
-	version := room.RoomVersion
+	version := room.RoomVersion.Uint64()
 	return &version, nil
 }
 
@@ -334,7 +334,7 @@ func (c *WebsocketBus) processLegacy(ctx context.Context, usecaseCall useCaseCal
 			room, loadErr := c.hub.LoadRoom(ctx, c.roomID)
 			version := uint64(0)
 			if loadErr == nil {
-				version = room.RoomVersion
+				version = room.RoomVersion.Uint64()
 			}
 			_ = c.Send(ctx, protocol.StaleCommand{Type: protocol.MessageTypeStaleCommand, RoomVersion: version})
 			return

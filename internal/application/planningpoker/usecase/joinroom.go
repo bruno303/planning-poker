@@ -101,7 +101,7 @@ func (uc JoinRoomUseCase) loadOrCreateRoom(ctx context.Context, cmd JoinRoomComm
 
 func (uc JoinRoomUseCase) notifyJoin(ctx context.Context, cmd JoinRoomCommand, room *entity.Room, client *entity.Client) error {
 	uc.logger.Debug(ctx, "sending update client ID command for client %s on room %s", client.ID, room.ID)
-	if err := cmd.Bus.Send(ctx, dto.NewUpdateClientIDCommand(client.ID)); err != nil {
+	if err := cmd.Bus.Send(ctx, dto.NewUpdateClientIDCommand(client.ID.String())); err != nil {
 		return fmt.Errorf("failed to send update client ID command: %w", err)
 	}
 
@@ -135,13 +135,14 @@ func (uc JoinRoomUseCase) recordJoinMetrics(ctx context.Context, autoCreated, is
 }
 
 func (uc JoinRoomUseCase) joinClient(ctx context.Context, room *entity.Room, cmd JoinRoomCommand) (client *entity.Client, isReconnect bool, rollbackFunc func(context.Context) error, err error) {
-	if existingClient, ok := room.FindClient(cmd.SenderID); ok {
+	clientID := entity.ClientID(cmd.SenderID)
+	if existingClient, ok := room.FindClient(clientID); ok {
 		isReconnect = true
 		client = existingClient
 		rollbackFunc, err = uc.reconnectClient(ctx, cmd)
 	} else {
-		client = room.NewClient(cmd.SenderID)
-		rollbackFunc, err = uc.createNewClient(ctx, cmd, client)
+		client = room.NewClient(clientID)
+		rollbackFunc, err = uc.createNewClient(ctx, room, cmd, client)
 	}
 
 	return
@@ -168,15 +169,15 @@ func (uc JoinRoomUseCase) reconnectClient(ctx context.Context, cmd JoinRoomComma
 	return rollbackFunc, nil
 }
 
-func (uc JoinRoomUseCase) createNewClient(ctx context.Context, cmd JoinRoomCommand, client *entity.Client) (func(context.Context) error, error) {
+func (uc JoinRoomUseCase) createNewClient(ctx context.Context, room *entity.Room, cmd JoinRoomCommand, client *entity.Client) (func(context.Context) error, error) {
 	uc.logger.Debug(ctx, "creating client for room %s", cmd.RoomID)
-	uc.hub.AddClient(client)
+	uc.hub.AddClient(ctx, room, client)
 
 	uc.logger.Debug(ctx, "creating bus for client %s on room %s", client.ID, cmd.RoomID)
 	rollbackFunc := func(cleanupCtx context.Context) error {
-		return uc.hub.RemoveClient(cleanupCtx, client.ID, cmd.RoomID)
+		return uc.hub.RemoveClient(cleanupCtx, client.ID.String(), cmd.RoomID)
 	}
-	if err := uc.hub.AddBus(ctx, client.ID, cmd.Bus); err != nil {
+	if err := uc.hub.AddBus(ctx, client.ID.String(), cmd.Bus); err != nil {
 		return rollbackFunc, fmt.Errorf("failed to add bus for client %s: %w", client.ID, err)
 	}
 

@@ -41,7 +41,7 @@ func TestRemoveStoryUseCase_Execute_Success(t *testing.T) {
 		Clients: clientcollection.New(),
 	}
 
-	client := room.NewClient(clientID)
+	client := room.NewClient(entity.ClientID(clientID))
 	client.IsOwner = true
 	room.Stories = []entity.Story{{ID: "story-1", Name: "Story 1"}}
 
@@ -84,7 +84,7 @@ func TestRemoveStoryUseCase_Execute_SaveRoomError(t *testing.T) {
 		Clients: clientcollection.New(),
 	}
 
-	client := room.NewClient(senderID)
+	client := room.NewClient(entity.ClientID(senderID))
 	client.IsOwner = true
 	room.Stories = []entity.Story{{ID: "story-1", Name: "Story 1"}}
 	expectedError := errors.New("failed to save room")
@@ -165,7 +165,7 @@ func TestRemoveStoryUseCase_Execute_BroadcastError(t *testing.T) {
 		Clients: clientcollection.New(),
 	}
 
-	client := room.NewClient(clientID)
+	client := room.NewClient(entity.ClientID(clientID))
 	client.IsOwner = true
 	room.Stories = []entity.Story{{ID: "story-1", Name: "Story 1"}}
 	expectedError := errors.New("broadcast failed")

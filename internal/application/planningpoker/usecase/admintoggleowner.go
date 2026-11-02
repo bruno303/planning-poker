@@ -6,6 +6,7 @@ import (
 	"planning-poker/internal/application/lock"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
 	"planning-poker/internal/domain"
+	"planning-poker/internal/domain/entity"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
 )
@@ -42,7 +43,7 @@ func (uc *adminToggleOwnerUseCase) Execute(ctx context.Context, cmd AdminToggleO
 			return fmt.Errorf("load room: %w", err)
 		}
 
-		if err := room.AdminToggleOwner(ctx, cmd.TargetClientID); err != nil {
+		if err := room.AdminToggleOwner(ctx, entity.ClientID(cmd.TargetClientID)); err != nil {
 			uc.logger.Warn(ctx, "Admin toggle owner failed: %v", err)
 			return err
 		}

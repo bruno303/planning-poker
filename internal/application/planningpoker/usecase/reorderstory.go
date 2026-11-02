@@ -6,6 +6,7 @@ import (
 	"planning-poker/internal/application/lock"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
 	"planning-poker/internal/domain"
+	"planning-poker/internal/domain/entity"
 )
 
 type (
@@ -35,7 +36,7 @@ func (uc ReorderStoryUseCase) Execute(ctx context.Context, cmd ReorderStoryComma
 			return err
 		}
 
-		if err := room.ReorderStory(ctx, cmd.SenderID, cmd.StoryID, cmd.TargetIndex); err != nil {
+		if err := room.ReorderStory(ctx, entity.ClientID(cmd.SenderID), entity.StoryID(cmd.StoryID), cmd.TargetIndex); err != nil {
 			return err
 		}
 		if err := uc.hub.SaveRoomIfVersion(ctx, room, cmd.ExpectedRoomVersion); err != nil {

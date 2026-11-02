@@ -6,7 +6,7 @@ import (
 )
 
 func newTestClient(id, name string) *entity.Client {
-	return &entity.Client{ID: id, Name: name}
+	return &entity.Client{ID: entity.ClientID(id), Name: name}
 }
 
 func TestAddAndValues(t *testing.T) {
@@ -66,7 +66,7 @@ func TestForEach(t *testing.T) {
 
 	var ids []string
 	cc.ForEach(func(c *entity.Client) {
-		ids = append(ids, c.ID)
+		ids = append(ids, c.ID.String())
 	})
 	if len(ids) != 2 || ids[0] != "1" || ids[1] != "2" {
 		t.Errorf("ForEach did not iterate correctly")

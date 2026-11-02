@@ -35,7 +35,7 @@ func NewRoomStateCommand(room *entity.Room) protocol.RoomState {
 		BacklogMode:        lo.ToPtr(room.BacklogMode),
 		Stories:            mapStories(room.Stories),
 		CurrentStoryIndex:  lo.ToPtr(room.CurrentStoryIndex),
-		RoomVersion:        room.RoomVersion,
+		RoomVersion:        room.RoomVersion.Uint64(),
 	}
 }
 
@@ -69,7 +69,7 @@ func optionalInt(value int) *int {
 func mapStories(stories []entity.Story) []protocol.Story {
 	return lo.Map(stories, func(s entity.Story, _ int) protocol.Story {
 		return protocol.Story{
-			ID:                 s.ID,
+			ID:                 string(s.ID),
 			Name:               s.Name,
 			Result:             s.Result,
 			MostAppearingVotes: s.MostAppearingVotes,
@@ -87,9 +87,9 @@ func MapToParticipants(clients []*entity.Client) []protocol.Participant {
 		clients,
 		func(client *entity.Client, _ int) protocol.Participant {
 			return protocol.Participant{
-				ID:          client.ID,
+				ID:          string(client.ID),
 				Name:        client.Name,
-				Vote:        client.CurrentVote,
+				Vote:        client.CurrentVote.Ptr(),
 				HasVoted:    client.HasVoted,
 				VotedAt:     entity.OptionalUTCTimePtr(client.VotedAt),
 				IsSpectator: client.IsSpectator,

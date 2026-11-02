@@ -5,6 +5,7 @@ import (
 	"planning-poker/internal/application/lock"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
 	"planning-poker/internal/domain"
+	"planning-poker/internal/domain/entity"
 )
 
 type (
@@ -37,7 +38,7 @@ func (uc UpdateStoryUseCase) Execute(ctx context.Context, cmd UpdateStoryCommand
 			return err
 		}
 
-		if err := room.SetCurrentStory(ctx, cmd.SenderID, cmd.Story); err != nil {
+		if err := room.SetCurrentStory(ctx, entity.ClientID(cmd.SenderID), cmd.Story); err != nil {
 			return err
 		}
 

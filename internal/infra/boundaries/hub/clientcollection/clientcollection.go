@@ -20,7 +20,7 @@ func (cc *InMemoryClientCollection) Add(client *entity.Client) {
 
 func (cc *InMemoryClientCollection) Remove(clientID string) {
 	for i, c := range cc.clients {
-		if c.ID == clientID {
+		if c.ID == entity.ClientID(clientID) {
 			cc.clients = append(cc.clients[:i], cc.clients[i+1:]...)
 			return
 		}

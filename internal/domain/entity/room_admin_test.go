@@ -13,7 +13,7 @@ import (
 func assertAdminToggleOwnerResult(t *testing.T, room *entity.Room, targetID string, wantIsOwner, wantErrLastOwner bool, wantErrSentinel, wantErr error) {
 	t.Helper()
 
-	err := room.AdminToggleOwner(context.Background(), targetID)
+	err := room.AdminToggleOwner(context.Background(), entity.ClientID(targetID))
 	if wantErrLastOwner {
 		if err == nil || !errors.Is(err, domainerror.ErrLastOwner) {
 			t.Errorf("expected ErrLastOwner, got %v", err)
@@ -36,7 +36,7 @@ func assertAdminToggleOwnerResult(t *testing.T, room *entity.Room, targetID stri
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	client, ok := room.FindClient(targetID)
+	client, ok := room.FindClient(entity.ClientID(targetID))
 	if !ok {
 		t.Fatal("target client not found after toggle")
 	}
@@ -57,29 +57,29 @@ func TestRoom_AdminToggleOwner(t *testing.T) {
 		{
 			name: "grant owner to non-owner",
 			setup: func(room *entity.Room) string {
-				room.NewClient("owner1").IsOwner = true
-				target := room.NewClient("target1")
-				return target.ID
+				room.NewClient(entity.ClientID("owner1")).IsOwner = true
+				target := room.NewClient(entity.ClientID("target1"))
+				return target.ID.String()
 			},
 			wantIsOwner: true,
 		},
 		{
 			name: "revoke owner when multiple owners exist",
 			setup: func(room *entity.Room) string {
-				room.NewClient("owner1").IsOwner = true
-				target := room.NewClient("owner2")
+				room.NewClient(entity.ClientID("owner1")).IsOwner = true
+				target := room.NewClient(entity.ClientID("owner2"))
 				target.IsOwner = true
-				return target.ID
+				return target.ID.String()
 			},
 			wantIsOwner: false,
 		},
 		{
 			name: "refuse revoke from last owner",
 			setup: func(room *entity.Room) string {
-				target := room.NewClient("owner1")
+				target := room.NewClient(entity.ClientID("owner1"))
 				target.IsOwner = true
-				room.NewClient("client1")
-				return target.ID
+				room.NewClient(entity.ClientID("client1"))
+				return target.ID.String()
 			},
 			wantIsOwner:      true,
 			wantErrLastOwner: true,

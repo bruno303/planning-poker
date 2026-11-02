@@ -5,6 +5,7 @@ import (
 	"planning-poker/internal/application/lock"
 	"planning-poker/internal/application/planningpoker/usecase/dto"
 	"planning-poker/internal/domain"
+	"planning-poker/internal/domain/entity"
 )
 
 type (
@@ -36,7 +37,7 @@ func (uc RemoveStoryUseCase) Execute(ctx context.Context, cmd RemoveStoryCommand
 			return err
 		}
 
-		if err := room.RemoveStory(ctx, cmd.SenderID, cmd.StoryID); err != nil {
+		if err := room.RemoveStory(ctx, entity.ClientID(cmd.SenderID), entity.StoryID(cmd.StoryID)); err != nil {
 			return err
 		}
 

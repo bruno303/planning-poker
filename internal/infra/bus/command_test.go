@@ -167,7 +167,7 @@ func TestWebsocketBus_Process_SendsCommandAck(t *testing.T) {
 	roomVersion := uint64(12)
 
 	hub := domain.NewMockHub(ctrl)
-	hub.EXPECT().LoadRoom(gomock.Any(), commandTestRoomID).Return(&entity.Room{RoomVersion: roomVersion}, nil)
+	hub.EXPECT().LoadRoom(gomock.Any(), commandTestRoomID).Return(&entity.Room{RoomVersion: entity.RoomVersion(roomVersion)}, nil)
 
 	updateName := usecase.NewMockUseCase[usecase.UpdateNameCommand](ctrl)
 	updateName.EXPECT().Execute(gomock.Any(), usecase.UpdateNameCommand{
@@ -241,7 +241,7 @@ func TestWebsocketBus_Process_SendsCommandErrorForStaleVersion(t *testing.T) {
 	roomVersion := uint64(9)
 
 	hub := domain.NewMockHub(ctrl)
-	hub.EXPECT().LoadRoom(gomock.Any(), commandTestRoomID).Return(&entity.Room{RoomVersion: roomVersion}, nil)
+	hub.EXPECT().LoadRoom(gomock.Any(), commandTestRoomID).Return(&entity.Room{RoomVersion: entity.RoomVersion(roomVersion)}, nil)
 
 	reset := usecase.NewMockUseCase[usecase.ResetCommand](ctrl)
 	reset.EXPECT().Execute(gomock.Any(), gomock.Any()).Return(domain.ErrStaleRoomVersion)
@@ -538,7 +538,7 @@ func TestWebsocketBus_Process_CachesCommandAck(t *testing.T) {
 	roomVersion := uint64(12)
 
 	hub := domain.NewMockHub(ctrl)
-	hub.EXPECT().LoadRoom(gomock.Any(), commandTestRoomID).Return(&entity.Room{RoomVersion: roomVersion}, nil)
+	hub.EXPECT().LoadRoom(gomock.Any(), commandTestRoomID).Return(&entity.Room{RoomVersion: entity.RoomVersion(roomVersion)}, nil)
 
 	updateName := usecase.NewMockUseCase[usecase.UpdateNameCommand](ctrl)
 	updateName.EXPECT().Execute(gomock.Any(), gomock.Any()).Return(nil)
@@ -575,7 +575,7 @@ func TestWebsocketBus_Process_ReplaysCompletedCommandOutcome(t *testing.T) {
 	roomVersion := uint64(12)
 
 	hub := domain.NewMockHub(ctrl)
-	hub.EXPECT().LoadRoom(gomock.Any(), commandTestRoomID).Return(&entity.Room{RoomVersion: roomVersion}, nil)
+	hub.EXPECT().LoadRoom(gomock.Any(), commandTestRoomID).Return(&entity.Room{RoomVersion: entity.RoomVersion(roomVersion)}, nil)
 
 	updateName := usecase.NewMockUseCase[usecase.UpdateNameCommand](ctrl)
 	updateName.EXPECT().Execute(gomock.Any(), gomock.Any()).Return(nil).Times(1)
@@ -679,7 +679,7 @@ func TestWebsocketBus_Process_CompleteFailureStillSendsFrame(t *testing.T) {
 	roomVersion := uint64(3)
 
 	hub := domain.NewMockHub(ctrl)
-	hub.EXPECT().LoadRoom(gomock.Any(), commandTestRoomID).Return(&entity.Room{RoomVersion: roomVersion}, nil)
+	hub.EXPECT().LoadRoom(gomock.Any(), commandTestRoomID).Return(&entity.Room{RoomVersion: entity.RoomVersion(roomVersion)}, nil)
 
 	updateName := usecase.NewMockUseCase[usecase.UpdateNameCommand](ctrl)
 	updateName.EXPECT().Execute(gomock.Any(), gomock.Any()).Return(nil)
@@ -766,7 +766,7 @@ func TestWebsocketBus_Process_LegacyCommandSendsNoAck(t *testing.T) {
 		roomVersion := uint64(6)
 
 		hub := domain.NewMockHub(ctrl)
-		hub.EXPECT().LoadRoom(gomock.Any(), commandTestRoomID).Return(&entity.Room{RoomVersion: roomVersion}, nil)
+		hub.EXPECT().LoadRoom(gomock.Any(), commandTestRoomID).Return(&entity.Room{RoomVersion: entity.RoomVersion(roomVersion)}, nil)
 
 		reset := usecase.NewMockUseCase[usecase.ResetCommand](ctrl)
 		reset.EXPECT().Execute(gomock.Any(), gomock.Any()).Return(domain.ErrStaleRoomVersion)

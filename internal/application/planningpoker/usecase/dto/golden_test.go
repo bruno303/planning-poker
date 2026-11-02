@@ -69,7 +69,7 @@ func goldenRoom() *entity.Room {
 	clients.Add(&entity.Client{
 		ID:          "client-alice",
 		Name:        "Alice",
-		CurrentVote: &vote,
+		CurrentVote: entity.VotePtr(vote),
 		HasVoted:    true,
 		VotedAt:     &votedAt,
 		IsOwner:     true,
