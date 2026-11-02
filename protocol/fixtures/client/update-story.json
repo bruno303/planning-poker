@@ -1,0 +1,8 @@
+{
+  "type": "update-story",
+  "commandId": "72c7de75-17dc-4875-b1f8-64b61bcb0bea",
+  "payload": {
+    "story": "Estimate the checkout flow",
+    "expectedRoomVersion": 12
+  }
+}

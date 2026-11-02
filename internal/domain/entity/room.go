@@ -8,6 +8,12 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	clientNotFoundFormat = "client %s not found in room %s"
+	storyIDEmpty         = "story ID cannot be empty"
+	storyNotFoundFormat  = "story %s not found in room %s"
+)
+
 type (
 	Room struct {
 		ID                 string

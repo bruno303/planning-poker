@@ -2,24 +2,25 @@ package entity
 
 import (
 	"context"
-	"fmt"
 	"slices"
 	"strconv"
 	"time"
 
 	"github.com/samber/lo"
+
+	"planning-poker/internal/domain/domainerror"
 )
 
 func (r *Room) Vote(ctx context.Context, clientID ClientID, vote *Vote) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, clientNotFoundFormat, clientID, r.ID)
 	}
 
 	if vote != nil && !vote.IsEmpty() {
 		deck := r.Deck()
 		if !deck.HasCard(vote.String()) {
-			return fmt.Errorf("vote %q is not part of deck %s", vote.String(), deck.ID)
+			return domainerror.Newf(domainerror.CodeValidation, "vote %q is not part of deck %s", vote.String(), deck.ID)
 		}
 	}
 
@@ -50,10 +51,10 @@ func (r *Room) applyVote(client *Client, vote *Vote) bool {
 func (r *Room) ToggleReveal(ctx context.Context, clientID ClientID) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, clientNotFoundFormat, clientID, r.ID)
 	}
 	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can toggle reveal")
+		return domainerror.Newf(domainerror.CodeForbidden, "only the room owner can toggle reveal")
 	}
 
 	r.reveal(!r.Reveal)
@@ -63,10 +64,10 @@ func (r *Room) ToggleReveal(ctx context.Context, clientID ClientID) error {
 func (r *Room) ResetVoting(ctx context.Context, clientID ClientID) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, clientNotFoundFormat, clientID, r.ID)
 	}
 	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can reset voting")
+		return domainerror.Newf(domainerror.CodeForbidden, "only the room owner can reset voting")
 	}
 
 	r.reveal(false)

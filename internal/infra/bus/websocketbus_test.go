@@ -51,6 +51,7 @@ func TestWebsocketBus_Detach_PreventsLeaveRoom(t *testing.T) {
 		serverConn,
 		domain.NewMockHub(ctrl),
 		usecases,
+		nil,
 		WebSocketConfig{},
 	)
 
@@ -104,6 +105,7 @@ func TestWebsocketBus_Close_WithoutDetach_CallsLeaveRoom(t *testing.T) {
 		serverConn,
 		domain.NewMockHub(ctrl),
 		usecases,
+		nil,
 		WebSocketConfig{},
 	)
 
@@ -151,6 +153,7 @@ func TestWebsocketBus_Detach_IsIdempotent(t *testing.T) {
 		serverConn,
 		domain.NewMockHub(ctrl),
 		usecases,
+		nil,
 		WebSocketConfig{},
 	)
 

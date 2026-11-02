@@ -1,0 +1,7 @@
+{
+  "type": "reset",
+  "commandId": "c24692fe-2d56-48ab-ad58-9b628729cedb",
+  "payload": {
+    "expectedRoomVersion": 12
+  }
+}

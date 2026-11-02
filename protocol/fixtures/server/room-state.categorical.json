@@ -1,0 +1,33 @@
+{
+  "type": "room-state",
+  "deck": {
+    "id": "t-shirt",
+    "name": "T-shirt",
+    "kind": "categorical",
+    "cards": ["XS", "S", "M", "L", "XL", "XXL", "?", "☕"]
+  },
+  "currentStory": "Rate the onboarding effort",
+  "reveal": true,
+  "mostAppearingVotes": ["M"],
+  "participants": [
+    {
+      "id": "client-ada",
+      "name": "Ada",
+      "vote": "M",
+      "hasVoted": true,
+      "votedAt": "2026-09-03T12:01:00Z",
+      "isSpectator": false,
+      "isOwner": true
+    }
+  ],
+  "roomVersion": 3,
+  "startedAt": "2026-09-03T12:00:00Z",
+  "consensus": "Low",
+  "lowestVote": "S",
+  "highestVote": "L",
+  "voteSpread": 3,
+  "specialVoteCount": 1,
+  "backlogMode": false,
+  "stories": [],
+  "currentStoryIndex": 0
+}

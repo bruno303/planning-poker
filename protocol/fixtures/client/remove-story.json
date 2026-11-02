@@ -1,0 +1,8 @@
+{
+  "type": "remove-story",
+  "commandId": "0f55e64e-629a-49fa-b2bf-16dc78347fca",
+  "payload": {
+    "storyId": "story-2",
+    "expectedRoomVersion": 12
+  }
+}

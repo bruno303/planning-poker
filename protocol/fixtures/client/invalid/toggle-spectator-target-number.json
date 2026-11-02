@@ -1,0 +1,8 @@
+{
+  "type": "toggle-spectator",
+  "commandId": "d4d623e3-2644-4470-8182-6a9ba2397ce0",
+  "payload": {
+    "targetClientId": 42,
+    "expectedRoomVersion": 12
+  }
+}

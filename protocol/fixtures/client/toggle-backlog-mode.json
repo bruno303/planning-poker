@@ -1,0 +1,7 @@
+{
+  "type": "toggle-backlog-mode",
+  "commandId": "882f5d9d-a4a7-49dc-accf-22145bdb0c1e",
+  "payload": {
+    "expectedRoomVersion": 12
+  }
+}

@@ -12,6 +12,8 @@ on:
       - main
     paths:
       - 'frontend/planning-poker-front/**'
+      - 'protocol/**'
+      - 'tools/protocolgen/**'
 
 env:
   APP_DIR: frontend/planning-poker-front

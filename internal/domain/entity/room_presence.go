@@ -61,10 +61,10 @@ func (r *Room) CountOwners() int {
 func (r *Room) ToggleSpectator(ctx context.Context, clientID ClientID, targetClientID ClientID) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, clientNotFoundFormat, clientID, r.ID)
 	}
 	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can toggle ownership")
+		return domainerror.Newf(domainerror.CodeForbidden, "only the room owner can toggle ownership")
 	}
 
 	if targetClient, ok := r.FindClient(targetClientID); ok {
@@ -72,7 +72,7 @@ func (r *Room) ToggleSpectator(ctx context.Context, clientID ClientID, targetCli
 		r.applyVote(targetClient, nil)
 		r.checkReveal()
 	} else {
-		return fmt.Errorf("target client %s not found in room %s", targetClientID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, "target client %s not found in room %s", targetClientID, r.ID)
 	}
 	return nil
 }
@@ -80,10 +80,10 @@ func (r *Room) ToggleSpectator(ctx context.Context, clientID ClientID, targetCli
 func (r *Room) ToggleOwner(ctx context.Context, clientID ClientID, targetClientID ClientID) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, clientNotFoundFormat, clientID, r.ID)
 	}
 	if !client.IsOwner {
-		return fmt.Errorf("only the room owner can toggle ownership")
+		return domainerror.Newf(domainerror.CodeForbidden, "only the room owner can toggle ownership")
 	}
 
 	owners := r.Clients.Filter(func(client *Client) bool {
@@ -102,7 +102,7 @@ func (r *Room) ToggleOwner(ctx context.Context, clientID ClientID, targetClientI
 	if targetClient, ok := r.FindClient(targetClientID); ok {
 		targetClient.IsOwner = !targetClient.IsOwner
 	} else {
-		return fmt.Errorf("target client %s not found in room %s", targetClientID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, "target client %s not found in room %s", targetClientID, r.ID)
 	}
 	return nil
 }
@@ -135,7 +135,7 @@ func (r *Room) AdminToggleOwner(ctx context.Context, targetClientID ClientID) er
 func (r *Room) UpdateClientName(ctx context.Context, clientID ClientID, name string) error {
 	client, ok := r.FindClient(clientID)
 	if !ok {
-		return fmt.Errorf("client %s not found in room %s", clientID, r.ID)
+		return domainerror.Newf(domainerror.CodeNotFound, clientNotFoundFormat, clientID, r.ID)
 	}
 
 	client.UpdateName(ctx, name)

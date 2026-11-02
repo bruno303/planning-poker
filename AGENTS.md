@@ -154,6 +154,28 @@ unique `COMPOSE_PROJECT_NAME` and `REDIS_HOST_PORT`.
 - If a dependency crosses layers, define its interface in the domain or application contract layer, not infra.
 - Keep DTO mapping at boundaries; do not leak storage or transport models into domain logic.
 
+### WebSocket command protocol
+
+- The contract lives in `protocol/`: `protocol/asyncapi.yaml` is the AsyncAPI spec and
+  `protocol/README.md` is the generated message table. The spec and the generated artifacts are
+  the source of truth; do not hand-maintain frame shapes, error codes, or type inventories here.
+- Run `make protocol` after any spec edit and commit the generated files.
+- Never hand-edit `*.generated.go`, `protocol.generated.ts`, or `protocol/README.md`.
+- Adding a command = spec entry + `mapUsecases` entry.
+- Adding an event = spec entry + emit site.
+- Idempotency uses a Redis ledger: the pending reservation lives for 30s, a completed outcome
+  for 5m, under the key `planning-poker:command:<roomID>:<clientID>:<canonicalCommandID>`.
+- Use one fresh UUID per command. Reusing a `commandId` replays the first stored outcome
+  (`command-ack` or `command-error`) and does not re-execute the command.
+- Legacy path: without a `commandId` there is no ack or nack. The only protocol frame is
+  `{"type": "stale-command", "roomVersion": <n>}`, emitted on a version conflict.
+  One intentional exception to "legacy behaviour unchanged": a malformed (non-numeric)
+  `expectedRoomVersion` now rejects the command as `invalid_payload` instead of applying it
+  unguarded; on the legacy path that rejection is only logged, so no frame is sent. This
+  closes the previous unguarded-mutation defect.
+- Ordering is not guaranteed: the ack/error may arrive before or after the `room-state`
+  broadcast caused by the command. Correlate by `commandId`, never by frame order.
+
 ## Backend Testing Conventions
 
 - Unit tests live next to the code they cover.

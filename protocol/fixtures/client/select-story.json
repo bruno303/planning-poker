@@ -1,0 +1,8 @@
+{
+  "type": "select-story",
+  "commandId": "daead407-40ae-4b69-b1ca-ada2879e73bc",
+  "payload": {
+    "storyId": "story-2",
+    "expectedRoomVersion": 12
+  }
+}

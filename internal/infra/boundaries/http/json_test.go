@@ -120,7 +120,7 @@ func TestSendJsonResponse(t *testing.T) {
 			name:       "should send JSON response with nil",
 			statusCode: http.StatusNoContent,
 			response:   nil,
-			wantBody:   "",
+			wantBody:   ``,
 			wantStatus: http.StatusNoContent,
 		},
 	}

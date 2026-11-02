@@ -1,0 +1,8 @@
+{
+  "type": "toggle-owner",
+  "commandId": "03825346-ff92-4dfd-a81f-5f5f4e2e4a6d",
+  "payload": {
+    "targetClientId": "client-ada",
+    "expectedRoomVersion": 12
+  }
+}

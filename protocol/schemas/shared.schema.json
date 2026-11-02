@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://planning-poker.local/protocol/schemas/shared.schema.json",
+  "title": "Shared protocol types",
+  "$defs": {
+    "DeckKind": {
+      "type": "string",
+      "enum": ["numeric", "categorical"]
+    },
+    "DeckDescriptor": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/DeckKind"
+        },
+        "cards": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["id", "name", "kind", "cards"]
+    },
+    "Story": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "mostAppearingVotes": {
+          "type": ["array", "null"],
+          "items": {
+            "type": "string"
+          }
+        },
+        "voted": {
+          "type": "boolean"
+        },
+        "result": {
+          "type": "number",
+          "x-go-type": "float32"
+        }
+      },
+      "required": ["id", "name", "mostAppearingVotes", "voted"]
+    },
+    "Participant": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "vote": {
+          "type": ["string", "null"]
+        },
+        "hasVoted": {
+          "type": "boolean"
+        },
+        "votedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "isSpectator": {
+          "type": "boolean"
+        },
+        "isOwner": {
+          "type": "boolean"
+        }
+      },
+      "required": ["id", "name", "vote", "hasVoted", "isSpectator", "isOwner"]
+    },
+    "ConsensusLevel": {
+      "type": "string",
+      "enum": ["High", "Medium", "Low", "Unavailable"]
+    }
+  }
+}

@@ -12,6 +12,7 @@ import (
 	"planning-poker/internal/application/planningpoker/usecase"
 	"planning-poker/internal/domain"
 	"planning-poker/internal/domain/entity"
+	"planning-poker/internal/protocol"
 
 	"github.com/bruno303/go-toolkit/pkg/log"
 	"github.com/gorilla/websocket"
@@ -48,14 +49,14 @@ func TestMapUsecases_DispatchesSupportedCommands(t *testing.T) {
 	}{
 		{
 			name: "update-name",
-			msg:  WebSocketMessage{Type: "update-name", Payload: UpdateNamePayload{Username: "Alice"}},
+			msg:  WebSocketMessage{Type: "update-name", Payload: protocol.UpdateNamePayload{Username: "Alice"}},
 			set: func() {
 				updateName.EXPECT().Execute(gomock.Any(), usecase.UpdateNameCommand{RoomID: roomID, SenderID: clientID, Username: "Alice"}).Return(nil)
 			},
 		},
 		{
 			name: "vote",
-			msg:  WebSocketMessage{Type: "vote", Payload: VotePayload{Vote: voteValue}},
+			msg:  WebSocketMessage{Type: "vote", Payload: protocol.VotePayload{Vote: voteValue}},
 			set: func() {
 				vote.EXPECT().Execute(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, cmd usecase.VoteCommand) error {
 					if cmd.RoomID != roomID || cmd.SenderID != clientID || cmd.Vote == nil || *cmd.Vote != voteValue {
@@ -81,21 +82,21 @@ func TestMapUsecases_DispatchesSupportedCommands(t *testing.T) {
 		},
 		{
 			name: "toggle-spectator",
-			msg:  WebSocketMessage{Type: "toggle-spectator", Payload: ToggleSpectatorPayload{TargetClientID: "target-1"}},
+			msg:  WebSocketMessage{Type: "toggle-spectator", Payload: protocol.ToggleSpectatorPayload{TargetClientID: "target-1"}},
 			set: func() {
 				toggleSpectator.EXPECT().Execute(gomock.Any(), usecase.ToggleSpectatorCommand{RoomID: roomID, SenderID: clientID, TargetClientID: "target-1"}).Return(nil)
 			},
 		},
 		{
 			name: "toggle-owner",
-			msg:  WebSocketMessage{Type: "toggle-owner", Payload: ToggleOwnerPayload{TargetClientID: "target-2"}},
+			msg:  WebSocketMessage{Type: "toggle-owner", Payload: protocol.ToggleOwnerPayload{TargetClientID: "target-2"}},
 			set: func() {
 				toggleOwner.EXPECT().Execute(gomock.Any(), usecase.ToggleOwnerCommand{RoomID: roomID, SenderID: clientID, TargetClientID: "target-2"}).Return(nil)
 			},
 		},
 		{
 			name: "update-story",
-			msg:  WebSocketMessage{Type: "update-story", Payload: UpdateStoryPayload{Story: "Current story"}},
+			msg:  WebSocketMessage{Type: "update-story", Payload: protocol.UpdateStoryPayload{Story: "Current story"}},
 			set: func() {
 				updateStory.EXPECT().Execute(gomock.Any(), usecase.UpdateStoryCommand{RoomID: roomID, SenderID: clientID, Story: "Current story"}).Return(nil)
 			},
@@ -116,14 +117,14 @@ func TestMapUsecases_DispatchesSupportedCommands(t *testing.T) {
 		},
 		{
 			name: "add-story",
-			msg:  WebSocketMessage{Type: "add-story", Payload: AddStoryPayload{Story: "Story from backlog"}},
+			msg:  WebSocketMessage{Type: "add-story", Payload: protocol.AddStoryPayload{Story: "Story from backlog"}},
 			set: func() {
 				addStory.EXPECT().Execute(gomock.Any(), usecase.AddStoryCommand{RoomID: roomID, SenderID: clientID, StoryName: "Story from backlog"}).Return(nil)
 			},
 		},
 		{
 			name: "remove-story",
-			msg:  WebSocketMessage{Type: "remove-story", Payload: RemoveStoryPayload{StoryID: "story-3"}},
+			msg:  WebSocketMessage{Type: "remove-story", Payload: protocol.RemoveStoryPayload{StoryID: "story-3"}},
 			set: func() {
 				removeStory.EXPECT().Execute(gomock.Any(), usecase.RemoveStoryCommand{
 					RoomID: roomID, SenderID: clientID, StoryID: "story-3",
@@ -146,14 +147,14 @@ func TestMapUsecases_DispatchesSupportedCommands(t *testing.T) {
 		},
 		{
 			name: "select-story",
-			msg:  WebSocketMessage{Type: "select-story", Payload: SelectStoryPayload{StoryID: "story-1"}},
+			msg:  WebSocketMessage{Type: "select-story", Payload: protocol.SelectStoryPayload{StoryID: "story-1"}},
 			set: func() {
 				selectStory.EXPECT().Execute(gomock.Any(), usecase.SelectStoryCommand{RoomID: roomID, SenderID: clientID, StoryID: "story-1"}).Return(nil)
 			},
 		},
 		{
 			name: "reorder-story",
-			msg: WebSocketMessage{Type: "reorder-story", Payload: ReorderStoryPayload{
+			msg: WebSocketMessage{Type: "reorder-story", Payload: protocol.ReorderStoryPayload{
 				StoryID: "story-2", TargetIndex: 1,
 			}},
 			set: func() {
@@ -193,19 +194,41 @@ func TestMapUsecases_DispatchesSupportedCommands(t *testing.T) {
 	}
 }
 
+func TestMapUsecases_CoversGeneratedCommandRegistry(t *testing.T) {
+	calls := mapUsecases(usecase.UseCasesFacade{}, "client", "room")
+
+	for _, commandType := range protocol.ClientCommandTypes {
+		t.Run(commandType, func(t *testing.T) {
+			if _, ok := calls[commandType]; !ok {
+				t.Errorf("generated client command %q has no mapUsecases handler", commandType)
+			}
+		})
+	}
+
+	for commandType := range calls {
+		if !protocol.IsClientCommandType(commandType) {
+			t.Errorf("mapUsecases handler %q is not a generated client command", commandType)
+		}
+	}
+
+	if len(calls) != len(protocol.ClientCommandTypes) {
+		t.Errorf("mapUsecases exposes %d handlers, generated client command registry has %d", len(calls), len(protocol.ClientCommandTypes))
+	}
+}
+
 func TestGuardedCommandAndExpectedRoomVersion(t *testing.T) {
-	version, ok := expectedRoomVersion(map[string]uint64{"expectedRoomVersion": 7})
-	if !ok || version == nil || *version != 7 {
-		t.Fatalf("expectedRoomVersion returned (%v, %t), want (7, true)", version, ok)
+	version, ok, err := expectedRoomVersion(map[string]uint64{"expectedRoomVersion": 7})
+	if err != nil || !ok || version == nil || *version != 7 {
+		t.Fatalf("expectedRoomVersion returned (%v, %t, %v), want (7, true, nil)", version, ok, err)
 	}
-	if _, ok := expectedRoomVersion(map[string]string{"expectedRoomVersion": "invalid"}); ok {
-		t.Fatal("expectedRoomVersion accepted an invalid revision")
+	if _, _, err := expectedRoomVersion(map[string]string{"expectedRoomVersion": "invalid"}); !errors.Is(err, ErrInvalidPayload) {
+		t.Fatalf("expectedRoomVersion accepted an invalid revision: %v", err)
 	}
-	if _, ok := expectedRoomVersion(nil); ok {
-		t.Fatal("expectedRoomVersion accepted a missing revision")
+	if version, ok, err := expectedRoomVersion(nil); err != nil || ok || version != nil {
+		t.Fatalf("expectedRoomVersion returned (%v, %t, %v) for a missing revision, want (nil, false, nil)", version, ok, err)
 	}
-	if _, ok := expectedRoomVersion(func() {}); ok {
-		t.Fatal("expectedRoomVersion accepted an unserializable payload")
+	if _, _, err := expectedRoomVersion(func() {}); !errors.Is(err, ErrInvalidPayload) {
+		t.Fatalf("expectedRoomVersion accepted an unserializable payload: %v", err)
 	}
 }
 
@@ -289,7 +312,7 @@ func TestWebsocketBus_Process_WhenUseCaseReportsStaleVersion(t *testing.T) {
 	calls := map[string]useCaseCall{
 		"reset": func(context.Context, WebSocketMessage) error { return domain.ErrStaleRoomVersion },
 	}
-	bus := NewWebsocketBus("client-1", "room-1", serverConn, hub, usecase.UseCasesFacade{}, WebSocketConfig{WriteTimeout: time.Second})
+	bus := NewWebsocketBus("client-1", "room-1", serverConn, hub, usecase.UseCasesFacade{}, nil, WebSocketConfig{WriteTimeout: time.Second})
 	bus.calls = calls
 	bus.Detach()
 	defer bus.Close()
@@ -307,7 +330,7 @@ func assertStaleCommand(t *testing.T, conn *websocket.Conn, hasVersion bool, ver
 	if err := conn.ReadJSON(&message); err != nil {
 		t.Fatalf("failed to read stale command: %v", err)
 	}
-	if message.Type != "stale-command" || (hasVersion && message.RoomVersion != version) || (!hasVersion && message.RoomVersion != 0) {
+	if message.Type != protocol.MessageTypeStaleCommand || (hasVersion && message.RoomVersion != version) || (!hasVersion && message.RoomVersion != 0) {
 		t.Fatalf("unexpected stale command: %+v", message)
 	}
 }
@@ -329,6 +352,7 @@ func TestWebsocketBus_Listen_DispatchesIncomingMessage(t *testing.T) {
 		serverConn,
 		domain.NewMockHub(ctrl),
 		usecase.UseCasesFacade{UpdateName: updateName, LeaveRoom: leaveRoom},
+		nil,
 		WebSocketConfig{ReadTimeout: time.Second, WriteTimeout: time.Second, PingInterval: time.Second},
 	)
 
@@ -338,7 +362,7 @@ func TestWebsocketBus_Listen_DispatchesIncomingMessage(t *testing.T) {
 		close(done)
 	}()
 
-	if err := clientConn.WriteJSON(WebSocketMessage{Type: "update-name", Payload: UpdateNamePayload{Username: "Alice"}}); err != nil {
+	if err := clientConn.WriteJSON(WebSocketMessage{Type: "update-name", Payload: protocol.UpdateNamePayload{Username: "Alice"}}); err != nil {
 		t.Fatalf("failed to send websocket message: %v", err)
 	}
 	if err := clientConn.Close(); err != nil {
@@ -356,7 +380,7 @@ func TestWebsocketBus_Send_WritesMessage(t *testing.T) {
 	serverConn, clientConn := websocketPair(t)
 	defer clientConn.Close()
 
-	bus := NewWebsocketBus("client-1", "room-1", serverConn, domain.NewMockHub(gomock.NewController(t)), usecase.UseCasesFacade{}, WebSocketConfig{WriteTimeout: time.Second})
+	bus := NewWebsocketBus("client-1", "room-1", serverConn, domain.NewMockHub(gomock.NewController(t)), usecase.UseCasesFacade{}, nil, WebSocketConfig{WriteTimeout: time.Second})
 	bus.Detach()
 	defer bus.Close()
 
@@ -379,7 +403,7 @@ func TestWebsocketBus_Send_WhenConnectionClosedReturnsError(t *testing.T) {
 	serverConn, clientConn := websocketPair(t)
 	defer clientConn.Close()
 
-	bus := NewWebsocketBus("client-1", "room-1", serverConn, domain.NewMockHub(ctrl), usecase.UseCasesFacade{}, WebSocketConfig{})
+	bus := NewWebsocketBus("client-1", "room-1", serverConn, domain.NewMockHub(ctrl), usecase.UseCasesFacade{}, nil, WebSocketConfig{})
 	bus.Detach()
 	if err := bus.Close(); err != nil {
 		t.Fatalf("Close returned error: %v", err)
@@ -395,7 +419,7 @@ func TestWebsocketBus_Send_WhenSocketWriteFailsReturnsError(t *testing.T) {
 	serverConn, clientConn := websocketPair(t)
 	defer clientConn.Close()
 
-	bus := NewWebsocketBus("client-1", "room-1", serverConn, domain.NewMockHub(ctrl), usecase.UseCasesFacade{}, WebSocketConfig{})
+	bus := NewWebsocketBus("client-1", "room-1", serverConn, domain.NewMockHub(ctrl), usecase.UseCasesFacade{}, nil, WebSocketConfig{})
 	bus.Detach()
 	if err := serverConn.Close(); err != nil {
 		t.Fatalf("failed to close server connection: %v", err)
