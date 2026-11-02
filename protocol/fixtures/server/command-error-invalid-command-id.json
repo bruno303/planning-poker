@@ -1,0 +1,6 @@
+{
+  "type": "command-error",
+  "commandId": "not-a-uuid",
+  "code": "invalid_command_id",
+  "message": "commandId must be a UUID"
+}

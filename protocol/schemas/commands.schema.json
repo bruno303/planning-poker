@@ -1,0 +1,436 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://planning-poker.local/protocol/schemas/commands.schema.json",
+  "title": "Client command frames and payloads",
+  "$defs": {
+    "VotePayload": {
+      "type": "object",
+      "properties": {
+        "vote": {
+          "type": "string"
+        }
+      },
+      "required": ["vote"]
+    },
+    "VoteCommand": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "vote"
+        },
+        "commandId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "payload": {
+          "$ref": "#/$defs/VotePayload"
+        }
+      },
+      "required": ["type", "payload"]
+    },
+    "UpdateNamePayload": {
+      "type": "object",
+      "properties": {
+        "username": {
+          "type": "string"
+        }
+      },
+      "required": ["username"]
+    },
+    "UpdateNameCommand": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "update-name"
+        },
+        "commandId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "payload": {
+          "$ref": "#/$defs/UpdateNamePayload"
+        }
+      },
+      "required": ["type", "payload"]
+    },
+    "ResetPayload": {
+      "type": "object",
+      "properties": {
+        "expectedRoomVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "x-go-type": "uint64"
+        }
+      }
+    },
+    "ResetCommand": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "reset"
+        },
+        "commandId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "payload": {
+          "$ref": "#/$defs/ResetPayload"
+        }
+      },
+      "required": ["type", "payload"]
+    },
+    "RevealVotesPayload": {
+      "type": "object",
+      "properties": {
+        "expectedRoomVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "x-go-type": "uint64"
+        }
+      }
+    },
+    "RevealVotesCommand": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "reveal-votes"
+        },
+        "commandId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "payload": {
+          "$ref": "#/$defs/RevealVotesPayload"
+        }
+      },
+      "required": ["type", "payload"]
+    },
+    "ToggleSpectatorPayload": {
+      "type": "object",
+      "properties": {
+        "targetClientId": {
+          "type": "string"
+        },
+        "expectedRoomVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "x-go-type": "uint64"
+        }
+      },
+      "required": ["targetClientId"]
+    },
+    "ToggleSpectatorCommand": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "toggle-spectator"
+        },
+        "commandId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "payload": {
+          "$ref": "#/$defs/ToggleSpectatorPayload"
+        }
+      },
+      "required": ["type", "payload"]
+    },
+    "ToggleOwnerPayload": {
+      "type": "object",
+      "properties": {
+        "targetClientId": {
+          "type": "string"
+        },
+        "expectedRoomVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "x-go-type": "uint64"
+        }
+      },
+      "required": ["targetClientId"]
+    },
+    "ToggleOwnerCommand": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "toggle-owner"
+        },
+        "commandId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "payload": {
+          "$ref": "#/$defs/ToggleOwnerPayload"
+        }
+      },
+      "required": ["type", "payload"]
+    },
+    "UpdateStoryPayload": {
+      "type": "object",
+      "properties": {
+        "story": {
+          "type": "string"
+        },
+        "expectedRoomVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "x-go-type": "uint64"
+        }
+      },
+      "required": ["story"]
+    },
+    "UpdateStoryCommand": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "update-story"
+        },
+        "commandId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "payload": {
+          "$ref": "#/$defs/UpdateStoryPayload"
+        }
+      },
+      "required": ["type", "payload"]
+    },
+    "VoteAgainPayload": {
+      "type": "object",
+      "properties": {
+        "expectedRoomVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "x-go-type": "uint64"
+        }
+      }
+    },
+    "VoteAgainCommand": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "vote-again"
+        },
+        "commandId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "payload": {
+          "$ref": "#/$defs/VoteAgainPayload"
+        }
+      },
+      "required": ["type", "payload"]
+    },
+    "ToggleBacklogModePayload": {
+      "type": "object",
+      "properties": {
+        "expectedRoomVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "x-go-type": "uint64"
+        }
+      }
+    },
+    "ToggleBacklogModeCommand": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "toggle-backlog-mode"
+        },
+        "commandId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "payload": {
+          "$ref": "#/$defs/ToggleBacklogModePayload"
+        }
+      },
+      "required": ["type", "payload"]
+    },
+    "AddStoryPayload": {
+      "type": "object",
+      "properties": {
+        "story": {
+          "type": "string"
+        }
+      },
+      "required": ["story"]
+    },
+    "AddStoryCommand": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "add-story"
+        },
+        "commandId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "payload": {
+          "$ref": "#/$defs/AddStoryPayload"
+        }
+      },
+      "required": ["type", "payload"]
+    },
+    "RemoveStoryPayload": {
+      "type": "object",
+      "properties": {
+        "storyId": {
+          "type": "string"
+        },
+        "expectedRoomVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "x-go-type": "uint64"
+        }
+      },
+      "required": ["storyId"]
+    },
+    "RemoveStoryCommand": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "remove-story"
+        },
+        "commandId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "payload": {
+          "$ref": "#/$defs/RemoveStoryPayload"
+        }
+      },
+      "required": ["type", "payload"]
+    },
+    "AdvanceStoryPayload": {
+      "type": "object",
+      "properties": {
+        "expectedRoomVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "x-go-type": "uint64"
+        }
+      }
+    },
+    "AdvanceStoryCommand": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "advance-story"
+        },
+        "commandId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "payload": {
+          "$ref": "#/$defs/AdvanceStoryPayload"
+        }
+      },
+      "required": ["type", "payload"]
+    },
+    "PrevStoryPayload": {
+      "type": "object",
+      "properties": {
+        "expectedRoomVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "x-go-type": "uint64"
+        }
+      }
+    },
+    "PrevStoryCommand": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "prev-story"
+        },
+        "commandId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "payload": {
+          "$ref": "#/$defs/PrevStoryPayload"
+        }
+      },
+      "required": ["type", "payload"]
+    },
+    "SelectStoryPayload": {
+      "type": "object",
+      "properties": {
+        "storyId": {
+          "type": "string"
+        },
+        "expectedRoomVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "x-go-type": "uint64"
+        }
+      },
+      "required": ["storyId"]
+    },
+    "SelectStoryCommand": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "select-story"
+        },
+        "commandId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "payload": {
+          "$ref": "#/$defs/SelectStoryPayload"
+        }
+      },
+      "required": ["type", "payload"]
+    },
+    "ReorderStoryPayload": {
+      "type": "object",
+      "properties": {
+        "storyId": {
+          "type": "string"
+        },
+        "targetIndex": {
+          "type": "integer"
+        },
+        "expectedRoomVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "x-go-type": "uint64"
+        }
+      },
+      "required": ["storyId", "targetIndex"]
+    },
+    "ReorderStoryCommand": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "reorder-story"
+        },
+        "commandId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "payload": {
+          "$ref": "#/$defs/ReorderStoryPayload"
+        }
+      },
+      "required": ["type", "payload"]
+    }
+  }
+}

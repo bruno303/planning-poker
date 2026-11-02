@@ -1,0 +1,7 @@
+{
+  "type": "update-name",
+  "commandId": "aa9527bb-8371-4e4d-88ce-e4b8beb276d7",
+  "payload": {
+    "username": "Ada Lovelace"
+  }
+}

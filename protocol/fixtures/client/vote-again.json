@@ -1,0 +1,7 @@
+{
+  "type": "vote-again",
+  "commandId": "36593c7c-7480-4ddd-8ed3-abdeb224e54a",
+  "payload": {
+    "expectedRoomVersion": 12
+  }
+}

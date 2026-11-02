@@ -13,10 +13,6 @@ var ErrCommandInProgress = errors.New("command in progress")
 const (
 	CommandPendingTTL = 30 * time.Second
 	CommandResultTTL  = 5 * time.Minute
-
-	// wireCodeCommandInProgress is emitted when a commandId is retried while a
-	// previous execution still holds its reservation.
-	wireCodeCommandInProgress = "command_in_progress"
 )
 
 // CommandLedger reserves command IDs and stores their outcomes so retries can be

@@ -1,0 +1,7 @@
+{
+  "type": "command-error",
+  "commandId": "e4fc6bda-babc-473a-bd64-34e17d9c3b19",
+  "code": "stale_version",
+  "message": "expected room version 7 but room is at version 9",
+  "roomVersion": 9
+}

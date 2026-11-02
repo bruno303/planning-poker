@@ -1,0 +1,7 @@
+{
+  "type": "add-story",
+  "commandId": "45e1bf3f-52f7-4d78-b281-c5873005fc5c",
+  "payload": {
+    "story": "Estimate the login flow"
+  }
+}
